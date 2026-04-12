@@ -1,0 +1,200 @@
+import { useEffect, useState } from 'react'
+import { FEATURED } from './Globe'
+
+interface Props {
+  countryId: number
+  x: number
+  y: number
+  onNavigate: (section: string) => void
+  onClose: () => void
+}
+
+export default function CountryPopup({ countryId, x, y, onNavigate, onClose }: Props) {
+  const country = FEATURED[countryId]
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => {
+    // Slight delay so the flag transition plays first
+    const t = setTimeout(() => setVisible(true), 100)
+    return () => clearTimeout(t)
+  }, [])
+
+  if (!country) return null
+
+  // Clamp popup within the viewport
+  const W = window.innerWidth
+  const H = window.innerHeight
+  const pw = 260
+  const ph = 200
+  const rawX = x - pw / 2
+  const rawY = y - ph - 24
+  const clampedX = Math.max(12, Math.min(W - pw - 12, rawX))
+  const clampedY = Math.max(70, Math.min(H - ph - 12, rawY))
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: clampedX,
+        top: clampedY,
+        width: pw,
+        zIndex: 100,
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0) scale(1)' : 'translateY(12px) scale(0.92)',
+        transition: 'opacity 0.35s cubic-bezier(0.34,1.56,0.64,1), transform 0.35s cubic-bezier(0.34,1.56,0.64,1)',
+        pointerEvents: visible ? 'all' : 'none',
+      }}
+    >
+      {/* Glass card */}
+      <div style={{
+        background: 'rgba(8, 18, 38, 0.88)',
+        border: `1.5px solid ${country.color}55`,
+        borderRadius: 18,
+        overflow: 'hidden',
+        boxShadow: `0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px ${country.color}22, 0 0 40px ${country.color}18`,
+        backdropFilter: 'blur(20px)',
+      }}>
+        {/* Color banner */}
+        <div style={{
+          height: 5,
+          background: `linear-gradient(90deg, ${country.color} 0%, ${country.color}88 100%)`,
+        }} />
+
+        <div style={{ padding: '16px 18px 18px' }}>
+          {/* Flag + country name row */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <img
+              src={`https://flagcdn.com/w80/${country.code}.png`}
+              alt={`Drapeau ${country.name}`}
+              style={{
+                width: 48, height: 32,
+                objectFit: 'cover',
+                borderRadius: 6,
+                boxShadow: `0 4px 14px ${country.color}44`,
+                border: '1px solid rgba(255,255,255,0.12)',
+              }}
+            />
+            <div>
+              <div style={{
+                fontFamily: "'Bebas Neue', cursive",
+                fontSize: 22,
+                letterSpacing: 2,
+                color: '#fff',
+                lineHeight: 1,
+              }}>
+                {country.name}
+              </div>
+              <div style={{
+                fontSize: 10,
+                fontWeight: 600,
+                letterSpacing: 1.5,
+                color: country.color,
+                textTransform: 'uppercase',
+                marginTop: 2,
+              }}>
+                Coupe du Monde 2026
+              </div>
+            </div>
+          </div>
+
+          {/* Section badge */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 12px',
+            background: `${country.color}14`,
+            borderRadius: 10,
+            border: `1px solid ${country.color}33`,
+            marginBottom: 14,
+          }}>
+            <span style={{ fontSize: 18 }}>{country.icon}</span>
+            <div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, marginBottom: 1 }}>
+                SECTION
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>
+                {country.sectionName}
+              </div>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => onNavigate(country.sectionId)}
+              style={{
+                flex: 1,
+                padding: '10px 16px',
+                background: `linear-gradient(135deg, ${country.color} 0%, ${country.color}bb 100%)`,
+                border: 'none',
+                borderRadius: 10,
+                color: '#fff',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                transition: 'all 0.2s',
+                boxShadow: `0 4px 16px ${country.color}44`,
+              }}
+              onMouseEnter={e => {
+                ;(e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)'
+                ;(e.currentTarget as HTMLButtonElement).style.boxShadow = `0 8px 24px ${country.color}66`
+              }}
+              onMouseLeave={e => {
+                ;(e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'
+                ;(e.currentTarget as HTMLButtonElement).style.boxShadow = `0 4px 16px ${country.color}44`
+              }}
+            >
+              Explorer →
+            </button>
+            <button
+              onClick={onClose}
+              style={{
+                width: 40,
+                height: 40,
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 10,
+                color: 'rgba(255,255,255,0.5)',
+                fontSize: 16,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s',
+                flexShrink: 0,
+              }}
+              onMouseEnter={e => {
+                ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.12)'
+                ;(e.currentTarget as HTMLButtonElement).style.color = '#fff'
+              }}
+              onMouseLeave={e => {
+                ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'
+                ;(e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.5)'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Arrow pointing down toward centroid */}
+      <div style={{
+        position: 'absolute',
+        bottom: -8,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: 0,
+        height: 0,
+        borderLeft: '8px solid transparent',
+        borderRight: '8px solid transparent',
+        borderTop: `8px solid ${country.color}55`,
+      }} />
+    </div>
+  )
+}
