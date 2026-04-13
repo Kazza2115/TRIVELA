@@ -1,5 +1,5 @@
 // ─── WC 2026 — Teams & Match schedule ─────────────────────────────────────
-// Groups are indicative; official draw results will replace these values.
+// Groups reflect the official FIFA World Cup 2026 draw (5 Dec 2024, Miami).
 
 export interface Team {
   name: string
@@ -81,22 +81,33 @@ const T: Record<string, Team> = {
   COD: { name: 'RD Congo',     short: 'COD', code: 'cd' },
   // OFC
   NZL: { name: 'Nouvelle-Zélande', short: 'NZL', code: 'nz' },
+  // Additional qualified teams (draw Dec 2024)
+  CZE: { name: 'Tchéquie',         short: 'CZE', code: 'cz' },
+  HAI: { name: 'Haïti',            short: 'HAI', code: 'ht' },
+  PAR: { name: 'Paraguay',         short: 'PAR', code: 'py' },
+  BIH: { name: 'Bosnie-Herzégovine', short: 'BIH', code: 'ba' },
+  SWE: { name: 'Suède',            short: 'SWE', code: 'se' },
+  TUN: { name: 'Tunisie',          short: 'TUN', code: 'tn' },
+  CPV: { name: 'Cap-Vert',         short: 'CPV', code: 'cv' },
+  NOR: { name: 'Norvège',          short: 'NOR', code: 'no' },
+  GHA: { name: 'Ghana',            short: 'GHA', code: 'gh' },
+  CUR: { name: 'Curaçao',          short: 'CUR', code: 'cw' },
 }
 
-// ─── Groups ────────────────────────────────────────────────────────────────
+// ─── Groups (official draw — 5 Dec 2024, Miami) ───────────────────────────
 export const GROUPS: Record<string, [Team, Team, Team, Team]> = {
-  A: [T.BRA, T.SUI, T.CIV, T.JOR],
-  B: [T.FRA, T.CRO, T.NGA, T.AUS],
-  C: [T.GER, T.MEX, T.ZAF, T.UZB],
-  D: [T.ESP, T.JPN, T.EGY, T.HON],
-  E: [T.ENG, T.COL, T.IRN, T.NZL],
-  F: [T.POR, T.NED, T.SEN, T.QAT],
-  G: [T.ARG, T.BEL, T.CMR, T.CRC],
-  H: [T.ITA, T.USA, T.COD, T.ECU],
-  I: [T.SRB, T.DEN, T.SAU, T.JAM],
-  J: [T.AUT, T.TUR, T.DZA, T.PAN],
-  K: [T.KOR, T.SCO, T.URU, T.VEN],
-  L: [T.CAN, T.UKR, T.MAR, T.IRQ],
+  A: [T.MEX, T.KOR, T.ZAF, T.CZE],
+  B: [T.CAN, T.SUI, T.QAT, T.BIH],
+  C: [T.BRA, T.MAR, T.SCO, T.HAI],
+  D: [T.USA, T.PAR, T.AUS, T.TUR],
+  E: [T.GER, T.ECU, T.CIV, T.CUR],
+  F: [T.NED, T.JPN, T.SWE, T.TUN],
+  G: [T.BEL, T.EGY, T.IRN, T.NZL],
+  H: [T.ESP, T.URU, T.SAU, T.CPV],
+  I: [T.FRA, T.SEN, T.NOR, T.IRQ],
+  J: [T.ARG, T.DZA, T.AUT, T.JOR],
+  K: [T.POR, T.COL, T.UZB, T.COD],
+  L: [T.ENG, T.CRO, T.PAN, T.GHA],
 }
 
 // ─── Build group-stage matches ─────────────────────────────────────────────
