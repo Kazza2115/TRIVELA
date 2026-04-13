@@ -11,7 +11,7 @@ export const FEATURED: Record<number, {
 }> = {
   76:  { name:'Brésil',  code:'br', color:'#009C3B', pulseClass:'pulse-brazil',   sectionId:'packs',      sectionName:'Mes Packs',   icon:'📦' },
   686: { name:'Sénégal', code:'sn', color:'#00A550', pulseClass:'pulse-senegal',  sectionId:'classement', sectionName:'Classement',  icon:'🏆' },
-  756: { name:'Suisse',  code:'ch', color:'#D00020', pulseClass:'pulse-suisse',   sectionId:'album',      sectionName:'Mon Album',   icon:'📖' },
+  724: { name:'Espagne', code:'es', color:'#C60B1E', pulseClass:'pulse-espagne',  sectionId:'album',      sectionName:'Mon Album',   icon:'📖' },
   392: { name:'Japon',   code:'jp', color:'#BC002D', pulseClass:'pulse-japon',    sectionId:'echange',    sectionName:'Échange',     icon:'🔄' },
   840: { name:'USA',     code:'us', color:'#3C3B6E', pulseClass:'pulse-usa',      sectionId:'paris',      sectionName:'Paris 2026',  icon:'⚡' },
 }
@@ -34,6 +34,12 @@ interface CenteringState {
   startTime: number; countryId: number; feature: any
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────
+/** Returns the equivalent of `to` that is within 180° of `from` (shortest arc). */
+function shortestPath(from: number, to: number): number {
+  return from + ((to - from + 540) % 360 - 180)
+}
+
 // ─── Component ────────────────────────────────────────────────────────────
 export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -54,7 +60,9 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
   const pendingCenterRef  = useRef<number | undefined>(undefined)
   const triggerCenterRef  = useRef<(id: number) => void>(() => {})
   const zoomRef           = useRef(1)
+  const baseRRef          = useRef(0)
   const velRef            = useRef({ x: 0, y: 0 })
+  const postZoomAnimRef   = useRef<{ start: number; from: number; to: number } | null>(null)
 
   const setPopupSync = useCallback((p: PopupState | null) => {
     popupRef.current    = p
@@ -93,11 +101,12 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
         }
       }
     }
-    isRotRef.current = false
-    velRef.current   = { x: 0, y: 0 }
-    centeringRef.current = {
-      startRot: [...rotRef.current] as [number, number],
-      targetRot: [-lon, -lat],
+    isRotRef.current      = false
+    velRef.current        = { x: 0, y: 0 }
+    postZoomAnimRef.current = null
+    centeringRef.current  = {
+      startRot:  [...rotRef.current] as [number, number],
+      targetRot: [shortestPath(rotRef.current[0], -lon), Math.max(-80, Math.min(80, -lat))],
       startTime: performance.now(),
       countryId, feature: feat,
     }
@@ -117,6 +126,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     const W = el.clientWidth
     const H = el.clientHeight
     const R = Math.min(W, H) * 0.26   // ← compact globe
+    baseRRef.current = R
 
     const proj = d3.geoOrthographic()
       .scale(R)
@@ -263,15 +273,34 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
             ] as [number, number]
             proj.rotate(rotRef.current)
 
+            // Zoom curve: pull back → zoom in
+            const zf = progress < 0.45
+              ? 1 - 0.08 * d3.easeCubicOut(progress / 0.45)
+              : 0.92 + 0.22 * d3.easeCubicInOut((progress - 0.45) / 0.55)
+            proj.scale(R * zoomRef.current * zf)
+
             if (progress >= 1) {
               const { countryId, feature: feat } = centeringRef.current
               centeringRef.current = null
+              postZoomAnimRef.current = { start: t, from: 1.14, to: 1.0 }
               const centroid = geoPath.centroid(feat as any)
               if (isFinite(centroid[0]) && isFinite(centroid[1])) {
                 applyFlag(countryId, feat, geoPath, gFlags, defs)
                 gFtCountry.select(`.country-${countryId}`).classed('selected', true)
                 setPopupSync({ countryId, x: centroid[0], y: centroid[1] })
               }
+            }
+          }
+
+          // Post-centering zoom ease-back
+          if (postZoomAnimRef.current && !centeringRef.current) {
+            const { start, from, to } = postZoomAnimRef.current
+            const prog = Math.min((t - start) / 700, 1)
+            const zf   = from + (to - from) * d3.easeCubicOut(prog)
+            proj.scale(R * zoomRef.current * zf)
+            if (prog >= 1) {
+              postZoomAnimRef.current = null
+              proj.scale(R * zoomRef.current)
             }
           }
 
@@ -315,6 +344,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     // ── Zoom: scroll wheel ─────────────────────────────────────────────
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
+      postZoomAnimRef.current = null
       const factor = e.deltaY > 0 ? 0.92 : 1.08
       zoomRef.current = Math.max(0.4, Math.min(3.5, zoomRef.current * factor))
       proj.scale(R * zoomRef.current)
@@ -337,6 +367,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
         const dy = e.touches[0].clientY - e.touches[1].clientY
         const dist = Math.hypot(dx, dy)
         if (lastPinchDist > 0) {
+          postZoomAnimRef.current = null
           const factor = dist / lastPinchDist
           zoomRef.current = Math.max(0.4, Math.min(3.5, zoomRef.current * factor))
           proj.scale(R * zoomRef.current)
@@ -366,6 +397,45 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
         onMouseDown={() => { if (svgRef.current) svgRef.current.style.cursor = 'grabbing' }}
         onMouseUp={()   => { if (svgRef.current) svgRef.current.style.cursor = 'grab' }}
       />
+
+      {/* Zoom controls */}
+      {isLoaded && (
+        <div style={{
+          position: 'absolute', right: 14, bottom: 14,
+          display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          {['+', '−'].map((label, i) => (
+            <button
+              key={label}
+              onClick={() => {
+                if (!projRef.current || !baseRRef.current) return
+                postZoomAnimRef.current = null
+                zoomRef.current = i === 0
+                  ? Math.min(3.5, zoomRef.current * 1.3)
+                  : Math.max(0.4, zoomRef.current / 1.3)
+                projRef.current.scale(baseRRef.current * zoomRef.current)
+              }}
+              style={{
+                width: 32, height: 32,
+                borderRadius: 10,
+                background: 'rgba(255,255,255,0.82)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1px solid rgba(255,255,255,0.5)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.18)',
+                fontSize: 18, fontWeight: 300, color: '#1C1C1E',
+                cursor: 'pointer', lineHeight: 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'opacity 0.12s',
+              }}
+              onPointerDown={e => (e.currentTarget.style.opacity = '0.5')}
+              onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {!isLoaded && (
         <div style={{

@@ -2,6 +2,9 @@ import { useState } from 'react'
 import Globe      from './components/Globe'
 import Paris      from './pages/Paris'
 import Classement from './pages/Classement'
+import AuthModal  from './components/AuthModal'
+import { getSession, logout } from './services/auth'
+import type { UserProfile } from './services/auth'
 import {
   IconGlobe, IconTrophy,
 } from './components/NavIcons'
@@ -30,10 +33,15 @@ const NAV_ITEMS = [
 ] as const
 
 export default function App() {
-  const [section, setSection] = useState<SectionId>('globe')
+  const [section,       setSection]       = useState<SectionId>('globe')
   const [centerRequest, setCenterRequest] = useState<{ id: number; ts: number } | null>(null)
+  const [currentUser,   setCurrentUser]   = useState<UserProfile | null>(() => getSession())
+  const [showAuth,      setShowAuth]      = useState(false)
 
-  const back = () => setSection('globe')
+  const back       = () => setSection('globe')
+  const openAuth   = () => setShowAuth(true)
+  const handleAuth = (user: UserProfile) => { setCurrentUser(user); setShowAuth(false) }
+  const handleLogout = () => { logout(); setCurrentUser(null) }
 
   const gold   = '#C89B3C'
   const dimCol = '#AEAEB2'
@@ -47,113 +55,110 @@ export default function App() {
       paddingTop: 'var(--sat)', paddingBottom: 'var(--sab)',
       paddingLeft: 'var(--sal)', paddingRight: 'var(--sar)',
     }}>
-      {/* ── Header ──────────────────────────────────────────────── */}
+      {/* ── Header ────────────────────────────────────────────── */}
       <header style={{
-        flexShrink: 0,
-        height: 'var(--header-h)',
+        flexShrink: 0, height: 'var(--header-h)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 20px',
-        zIndex: 10,
+        padding: '0 16px', zIndex: 10,
         background: 'rgba(242,242,247,0.85)',
         backdropFilter: 'saturate(180%) blur(20px)',
         WebkitBackdropFilter: 'saturate(180%) blur(20px)',
         borderBottom: '1px solid rgba(60,60,67,0.14)',
       }}>
-        {/* Clickable TRIVELA logo */}
-        <button
-          onClick={() => setSection('globe')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 7,
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: '4px 6px', borderRadius: 8,
-            transition: 'opacity 0.18s',
-          }}
+        {/* Logo */}
+        <button onClick={() => setSection('globe')} style={{
+          display: 'flex', alignItems: 'center', gap: 7,
+          background: 'none', border: 'none', cursor: 'pointer',
+          padding: '4px 6px', borderRadius: 8, transition: 'opacity 0.18s',
+        }}
           onPointerDown={e => (e.currentTarget.style.opacity = '0.5')}
           onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
         >
           <span style={{ fontSize: 18, lineHeight: 1 }}>⚽</span>
-          <span style={{
-            fontFamily: "'Bebas Neue', cursive",
-            fontSize: 27, letterSpacing: 4,
-            color: gold, lineHeight: 1,
-          }}>TRIVELA</span>
+          <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 27, letterSpacing: 4, color: gold, lineHeight: 1 }}>
+            TRIVELA
+          </span>
         </button>
 
-        <span style={{
-          fontSize: 9, fontWeight: 700, letterSpacing: 2,
-          color: 'var(--text-3)', textTransform: 'uppercase',
-        }}>
-          World Cup 2026
-        </span>
+        {/* Auth area */}
+        {currentUser ? (
+          <button onClick={handleLogout} style={{
+            display: 'flex', alignItems: 'center', gap: 7,
+            background: 'none', border: '1px solid var(--border)',
+            borderRadius: 20, padding: '5px 10px 5px 6px',
+            cursor: 'pointer', transition: 'opacity 0.15s',
+          }}
+            onPointerDown={e => (e.currentTarget.style.opacity = '0.5')}
+            onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
+          >
+            <img src={`https://flagcdn.com/w40/${currentUser.countryCode}.png`}
+              alt={currentUser.countryName}
+              style={{ width: 20, height: 14, borderRadius: 2, objectFit: 'cover' }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', maxWidth: 80,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {currentUser.pseudo}
+            </span>
+          </button>
+        ) : (
+          <button onClick={openAuth} style={{
+            padding: '7px 14px',
+            background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
+            border: 'none', borderRadius: 20,
+            color: '#0D0800', fontSize: 12, fontWeight: 700,
+            cursor: 'pointer', boxShadow: '0 2px 8px rgba(200,155,60,0.35)',
+            transition: 'transform 0.12s',
+          }}
+            onPointerDown={e => (e.currentTarget.style.transform = 'scale(0.94)')}
+            onPointerUp={e   => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            Connexion
+          </button>
+        )}
       </header>
 
-      {/* ── Content ─────────────────────────────────────────────── */}
+      {/* ── Content ───────────────────────────────────────────── */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', zIndex: 1 }}>
 
         {section === 'globe' && (
           <div style={{ width: '100%', height: '100%', position: 'relative', background: 'var(--bg)' }}>
-            <Globe
-              onNavigate={(s) => setSection(s as SectionId)}
-              centerRequest={centerRequest}
-            />
+            <Globe onNavigate={(s) => setSection(s as SectionId)} centerRequest={centerRequest} />
 
-            {/* Hint */}
             <p style={{
               position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',
               fontSize: 10, letterSpacing: 2, textTransform: 'uppercase',
-              color: 'var(--text-3)', pointerEvents: 'none',
-              fontWeight: 600,
+              color: 'var(--text-3)', pointerEvents: 'none', fontWeight: 600,
               animation: 'fadeIn 2s ease 1.5s both',
             }}>
               Touchez un pays · Faites pivoter
             </p>
 
-            {/* Quick-access card */}
             <div style={{
               position: 'absolute', bottom: 16, left: 16, right: 16,
-              padding: '16px 18px',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: 20,
+              padding: '16px 18px', background: 'var(--bg-card)',
+              border: '1px solid var(--border)', borderRadius: 20,
               boxShadow: 'var(--shadow-lg)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              gap: 12,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
               animation: 'fadeSlideUp .5s cubic-bezier(0.4,0,0.2,1) .8s both',
             }}>
               <div>
-                <div style={{
-                  fontSize: 10, fontWeight: 700, letterSpacing: 1.5,
-                  color: gold, textTransform: 'uppercase',
-                  marginBottom: 3,
-                }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: gold,
+                  textTransform: 'uppercase', marginBottom: 3 }}>
                   Coupe du Monde 2026
                 </div>
-                <div style={{
-                  fontSize: 13, color: 'var(--text-1)', fontWeight: 500,
-                }}>
+                <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 500 }}>
                   72 matchs · Faites vos pronostics
                 </div>
               </div>
-              <button
-                onClick={() => setSection('paris')}
-                style={{
-                  padding: '10px 18px',
-                  background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
-                  border: 'none', borderRadius: 12,
-                  color: '#0D0800', fontSize: 13, fontWeight: 700,
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                  boxShadow: '0 4px 14px rgba(200,155,60,0.4)',
-                  transition: 'transform 0.12s, box-shadow 0.12s',
-                }}
-                onPointerDown={e => {
-                  e.currentTarget.style.transform = 'scale(0.96)'
-                  e.currentTarget.style.boxShadow = '0 2px 6px rgba(200,155,60,0.25)'
-                }}
-                onPointerUp={e => {
-                  e.currentTarget.style.transform = 'scale(1)'
-                  e.currentTarget.style.boxShadow = '0 4px 14px rgba(200,155,60,0.4)'
-                }}
+              <button onClick={() => setSection('paris')} style={{
+                padding: '10px 18px',
+                background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
+                border: 'none', borderRadius: 12, color: '#0D0800', fontSize: 13, fontWeight: 700,
+                cursor: 'pointer', flexShrink: 0,
+                boxShadow: '0 4px 14px rgba(200,155,60,0.4)',
+                transition: 'transform 0.12s, box-shadow 0.12s',
+              }}
+                onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.96)'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(200,155,60,0.25)' }}
+                onPointerUp={e   => { e.currentTarget.style.transform = 'scale(1)';    e.currentTarget.style.boxShadow = '0 4px 14px rgba(200,155,60,0.4)' }}
               >
                 Parier →
               </button>
@@ -161,11 +166,13 @@ export default function App() {
           </div>
         )}
 
-        {section === 'paris'      && <Paris      onBack={back} />}
-        {section === 'classement' && <Classement onBack={back} />}
+        {section === 'paris'      && <Paris onBack={back} />}
+        {section === 'classement' && (
+          <Classement onBack={back} currentUser={currentUser} onOpenAuth={openAuth} />
+        )}
       </div>
 
-      {/* ── Bottom nav ──────────────────────────────────────────── */}
+      {/* ── Bottom nav ────────────────────────────────────────── */}
       <nav style={{
         flexShrink: 0, height: 'var(--nav-h)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-around',
@@ -178,8 +185,7 @@ export default function App() {
         {NAV_ITEMS.map(({ id, Icon, label, countryId }) => {
           const active = section === id
           return (
-            <button
-              key={id}
+            <button key={id}
               onClick={() => {
                 if (countryId !== null) {
                   setSection('globe')
@@ -192,8 +198,7 @@ export default function App() {
                 flex: 1, display: 'flex', flexDirection: 'column',
                 alignItems: 'center', justifyContent: 'center', gap: 3,
                 background: 'none', border: 'none', cursor: 'pointer',
-                padding: '6px 4px', borderRadius: 12,
-                transition: 'opacity 0.15s',
+                padding: '6px 4px', borderRadius: 12, transition: 'opacity 0.15s',
               }}
               onPointerDown={e => (e.currentTarget.style.opacity = '0.45')}
               onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
@@ -201,20 +206,19 @@ export default function App() {
               <Icon size={22} color={active ? gold : dimCol} />
               <span style={{
                 fontSize: 10, fontWeight: 600, letterSpacing: 0.5,
-                color: active ? gold : dimCol,
-                textTransform: 'uppercase',
+                color: active ? gold : dimCol, textTransform: 'uppercase',
                 transition: 'color 0.2s',
               }}>{label}</span>
-              {active && (
-                <div style={{
-                  width: 16, height: 2, borderRadius: 1,
-                  background: gold,
-                }} />
-              )}
+              {active && <div style={{ width: 16, height: 2, borderRadius: 1, background: gold }} />}
             </button>
           )
         })}
       </nav>
+
+      {/* ── Auth modal ────────────────────────────────────────── */}
+      {showAuth && (
+        <AuthModal onSuccess={handleAuth} onClose={() => setShowAuth(false)} />
+      )}
     </div>
   )
 }

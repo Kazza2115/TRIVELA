@@ -67,6 +67,10 @@ html, body {
   0%,100% { fill:#D00020; filter:drop-shadow(0 0 5px rgba(208,0,32,0.8)); }
   50%     { fill:#f00030; filter:drop-shadow(0 0 10px rgba(240,0,48,1)); }
 }
+@keyframes pulse-espagne {
+  0%,100% { fill:#C60B1E; filter:drop-shadow(0 0 5px rgba(198,11,30,0.8)); }
+  50%     { fill:#e01020; filter:drop-shadow(0 0 10px rgba(224,16,32,1)); }
+}
 @keyframes pulse-japon {
   0%,100% { fill:#BC002D; filter:drop-shadow(0 0 5px rgba(188,0,45,0.8)); }
   50%     { fill:#d80035; filter:drop-shadow(0 0 10px rgba(216,0,53,1)); }
@@ -75,15 +79,15 @@ html, body {
   0%,100% { fill:#3C3B6E; filter:drop-shadow(0 0 5px rgba(60,59,110,0.8)); }
   50%     { fill:#5554a0; filter:drop-shadow(0 0 10px rgba(85,84,160,1)); }
 }
-.pulse-brazil  { animation: pulse-brazil  3s ease-in-out infinite; cursor: pointer; }
-.pulse-senegal { animation: pulse-senegal 3.2s ease-in-out infinite; cursor: pointer; }
-.pulse-suisse  { animation: pulse-suisse  2.8s ease-in-out infinite; cursor: pointer; }
-.pulse-japon   { animation: pulse-japon   3.4s ease-in-out infinite; cursor: pointer; }
-.pulse-usa     { animation: pulse-usa     3.6s ease-in-out infinite; cursor: pointer; }
+.pulse-brazil   { animation: pulse-brazil   3s   ease-in-out infinite; cursor: pointer; }
+.pulse-senegal  { animation: pulse-senegal  3.2s ease-in-out infinite; cursor: pointer; }
+.pulse-espagne  { animation: pulse-espagne  2.8s ease-in-out infinite; cursor: pointer; }
+.pulse-japon    { animation: pulse-japon    3.4s ease-in-out infinite; cursor: pointer; }
+.pulse-usa      { animation: pulse-usa      3.6s ease-in-out infinite; cursor: pointer; }
 
 .pulse-brazil.selected,
 .pulse-senegal.selected,
-.pulse-suisse.selected,
+.pulse-espagne.selected,
 .pulse-japon.selected,
 .pulse-usa.selected {
   animation: none;
