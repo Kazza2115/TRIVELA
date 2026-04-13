@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import Globe      from './components/Globe'
-import Paris      from './pages/Paris'
-import Classement from './pages/Classement'
-import AuthModal  from './components/AuthModal'
-import { getSession, logout } from './services/auth'
+import Globe        from './components/Globe'
+import Paris        from './pages/Paris'
+import Classement   from './pages/Classement'
+import AuthModal    from './components/AuthModal'
+import ProfileModal from './components/ProfileModal'
+import { getSession } from './services/auth'
 import type { UserProfile } from './services/auth'
 import {
   IconGlobe, IconTrophy,
@@ -37,11 +38,12 @@ export default function App() {
   const [centerRequest, setCenterRequest] = useState<{ id: number; ts: number } | null>(null)
   const [currentUser,   setCurrentUser]   = useState<UserProfile | null>(() => getSession())
   const [showAuth,      setShowAuth]      = useState(false)
+  const [showProfile,   setShowProfile]   = useState(false)
 
-  const back       = () => setSection('globe')
-  const openAuth   = () => setShowAuth(true)
-  const handleAuth = (user: UserProfile) => { setCurrentUser(user); setShowAuth(false) }
-  const handleLogout = () => { logout(); setCurrentUser(null) }
+  const back         = () => setSection('globe')
+  const openAuth     = () => setShowAuth(true)
+  const handleAuth   = (user: UserProfile) => { setCurrentUser(user); setShowAuth(false) }
+  const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
 
   const gold   = '#C89B3C'
   const dimCol = '#AEAEB2'
@@ -82,7 +84,7 @@ export default function App() {
 
         {/* Auth area */}
         {currentUser ? (
-          <button onClick={handleLogout} style={{
+          <button onClick={() => setShowProfile(true)} style={{
             display: 'flex', alignItems: 'center', gap: 7,
             background: 'none', border: '1px solid var(--border)',
             borderRadius: 20, padding: '5px 10px 5px 6px',
@@ -166,7 +168,7 @@ export default function App() {
           </div>
         )}
 
-        {section === 'paris'      && <Paris onBack={back} />}
+        {section === 'paris'      && <Paris onBack={back} currentUser={currentUser} />}
         {section === 'classement' && (
           <Classement onBack={back} currentUser={currentUser} onOpenAuth={openAuth} />
         )}
@@ -218,6 +220,15 @@ export default function App() {
       {/* ── Auth modal ────────────────────────────────────────── */}
       {showAuth && (
         <AuthModal onSuccess={handleAuth} onClose={() => setShowAuth(false)} />
+      )}
+
+      {/* ── Profile modal ─────────────────────────────────────── */}
+      {showProfile && currentUser && (
+        <ProfileModal
+          currentUser={currentUser}
+          onClose={() => setShowProfile(false)}
+          onLogout={handleLogout}
+        />
       )}
     </div>
   )

@@ -3,13 +3,11 @@ import { FEATURED } from './Globe'
 
 interface Props {
   countryId: number
-  x: number
-  y: number
   onNavigate: (section: string) => void
   onClose: () => void
 }
 
-export default function CountryPopup({ countryId, x, y, onNavigate, onClose }: Props) {
+export default function CountryPopup({ countryId, onNavigate, onClose }: Props) {
   const country = FEATURED[countryId]
   const [visible, setVisible] = useState(false)
 
@@ -21,26 +19,19 @@ export default function CountryPopup({ countryId, x, y, onNavigate, onClose }: P
 
   if (!country) return null
 
-  // Clamp popup within the viewport
-  const W = window.innerWidth
-  const H = window.innerHeight
-  const pw = 260
-  const ph = 200
-  const rawX = x - pw / 2
-  const rawY = y - ph - 24
-  const clampedX = Math.max(12, Math.min(W - pw - 12, rawX))
-  const clampedY = Math.max(70, Math.min(H - ph - 12, rawY))
-
   return (
     <div
       style={{
         position: 'absolute',
-        left: clampedX,
-        top: clampedY,
-        width: pw,
+        left: 0,
+        top: 0,
+        width: 260,
         zIndex: 100,
         opacity: visible ? 1 : 0,
-        transform: visible ? 'translateY(0) scale(1)' : 'translateY(12px) scale(0.92)',
+        // Translate to center horizontally and sit above the anchor point
+        transform: visible
+          ? 'translate(-50%, calc(-100% - 20px)) scale(1)'
+          : 'translate(-50%, calc(-100% - 8px)) scale(0.92)',
         transition: 'opacity 0.35s cubic-bezier(0.34,1.56,0.64,1), transform 0.35s cubic-bezier(0.34,1.56,0.64,1)',
         pointerEvents: visible ? 'all' : 'none',
       }}

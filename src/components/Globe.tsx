@@ -63,6 +63,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
   const baseRRef          = useRef(0)
   const velRef            = useRef({ x: 0, y: 0 })
   const postZoomAnimRef   = useRef<{ start: number; from: number; to: number } | null>(null)
+  const popupWrapRef      = useRef<HTMLDivElement | null>(null)
 
   const setPopupSync = useCallback((p: PopupState | null) => {
     popupRef.current    = p
@@ -310,6 +311,23 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           gFtCountry.selectAll('.ft-country').attr('d', geoPath as any)
           gBorders.select('path').attr('d', geoPath as any)
 
+          // Keep atmosphere and rim circles in sync with the current scale
+          const curR = proj.scale()
+          gAtmo.select('circle').attr('r', curR + 32)
+          gRim.select('circle').attr('r', curR + 1)
+
+          // Keep popup wrapper anchored to country centroid during zoom / pan
+          if (selectedRef.current !== null && popupWrapRef.current) {
+            const selFeat = featuresRef.current.find((f: any) => parseInt(f.id) === selectedRef.current)
+            if (selFeat) {
+              const c = geoPath.centroid(selFeat as any)
+              if (isFinite(c[0]) && isFinite(c[1])) {
+                popupWrapRef.current.style.left = c[0] + 'px'
+                popupWrapRef.current.style.top  = c[1] + 'px'
+              }
+            }
+          }
+
           rafRef.current = requestAnimationFrame(animate)
         }
         rafRef.current = requestAnimationFrame(animate)
@@ -456,12 +474,16 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
       )}
 
       {popup && (
-        <CountryPopup
-          countryId={popup.countryId}
-          x={popup.x} y={popup.y}
-          onNavigate={onNavigate}
-          onClose={handleClose}
-        />
+        <div
+          ref={popupWrapRef}
+          style={{ position: 'absolute', left: popup.x, top: popup.y, pointerEvents: 'none' }}
+        >
+          <CountryPopup
+            countryId={popup.countryId}
+            onNavigate={onNavigate}
+            onClose={handleClose}
+          />
+        </div>
       )}
     </div>
   )

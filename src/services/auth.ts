@@ -86,3 +86,38 @@ function toProfile(u: StoredUser): UserProfile {
   const { _pwKey: _, ...profile } = u
   return profile
 }
+
+// ─── Bets ──────────────────────────────────────────────────────────────────
+
+export interface BetRecord {
+  id: string
+  userId: string
+  matchId: string
+  home: string
+  away: string
+  homeScore: number
+  awayScore: number
+  stage: string
+  createdAt: number
+}
+
+const BETS_KEY = 'trivela-bets'
+
+function getStoredBets(): BetRecord[] {
+  try { return JSON.parse(localStorage.getItem(BETS_KEY) ?? '[]') } catch { return [] }
+}
+
+export function saveBet(bet: Omit<BetRecord, 'id' | 'createdAt'>): void {
+  const bets = getStoredBets()
+  const idx  = bets.findIndex(b => b.userId === bet.userId && b.matchId === bet.matchId)
+  const record: BetRecord = { ...bet, id: crypto.randomUUID(), createdAt: Date.now() }
+  if (idx >= 0) bets[idx] = record
+  else bets.push(record)
+  localStorage.setItem(BETS_KEY, JSON.stringify(bets))
+}
+
+export function getBets(userId: string): BetRecord[] {
+  return getStoredBets()
+    .filter(b => b.userId === userId)
+    .sort((a, b) => b.createdAt - a.createdAt)
+}
