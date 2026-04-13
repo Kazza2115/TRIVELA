@@ -13,7 +13,7 @@ export const FEATURED: Record<number, {
   686: { name:'Sénégal', code:'sn', color:'#00A550', pulseClass:'pulse-senegal',  sectionId:'classement', sectionName:'Classement',  icon:'🏆' },
   756: { name:'Suisse',  code:'ch', color:'#D00020', pulseClass:'pulse-suisse',   sectionId:'album',      sectionName:'Mon Album',   icon:'📖' },
   392: { name:'Japon',   code:'jp', color:'#BC002D', pulseClass:'pulse-japon',    sectionId:'echange',    sectionName:'Échange',     icon:'🔄' },
-  840: { name:'USA',     code:'us', color:'#3C3B6E', pulseClass:'pulse-usa',      sectionId:'defis',      sectionName:'Défis',       icon:'⚡' },
+  840: { name:'USA',     code:'us', color:'#3C3B6E', pulseClass:'pulse-usa',      sectionId:'paris',      sectionName:'Paris 2026',  icon:'⚡' },
 }
 
 // ─── Globe palette ─────────────────────────────────────────────────────────
@@ -53,6 +53,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
   const centeringRef = useRef<CenteringState | null>(null)
   const pendingCenterRef  = useRef<number | undefined>(undefined)
   const triggerCenterRef  = useRef<(id: number) => void>(() => {})
+  const zoomRef           = useRef(1)
 
   const setPopupSync = useCallback((p: PopupState | null) => {
     popupRef.current    = p
@@ -142,9 +143,9 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     // Ocean sphere
     const sphereGrad = defs.append('radialGradient').attr('id','sphere-grad')
       .attr('cx','32%').attr('cy','26%').attr('r','65%')
-    sphereGrad.append('stop').attr('offset','0%').attr('stop-color','#112244')
-    sphereGrad.append('stop').attr('offset','60%').attr('stop-color','#08142e')
-    sphereGrad.append('stop').attr('offset','100%').attr('stop-color','#040a18')
+    sphereGrad.append('stop').attr('offset','0%').attr('stop-color','#2a5298')
+    sphereGrad.append('stop').attr('offset','60%').attr('stop-color','#162d5e')
+    sphereGrad.append('stop').attr('offset','100%').attr('stop-color','#0a1838')
 
     // Gold rim glow filter
     const rimFilter = defs.append('filter').attr('id','rim-glow').attr('x','-20%').attr('y','-20%').attr('width','140%').attr('height','140%')
@@ -209,17 +210,10 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           .attr('stroke', (d: any) => FEATURED[parseInt(d.id)].color)
           .attr('stroke-width', '0.8')
           .style('cursor', 'pointer')
-          .on('click', (event: MouseEvent, d: any) => {
+          .on('click', (_event: MouseEvent, d: any) => {
             const id = parseInt(d.id)
             if (!FEATURED[id]) return
-            isRotRef.current = false
-            const [mx, my]  = d3.pointer(event, svgRef.current)
-            const centroid   = geoPath.centroid(d as any)
-            const px = isFinite(mx) ? mx : centroid[0]
-            const py = isFinite(my) ? my : centroid[1]
-            applyFlag(id, d, geoPath, gFlags, defs)
-            gFtCountry.select(`.country-${id}`).classed('selected', true)
-            setPopupSync({ countryId: id, x: px, y: py })
+            triggerCenterRef.current(id)
           })
 
         // Border mesh
@@ -302,7 +296,48 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
       })
 
     svg.call(dragBehavior as any)
-    return () => { cancelAnimationFrame(rafRef.current) }
+
+    // ── Zoom: scroll wheel ─────────────────────────────────────────────
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      const factor = e.deltaY > 0 ? 0.92 : 1.08
+      zoomRef.current = Math.max(0.4, Math.min(3.5, zoomRef.current * factor))
+      proj.scale(R * zoomRef.current)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+
+    // ── Zoom: pinch gesture ────────────────────────────────────────────
+    let lastPinchDist = 0
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        lastPinchDist = Math.hypot(dx, dy)
+      }
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault()
+        const dx = e.touches[0].clientX - e.touches[1].clientX
+        const dy = e.touches[0].clientY - e.touches[1].clientY
+        const dist = Math.hypot(dx, dy)
+        if (lastPinchDist > 0) {
+          const factor = dist / lastPinchDist
+          zoomRef.current = Math.max(0.4, Math.min(3.5, zoomRef.current * factor))
+          proj.scale(R * zoomRef.current)
+        }
+        lastPinchDist = dist
+      }
+    }
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove',  onTouchMove,  { passive: false })
+
+    return () => {
+      cancelAnimationFrame(rafRef.current)
+      el.removeEventListener('wheel',      onWheel)
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove',  onTouchMove)
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

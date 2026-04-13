@@ -24,14 +24,14 @@ function IconTarget({ size = 22, color = 'currentColor' }: { size?: number; colo
 }
 
 const NAV_ITEMS = [
-  { id: 'globe'      as SectionId, Icon: IconGlobe,  label: 'Globe'      },
-  { id: 'paris'      as SectionId, Icon: IconTarget, label: 'Paris'      },
-  { id: 'classement' as SectionId, Icon: IconTrophy, label: 'Classement' },
+  { id: 'globe'      as SectionId, Icon: IconGlobe,  label: 'Globe',      countryId: null },
+  { id: 'paris'      as SectionId, Icon: IconTarget, label: 'Paris',      countryId: 840  },
+  { id: 'classement' as SectionId, Icon: IconTrophy, label: 'Classement', countryId: 686  },
 ] as const
 
 export default function App() {
   const [section, setSection] = useState<SectionId>('globe')
-  const [centerRequest] = useState<{ id: number; ts: number } | null>(null)
+  const [centerRequest, setCenterRequest] = useState<{ id: number; ts: number } | null>(null)
 
   const back = () => setSection('globe')
 
@@ -175,12 +175,19 @@ export default function App() {
         WebkitBackdropFilter: 'saturate(180%) blur(24px)',
         zIndex: 20,
       }}>
-        {NAV_ITEMS.map(({ id, Icon, label }) => {
+        {NAV_ITEMS.map(({ id, Icon, label, countryId }) => {
           const active = section === id
           return (
             <button
               key={id}
-              onClick={() => setSection(id)}
+              onClick={() => {
+                if (countryId !== null) {
+                  setSection('globe')
+                  setCenterRequest({ id: countryId, ts: Date.now() })
+                } else {
+                  setSection(id)
+                }
+              }}
               style={{
                 flex: 1, display: 'flex', flexDirection: 'column',
                 alignItems: 'center', justifyContent: 'center', gap: 3,
