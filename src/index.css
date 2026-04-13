@@ -7,24 +7,34 @@
 }
 
 :root {
-  --bg-deep:  #060D1A;
-  --bg-dark:  #0A1628;
+  /* ── Base palette ─────────────────────────────────────────────── */
+  --bg-deep:  #07090F;
+  --bg-card:  rgba(255,255,255,0.055);
+  --bg-card2: rgba(255,255,255,0.09);
   --gold:     #C89B3C;
-  --gold-lt:  #F0E6D2;
-  --text-primary:   #F0F4FF;
-  --text-secondary: #7EA8D8;
-  --text-muted:     #3D5A80;
+  --gold-lt:  #E8D080;
+  --gold-dim: rgba(200,155,60,0.35);
 
-  /* Section accent colours */
+  /* ── Text ─────────────────────────────────────────────────────── */
+  --text-1: #F5F5F7;
+  --text-2: rgba(245,245,247,0.58);
+  --text-3: rgba(245,245,247,0.32);
+
+  /* ── Surfaces ─────────────────────────────────────────────────── */
+  --border:   rgba(255,255,255,0.09);
+  --border-lt: rgba(255,255,255,0.05);
+  --shadow:   0 2px 12px rgba(0,0,0,0.35);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.45);
+
+  /* ── Country accents ──────────────────────────────────────────── */
   --brazil: #009C3B;
-  --senegal:#00A550;
   --suisse: #D00020;
-  --japon:  #BC002D;
-  --usa:    #3C3B6E;
 
-  /* Layout */
-  --header-h: 52px;
-  --nav-h:    64px;
+  /* ── Layout ───────────────────────────────────────────────────── */
+  --header-h: 56px;
+  --nav-h:    68px;
+  --radius:   14px;
+  --radius-sm: 10px;
   --sat: env(safe-area-inset-top,    0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left,   0px);
@@ -39,41 +49,40 @@ html, body {
   width: 100%; height: 100%;
   overflow: hidden;
   background: var(--bg-deep);
-  color: var(--text-primary);
-  font-family: 'Inter', sans-serif;
+  color: var(--text-1);
+  font-family: -apple-system, 'Inter', sans-serif;
   overscroll-behavior: none;
   position: fixed;
 }
 #root { width: 100%; height: 100%; }
 
-/* ─── Globe: national-colour glow pulses (LoL aesthetic) ──────────── */
-
+/* ─── Globe: refined country glow (subtle) ────────────────────── */
 @keyframes pulse-brazil {
-  0%,100% { fill:#009C3B; filter:drop-shadow(0 0 5px #009C3Bcc) drop-shadow(0 0 14px #009C3B77); }
-  50%     { fill:#00d44f; filter:drop-shadow(0 0 10px #00d44fff) drop-shadow(0 0 28px #009C3Baa); }
+  0%,100% { fill:#009C3B; filter:drop-shadow(0 0 4px rgba(0,156,59,0.7)); }
+  50%     { fill:#00b845; filter:drop-shadow(0 0 8px rgba(0,184,69,0.9)); }
 }
 @keyframes pulse-senegal {
-  0%,100% { fill:#00A550; filter:drop-shadow(0 0 5px #00A550cc) drop-shadow(0 0 14px #00A55077); }
-  50%     { fill:#00cc64; filter:drop-shadow(0 0 10px #00cc64ff) drop-shadow(0 0 28px #00A550aa); }
+  0%,100% { fill:#00A550; filter:drop-shadow(0 0 4px rgba(0,165,80,0.7)); }
+  50%     { fill:#00c060; filter:drop-shadow(0 0 8px rgba(0,192,96,0.9)); }
 }
 @keyframes pulse-suisse {
-  0%,100% { fill:#D00020; filter:drop-shadow(0 0 5px #D00020cc) drop-shadow(0 0 14px #D0002077); }
-  50%     { fill:#ff1a3a; filter:drop-shadow(0 0 10px #ff1a3aff) drop-shadow(0 0 28px #D00020aa); }
+  0%,100% { fill:#D00020; filter:drop-shadow(0 0 4px rgba(208,0,32,0.7)); }
+  50%     { fill:#f00030; filter:drop-shadow(0 0 8px rgba(240,0,48,0.9)); }
 }
 @keyframes pulse-japon {
-  0%,100% { fill:#BC002D; filter:drop-shadow(0 0 5px #BC002Dcc) drop-shadow(0 0 14px #BC002D77); }
-  50%     { fill:#e6003a; filter:drop-shadow(0 0 10px #e6003aff) drop-shadow(0 0 28px #BC002Daa); }
+  0%,100% { fill:#BC002D; filter:drop-shadow(0 0 4px rgba(188,0,45,0.7)); }
+  50%     { fill:#d80035; filter:drop-shadow(0 0 8px rgba(216,0,53,0.9)); }
 }
 @keyframes pulse-usa {
-  0%,100% { fill:#3C3B6E; filter:drop-shadow(0 0 5px #3C3B6Ecc) drop-shadow(0 0 14px #3C3B6E77); }
-  50%     { fill:#5756a8; filter:drop-shadow(0 0 10px #5756a8ff) drop-shadow(0 0 28px #3C3B6Eaa); }
+  0%,100% { fill:#3C3B6E; filter:drop-shadow(0 0 4px rgba(60,59,110,0.7)); }
+  50%     { fill:#5554a0; filter:drop-shadow(0 0 8px rgba(85,84,160,0.9)); }
 }
 
-.pulse-brazil  { animation: pulse-brazil  2.4s ease-in-out infinite; cursor: pointer; }
-.pulse-senegal { animation: pulse-senegal 2.2s ease-in-out infinite; cursor: pointer; }
-.pulse-suisse  { animation: pulse-suisse  2.6s ease-in-out infinite; cursor: pointer; }
-.pulse-japon   { animation: pulse-japon   2.0s ease-in-out infinite; cursor: pointer; }
-.pulse-usa     { animation: pulse-usa     2.8s ease-in-out infinite; cursor: pointer; }
+.pulse-brazil  { animation: pulse-brazil  3s ease-in-out infinite; cursor: pointer; }
+.pulse-senegal { animation: pulse-senegal 3.2s ease-in-out infinite; cursor: pointer; }
+.pulse-suisse  { animation: pulse-suisse  2.8s ease-in-out infinite; cursor: pointer; }
+.pulse-japon   { animation: pulse-japon   3.4s ease-in-out infinite; cursor: pointer; }
+.pulse-usa     { animation: pulse-usa     3.6s ease-in-out infinite; cursor: pointer; }
 
 .pulse-brazil.selected,
 .pulse-senegal.selected,
@@ -85,52 +94,20 @@ html, body {
   filter: none;
 }
 
-/* ─── App animations ─────────────────────────────────────────────── */
+/* ─── Animations ──────────────────────────────────────────────── */
 @keyframes fadeSlideUp {
-  from { opacity:0; transform:translateY(20px); }
-  to   { opacity:1; transform:translateY(0); }
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes fadeIn  { from{opacity:0} to{opacity:1} }
-@keyframes scaleIn { from{opacity:0;transform:scale(0.86)} to{opacity:1;transform:scale(1)} }
-@keyframes float   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-@keyframes spin    { to{transform:rotate(360deg)} }
-@keyframes shimmer {
-  0%  { background-position: -200% 0; }
-  100%{ background-position:  200% 0; }
-}
-
-/* ─── Card rarity shimmer ─────────────────────────────────────────── */
-@keyframes rarityShimmer {
-  0%  { background-position: -300% 0; }
-  100%{ background-position:  300% 0; }
+@keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes spin    { to { transform: rotate(360deg); } }
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ─── Buttons ────────────────────────────────────────────────────── */
-.btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 11px 22px; border: none; border-radius: 50px;
-  font-family: 'Inter', sans-serif; font-weight: 700;
-  font-size: 14px; cursor: pointer; transition: all .22s ease;
-  text-decoration: none; white-space: nowrap; letter-spacing: .5px;
-}
-.btn-gold {
-  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-lt) 100%);
-  color: #1a0d00;
-  box-shadow: 0 4px 20px rgba(200,155,60,.35);
-}
-.btn-gold:hover,.btn-gold:active {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(200,155,60,.55);
-}
-.btn-ghost {
-  background: rgba(255,255,255,.06); color: var(--text-secondary);
-  border: 1px solid rgba(255,255,255,.12);
-}
-.btn-ghost:hover,.btn-ghost:active {
-  background: rgba(255,255,255,.12); color: var(--text-primary);
-}
-
-/* ─── Scrollbar ─────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 3px; }
+/* ─── Scrollbar ───────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(100,140,200,.3); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }

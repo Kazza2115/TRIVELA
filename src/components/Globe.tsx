@@ -16,12 +16,12 @@ export const FEATURED: Record<number, {
   840: { name:'USA',     code:'us', color:'#3C3B6E', pulseClass:'pulse-usa',      sectionId:'defis',      sectionName:'Défis',       icon:'⚡' },
 }
 
-// ─── LoL-inspired globe palette ────────────────────────────────────────────
+// ─── Globe palette ─────────────────────────────────────────────────────────
 const C = {
-  bgFill:   'rgba(12, 22, 48, 0.82)',
-  bgStroke: 'rgba(45, 80, 140, 0.35)',
-  grid:     'rgba(80, 120, 200, 0.06)',
-  border:   'rgba(40, 70, 130, 0.25)',
+  bgFill:   'rgba(18, 28, 55, 0.78)',
+  bgStroke: 'rgba(60, 100, 180, 0.28)',
+  grid:     'rgba(100, 140, 220, 0.05)',
+  border:   'rgba(50, 80, 150, 0.22)',
 }
 
 interface GlobeProps {
@@ -113,7 +113,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
 
     const W = el.clientWidth
     const H = el.clientHeight
-    const R = Math.min(W, H) * 0.30   // ← compact globe
+    const R = Math.min(W, H) * 0.26   // ← compact globe
 
     const proj = d3.geoOrthographic()
       .scale(R)
@@ -131,20 +131,20 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     // ── Defs ──────────────────────────────────────────────────────────
     const defs = svg.append('defs')
 
-    // Wide dramatic atmosphere halo
+    // Soft atmosphere halo
     const atmoGrad = defs.append('radialGradient').attr('id','atmo-grad')
       .attr('cx','50%').attr('cy','50%').attr('r','50%')
-    atmoGrad.append('stop').attr('offset','70%').attr('stop-color','transparent')
-    atmoGrad.append('stop').attr('offset','85%').attr('stop-color','#1a4a9a').attr('stop-opacity','.38')
-    atmoGrad.append('stop').attr('offset','95%').attr('stop-color','#6020e0').attr('stop-opacity','.12')
+    atmoGrad.append('stop').attr('offset','72%').attr('stop-color','transparent')
+    atmoGrad.append('stop').attr('offset','86%').attr('stop-color','#1a3a7a').attr('stop-opacity','.28')
+    atmoGrad.append('stop').attr('offset','96%').attr('stop-color','#3a60c0').attr('stop-opacity','.08')
     atmoGrad.append('stop').attr('offset','100%').attr('stop-color','transparent')
 
-    // Ocean sphere (very dark, LoL-style)
+    // Ocean sphere
     const sphereGrad = defs.append('radialGradient').attr('id','sphere-grad')
       .attr('cx','32%').attr('cy','26%').attr('r','65%')
-    sphereGrad.append('stop').attr('offset','0%').attr('stop-color','#0d2040')
-    sphereGrad.append('stop').attr('offset','60%').attr('stop-color','#050e1f')
-    sphereGrad.append('stop').attr('offset','100%').attr('stop-color','#020508')
+    sphereGrad.append('stop').attr('offset','0%').attr('stop-color','#112244')
+    sphereGrad.append('stop').attr('offset','60%').attr('stop-color','#08142e')
+    sphereGrad.append('stop').attr('offset','100%').attr('stop-color','#040a18')
 
     // Gold rim glow filter
     const rimFilter = defs.append('filter').attr('id','rim-glow').attr('x','-20%').attr('y','-20%').attr('width','140%').attr('height','140%')
@@ -173,11 +173,9 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     gGrid.append('path').datum(d3.geoGraticule().step([30,30])())
       .attr('d',geoPath).attr('fill','none').attr('stroke',C.grid).attr('stroke-width','0.5')
 
-    // Gold rim rings (LoL magical orb feel)
+    // Clean gold rim
     gRim.append('circle').attr('cx',W/2).attr('cy',H/2).attr('r',R+1)
-      .attr('fill','none').attr('stroke','#C89B3C').attr('stroke-width','1').attr('opacity','.22')
-    gRim.append('circle').attr('cx',W/2).attr('cy',H/2).attr('r',R+3)
-      .attr('fill','none').attr('stroke','#6020e0').attr('stroke-width','1').attr('opacity','.10')
+      .attr('fill','none').attr('stroke','#C89B3C').attr('stroke-width','0.8').attr('opacity','.18')
 
     // ── Load world data ────────────────────────────────────────────────
     fetch('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json')
@@ -366,6 +364,6 @@ function applyFlag(
     .attr('preserveAspectRatio','xMidYMid slice')
     .attr('clip-path',`url(#clip-flag-${id})`)
     .attr('opacity',0)
-    .transition().duration(550).ease(d3.easeCubicOut)
-    .attr('opacity',0.9)
+    .transition().duration(500).ease(d3.easeCubicOut)
+    .attr('opacity',1)
 }

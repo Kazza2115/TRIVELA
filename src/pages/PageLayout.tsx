@@ -16,79 +16,91 @@ export default function PageLayout({ onBack, accentColor, flag, title, subtitle,
       background: 'var(--bg-deep)',
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
-      animation: 'fadeSlideUp 0.4s ease',
+      animation: 'fadeIn 0.28s cubic-bezier(0.4,0,0.2,1)',
     }}>
       {/* Top bar */}
       <header style={{
-        display: 'flex', alignItems: 'center', gap: 14,
-        padding: '18px 28px',
-        borderBottom: `1px solid ${accentColor}22`,
-        background: `linear-gradient(180deg, ${accentColor}0d 0%, transparent 100%)`,
+        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '0 20px',
+        height: 56,
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        background: 'rgba(7,9,15,0.8)',
+        backdropFilter: 'saturate(180%) blur(20px)',
+        WebkitBackdropFilter: 'saturate(180%) blur(20px)',
         flexShrink: 0,
       }}>
+        {/* Back button */}
         <button
           onClick={onBack}
           style={{
-            display: 'flex', alignItems: 'center', gap: 6,
+            display: 'flex', alignItems: 'center', gap: 5,
             background: 'rgba(255,255,255,0.06)',
             border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 10, padding: '8px 14px',
-            color: 'rgba(255,255,255,0.6)', fontSize: 13,
-            fontWeight: 600, cursor: 'pointer',
-            transition: 'all 0.2s', fontFamily: "'Inter', sans-serif",
+            borderRadius: 10, padding: '7px 13px',
+            color: 'rgba(245,245,247,0.65)', fontSize: 13,
+            fontWeight: 500, cursor: 'pointer',
+            fontFamily: '-apple-system, Inter, sans-serif',
+            transition: 'background 0.15s, color 0.15s',
+            flexShrink: 0,
           }}
-          onMouseEnter={e => {
-            ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.11)'
+          onPointerDown={e => {
+            ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.1)'
             ;(e.currentTarget as HTMLButtonElement).style.color = '#fff'
           }}
-          onMouseLeave={e => {
+          onPointerUp={e => {
             ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'
-            ;(e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.6)'
+            ;(e.currentTarget as HTMLButtonElement).style.color = 'rgba(245,245,247,0.65)'
           }}
         >
-          ← Globe
+          ‹ Retour
         </button>
 
-        <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.08)' }} />
+        {/* Divider */}
+        <div style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.08)', flexShrink: 0 }} />
 
-        <span style={{ fontSize: 26 }}>{flag}</span>
-
-        <div>
+        {/* Icon + title */}
+        <span style={{ fontSize: 22, lineHeight: 1, flexShrink: 0 }}>{flag}</span>
+        <div style={{ minWidth: 0 }}>
           <div style={{
             fontFamily: "'Bebas Neue', cursive",
-            fontSize: 26, letterSpacing: 3,
+            fontSize: 24, letterSpacing: 3,
             color: '#fff', lineHeight: 1,
           }}>
             {title}
           </div>
           {subtitle && (
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2, letterSpacing: 0.5 }}>
+            <div style={{
+              fontSize: 10, color: 'rgba(245,245,247,0.38)',
+              marginTop: 1, letterSpacing: 0.4,
+              fontFamily: '-apple-system, Inter, sans-serif',
+            }}>
               {subtitle}
             </div>
           )}
         </div>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+        {/* Brand mark */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           <span style={{
             fontFamily: "'Bebas Neue', cursive",
-            fontSize: 18, letterSpacing: 3,
-            color: `${accentColor}88`,
+            fontSize: 16, letterSpacing: 3,
+            color: `${accentColor}55`,
           }}>TRIVELA</span>
-          <span style={{ fontSize: 16 }}>⚽</span>
         </div>
       </header>
 
       {/* Accent line */}
       <div style={{
-        height: 2,
-        background: `linear-gradient(90deg, ${accentColor} 0%, ${accentColor}44 60%, transparent 100%)`,
+        height: 1,
+        background: `linear-gradient(90deg, ${accentColor}60 0%, ${accentColor}20 60%, transparent 100%)`,
         flexShrink: 0,
       }} />
 
-      {/* Content */}
+      {/* Scrollable content */}
       <div style={{
         flex: 1, overflowY: 'auto',
-        padding: '28px 28px',
+        padding: '22px 18px',
+        WebkitOverflowScrolling: 'touch',
       }}>
         {children}
       </div>

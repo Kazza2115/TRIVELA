@@ -17,12 +17,12 @@ const KO_ROUNDS = [
 
 // ─── Component ───────────────────────────────────────────────────────────
 export default function Paris({ onBack }: { onBack: () => void }) {
-  const [tab,          setTab]          = useState<Tab>('groupes')
-  const [activeGroup,  setActiveGroup]  = useState('A')
-  const [matchday,     setMatchday]     = useState<1|2|3>(1)
-  const [koRound,      setKoRound]      = useState<string>('r32')
-  const [predictions,  setPredictions]  = useState<Predictions>({})
-  const [confirmed,    setConfirmed]    = useState<Set<string>>(new Set())
+  const [tab,         setTab]         = useState<Tab>('groupes')
+  const [activeGroup, setActiveGroup] = useState('A')
+  const [matchday,    setMatchday]    = useState<1|2|3>(1)
+  const [koRound,     setKoRound]     = useState<string>('r32')
+  const [predictions, setPredictions] = useState<Predictions>({})
+  const [confirmed,   setConfirmed]   = useState<Set<string>>(new Set())
 
   const setPrediction = (id: string, side: 'home'|'away', delta: number) => {
     setPredictions(prev => {
@@ -35,15 +35,11 @@ export default function Paris({ onBack }: { onBack: () => void }) {
         },
       }
     })
-    // Un pari modifié n'est plus "confirmé"
     setConfirmed(prev => { const s = new Set(prev); s.delete(id); return s })
   }
 
-  const confirm = (id: string) => {
-    setConfirmed(prev => new Set(prev).add(id))
-  }
+  const confirm = (id: string) => setConfirmed(prev => new Set(prev).add(id))
 
-  // Filtered matches
   const groupMatches = GROUP_MATCHES.filter(
     m => m.group === activeGroup && m.matchday === matchday,
   )
@@ -55,86 +51,87 @@ export default function Paris({ onBack }: { onBack: () => void }) {
       accentColor="#C89B3C"
       flag="🎯"
       title="PARIS"
-      subtitle="Coupe du Monde 2026 · Faites vos pronostics"
+      subtitle="Coupe du Monde 2026 · Pronostics"
     >
       {/* ── Main tabs ──────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 22 }}>
+      <div style={{
+        display: 'flex', gap: 4, marginBottom: 20,
+        background: 'rgba(255,255,255,0.05)',
+        borderRadius: 12, padding: 4,
+        border: '1px solid rgba(255,255,255,0.08)',
+      }}>
         {(['groupes', 'eliminatoires'] as Tab[]).map(t => (
           <button
             key={t}
             onClick={() => setTab(t)}
             style={{
-              flex: 1,
-              padding: '10px 0',
-              borderRadius: 10,
+              flex: 1, padding: '9px 0',
+              borderRadius: 9,
               border: 'none',
-              fontFamily: "'Inter', sans-serif",
-              fontWeight: 700,
+              fontFamily: '-apple-system, Inter, sans-serif',
+              fontWeight: 600,
               fontSize: 12,
-              letterSpacing: 1.2,
-              textTransform: 'uppercase',
+              letterSpacing: 0.6,
               cursor: 'pointer',
-              transition: 'all .2s',
-              background: tab === t
-                ? 'linear-gradient(135deg,#C89B3C,#F0E6D2)'
-                : 'rgba(255,255,255,.05)',
-              color: tab === t ? '#1a0d00' : 'rgba(255,255,255,.45)',
-              boxShadow: tab === t ? '0 4px 18px rgba(200,155,60,.4)' : 'none',
+              transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
+              background: tab === t ? 'rgba(200,155,60,0.18)' : 'transparent',
+              color: tab === t ? '#E8D080' : 'rgba(245,245,247,0.38)',
+              boxShadow: tab === t ? 'inset 0 0 0 1px rgba(200,155,60,0.3)' : 'none',
             }}
           >
-            {t === 'groupes' ? '⚔ Phase de Groupes' : '🏆 Éliminatoires'}
+            {t === 'groupes' ? 'Phase de Groupes' : 'Éliminatoires'}
           </button>
         ))}
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════ */}
+      {/* ═══════════ GROUP STAGE ═══════════════════════════════════ */}
       {tab === 'groupes' && (
         <>
           {/* Group selector */}
           <div style={{
-            display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8,
-            marginBottom: 14,
-            scrollbarWidth: 'none',
+            display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 4,
+            marginBottom: 14, scrollbarWidth: 'none',
           }}>
             {Object.keys(GROUPS).map(g => (
               <GroupPill key={g} label={g} active={activeGroup === g} onClick={() => setActiveGroup(g)} />
             ))}
           </div>
 
-          {/* Group standings mini-banner */}
+          {/* Group banner */}
           <GroupBanner group={activeGroup} />
 
           {/* Matchday tabs */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 18 }}>
             {([1, 2, 3] as const).map(md => (
               <button
                 key={md}
                 onClick={() => setMatchday(md)}
                 style={{
                   flex: 1, padding: '8px 0',
-                  borderRadius: 8,
-                  border: `1px solid ${matchday === md ? 'rgba(200,155,60,.6)' : 'rgba(255,255,255,.08)'}`,
-                  background: matchday === md ? 'rgba(200,155,60,.12)' : 'rgba(255,255,255,.03)',
-                  color: matchday === md ? '#C89B3C' : 'rgba(255,255,255,.4)',
-                  fontFamily: "'Inter', sans-serif",
-                  fontWeight: 700, fontSize: 11, letterSpacing: 1,
-                  cursor: 'pointer', transition: 'all .15s',
+                  borderRadius: 9,
+                  border: `1px solid ${matchday === md ? 'rgba(200,155,60,0.5)' : 'rgba(255,255,255,0.08)'}`,
+                  background: matchday === md ? 'rgba(200,155,60,0.1)' : 'transparent',
+                  color: matchday === md ? '#C89B3C' : 'rgba(245,245,247,0.38)',
+                  fontFamily: '-apple-system, Inter, sans-serif',
+                  fontWeight: 600, fontSize: 11, letterSpacing: 0.8,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
                 }}
               >
-                JOURNÉE {md}
+                J{md}
               </button>
             ))}
           </div>
 
           {/* Match cards */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {groupMatches.map((m, i) => (
               <MatchCard
                 key={m.id}
                 match={m}
                 prediction={predictions[m.id]}
                 confirmed={confirmed.has(m.id)}
-                delay={i * 80}
+                delay={i * 60}
                 onIncrement={(side, delta) => setPrediction(m.id, side, delta)}
                 onConfirm={() => confirm(m.id)}
               />
@@ -143,12 +140,12 @@ export default function Paris({ onBack }: { onBack: () => void }) {
         </>
       )}
 
-      {/* ═══════════════════════════════════════════════════════════ */}
+      {/* ═══════════ KNOCKOUT ══════════════════════════════════════ */}
       {tab === 'eliminatoires' && (
         <>
           {/* Round tabs */}
           <div style={{
-            display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6,
+            display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 4,
             marginBottom: 18, scrollbarWidth: 'none',
           }}>
             {KO_ROUNDS.map(r => (
@@ -157,14 +154,15 @@ export default function Paris({ onBack }: { onBack: () => void }) {
                 onClick={() => setKoRound(r.key)}
                 style={{
                   flexShrink: 0,
-                  padding: '8px 14px',
+                  padding: '7px 14px',
                   borderRadius: 20,
-                  border: `1px solid ${koRound === r.key ? 'rgba(200,155,60,.6)' : 'rgba(255,255,255,.08)'}`,
-                  background: koRound === r.key ? 'rgba(200,155,60,.14)' : 'rgba(255,255,255,.03)',
-                  color: koRound === r.key ? '#C89B3C' : 'rgba(255,255,255,.4)',
-                  fontFamily: "'Inter', sans-serif",
-                  fontWeight: 700, fontSize: 11, letterSpacing: 1,
-                  cursor: 'pointer', transition: 'all .15s',
+                  border: `1px solid ${koRound === r.key ? 'rgba(200,155,60,0.5)' : 'rgba(255,255,255,0.08)'}`,
+                  background: koRound === r.key ? 'rgba(200,155,60,0.1)' : 'transparent',
+                  color: koRound === r.key ? '#C89B3C' : 'rgba(245,245,247,0.38)',
+                  fontFamily: '-apple-system, Inter, sans-serif',
+                  fontWeight: 600, fontSize: 11, letterSpacing: 0.8,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
                   whiteSpace: 'nowrap',
                 }}
               >
@@ -173,26 +171,27 @@ export default function Paris({ onBack }: { onBack: () => void }) {
             ))}
           </div>
 
-          {/* KO info banner */}
+          {/* Info banner */}
           <div style={{
-            padding: '12px 16px', marginBottom: 18,
-            background: 'rgba(200,155,60,.06)',
-            border: '1px solid rgba(200,155,60,.18)',
-            borderRadius: 12,
-            fontSize: 11, color: 'rgba(255,255,255,.45)', lineHeight: 1.6,
+            padding: '11px 15px', marginBottom: 18,
+            background: 'rgba(200,155,60,0.05)',
+            border: '1px solid rgba(200,155,60,0.15)',
+            borderRadius: 11,
+            fontSize: 11, color: 'rgba(245,245,247,0.42)', lineHeight: 1.6,
+            fontFamily: '-apple-system, Inter, sans-serif',
           }}>
-            Les équipes qualifiées seront révélées à l'issue de la phase de groupes.
-            Pariez dès maintenant — vos pronostics seront verrouillés au coup d'envoi.
+            Les équipes qualifiées seront révélées après la phase de groupes.
+            Vos pronostics seront verrouillés au coup d'envoi.
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {koMatches.map((m, i) => (
               <MatchCard
                 key={m.id}
                 match={m}
                 prediction={predictions[m.id]}
                 confirmed={confirmed.has(m.id)}
-                delay={i * 60}
+                delay={i * 50}
                 onIncrement={(side, delta) => setPrediction(m.id, side, delta)}
                 onConfirm={() => confirm(m.id)}
               />
@@ -211,17 +210,15 @@ function GroupPill({ label, active, onClick }: { label: string; active: boolean;
       onClick={onClick}
       style={{
         flexShrink: 0,
-        width: 36, height: 36,
-        borderRadius: 10,
-        border: `1px solid ${active ? '#C89B3C' : 'rgba(255,255,255,.1)'}`,
-        background: active
-          ? 'linear-gradient(135deg,rgba(200,155,60,.3),rgba(200,155,60,.1))'
-          : 'rgba(255,255,255,.04)',
-        color: active ? '#F0E6D2' : 'rgba(255,255,255,.35)',
+        width: 34, height: 34,
+        borderRadius: 9,
+        border: `1px solid ${active ? 'rgba(200,155,60,0.55)' : 'rgba(255,255,255,0.09)'}`,
+        background: active ? 'rgba(200,155,60,0.14)' : 'transparent',
+        color: active ? '#E8D080' : 'rgba(245,245,247,0.35)',
         fontFamily: "'Bebas Neue', cursive",
-        fontSize: 17, letterSpacing: 1,
-        cursor: 'pointer', transition: 'all .15s',
-        boxShadow: active ? '0 0 10px rgba(200,155,60,.3)' : 'none',
+        fontSize: 16, letterSpacing: 1,
+        cursor: 'pointer',
+        transition: 'all 0.15s',
       }}
     >
       {label}
@@ -237,31 +234,35 @@ function GroupBanner({ group }: { group: string }) {
     <div style={{
       display: 'flex', alignItems: 'center', gap: 8,
       padding: '10px 14px', marginBottom: 16,
-      background: 'rgba(255,255,255,.03)',
-      border: '1px solid rgba(255,255,255,.07)',
-      borderRadius: 12,
+      background: 'rgba(255,255,255,0.04)',
+      border: '1px solid rgba(255,255,255,0.07)',
+      borderRadius: 11,
       overflowX: 'auto', scrollbarWidth: 'none',
     }}>
       <span style={{
         fontFamily: "'Bebas Neue', cursive",
         fontSize: 13, letterSpacing: 2,
-        color: 'rgba(200,155,60,.7)',
+        color: 'rgba(200,155,60,0.65)',
         flexShrink: 0,
       }}>
-        GROUPE {group}
+        GRP {group}
       </span>
-      <div style={{ width: 1, height: 20, background: 'rgba(255,255,255,.1)', flexShrink: 0 }} />
+      <div style={{ width: 1, height: 18, background: 'rgba(255,255,255,0.09)', flexShrink: 0 }} />
       {teams.map((team, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
           <img
             src={`https://flagcdn.com/w40/${team.code}.png`}
             alt={team.name}
-            style={{ width: 22, height: 15, borderRadius: 2, objectFit: 'cover', border: '1px solid rgba(255,255,255,.15)' }}
+            style={{ width: 22, height: 15, borderRadius: 2, objectFit: 'cover', border: '1px solid rgba(255,255,255,0.12)' }}
           />
-          <span style={{ fontSize: 10, color: 'rgba(255,255,255,.55)', fontWeight: 600, letterSpacing: .5 }}>
+          <span style={{
+            fontSize: 10, color: 'rgba(245,245,247,0.52)',
+            fontWeight: 600, letterSpacing: 0.4,
+            fontFamily: '-apple-system, Inter, sans-serif',
+          }}>
             {team.short}
           </span>
-          {i < 3 && <span style={{ color: 'rgba(255,255,255,.15)', fontSize: 10 }}>·</span>}
+          {i < 3 && <span style={{ color: 'rgba(255,255,255,0.12)', fontSize: 10 }}>·</span>}
         </div>
       ))}
     </div>
@@ -286,27 +287,35 @@ function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm
     <div style={{
       borderRadius: 16,
       overflow: 'hidden',
-      border: confirmed ? '1px solid rgba(200,155,60,.45)' : '1px solid rgba(255,255,255,.08)',
-      background: 'linear-gradient(160deg,rgba(14,26,52,.95),rgba(8,14,28,.98))',
-      boxShadow: confirmed ? '0 4px 28px rgba(200,155,60,.14)' : '0 2px 12px rgba(0,0,0,.4)',
-      animation: `fadeSlideUp .35s ease ${delay}ms both`,
-      transition: 'box-shadow .2s',
+      border: confirmed
+        ? '1px solid rgba(200,155,60,0.4)'
+        : '1px solid rgba(255,255,255,0.08)',
+      background: 'rgba(255,255,255,0.045)',
+      backdropFilter: 'blur(12px)',
+      WebkitBackdropFilter: 'blur(12px)',
+      boxShadow: confirmed
+        ? '0 4px 24px rgba(200,155,60,0.1), 0 1px 4px rgba(0,0,0,0.3)'
+        : '0 2px 8px rgba(0,0,0,0.25)',
+      animation: `fadeSlideUp .3s cubic-bezier(0.4,0,0.2,1) ${delay}ms both`,
+      transition: 'border-color 0.25s, box-shadow 0.25s',
     }}>
-      {/* Accent line at top */}
-      <div style={{
-        height: 3,
-        background: confirmed
-          ? 'linear-gradient(90deg,#C89B3C,#F0E6D2 50%,#C89B3C)'
-          : 'linear-gradient(90deg,rgba(255,255,255,.06),rgba(255,255,255,.12),rgba(255,255,255,.06))',
-      }} />
 
-      {/* Meta row */}
+      {/* Confirmed accent line */}
+      {confirmed && (
+        <div style={{
+          height: 2,
+          background: 'linear-gradient(90deg,transparent,#C89B3C 30%,#E8D080 50%,#C89B3C 70%,transparent)',
+        }} />
+      )}
+
+      {/* Meta */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 16px 6px',
-        fontSize: 10, letterSpacing: 1,
-        color: 'rgba(255,255,255,.3)',
+        padding: '10px 16px 4px',
+        fontSize: 10, letterSpacing: 0.8,
+        color: 'rgba(245,245,247,0.28)',
         fontWeight: 600,
+        fontFamily: '-apple-system, Inter, sans-serif',
       }}>
         <span style={{ textTransform: 'uppercase' }}>
           {match.round === 'group'
@@ -319,10 +328,11 @@ function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm
       {/* Venue */}
       <div style={{
         textAlign: 'center', fontSize: 9,
-        color: 'rgba(255,255,255,.2)', letterSpacing: .8,
-        marginBottom: 14,
+        color: 'rgba(245,245,247,0.18)', letterSpacing: 0.6,
+        marginBottom: 12,
+        fontFamily: '-apple-system, Inter, sans-serif',
       }}>
-        {match.venue}, {match.city}
+        {match.venue} · {match.city}
       </div>
 
       {/* Teams + predictor */}
@@ -330,14 +340,12 @@ function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm
         display: 'grid',
         gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center',
-        padding: '0 16px 16px',
+        padding: '0 14px 14px',
         gap: 8,
       }}>
-        {/* Home team */}
         <TeamBlock team={match.home} align="left" />
 
-        {/* Score predictor */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <ScoreControl
             value={pred.home}
             disabled={isTBD || confirmed}
@@ -346,7 +354,7 @@ function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm
           />
           <span style={{
             fontFamily: "'Bebas Neue', cursive",
-            fontSize: 28, color: 'rgba(255,255,255,.25)',
+            fontSize: 26, color: 'rgba(245,245,247,0.2)',
             letterSpacing: 2, userSelect: 'none',
           }}>:</span>
           <ScoreControl
@@ -357,44 +365,46 @@ function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm
           />
         </div>
 
-        {/* Away team */}
         <TeamBlock team={match.away} align="right" />
       </div>
 
       {/* Footer */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '10px 16px',
-        borderTop: '1px solid rgba(255,255,255,.05)',
-        background: 'rgba(0,0,0,.2)',
+        padding: '9px 16px',
+        borderTop: '1px solid rgba(255,255,255,0.05)',
       }}>
-        <div style={{ fontSize: 10, color: 'rgba(255,255,255,.3)', lineHeight: 1.6 }}>
-          <span style={{ color: 'rgba(200,155,60,.7)' }}>+3 pts</span> score exact
+        <div style={{
+          fontSize: 10, color: 'rgba(245,245,247,0.28)', lineHeight: 1.5,
+          fontFamily: '-apple-system, Inter, sans-serif',
+        }}>
+          <span style={{ color: 'rgba(200,155,60,0.75)' }}>+3</span> score exact
           &nbsp;·&nbsp;
-          <span style={{ color: 'rgba(200,155,60,.5)' }}>+1 pt</span> bon résultat
+          <span style={{ color: 'rgba(200,155,60,0.5)' }}>+1</span> bon résultat
         </div>
 
         {!isTBD && (
           confirmed ? (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 5,
-              fontSize: 10, color: '#4ade80', fontWeight: 700, letterSpacing: .5,
+              fontSize: 10, color: '#4ade80', fontWeight: 700,
+              fontFamily: '-apple-system, Inter, sans-serif',
             }}>
-              <span>✓</span> Enregistré
+              ✓ Enregistré
             </div>
           ) : (
             <button
               onClick={onConfirm}
               style={{
                 padding: '6px 14px',
-                background: 'linear-gradient(135deg,#C89B3C,#F0E6D2)',
+                background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
                 border: 'none', borderRadius: 8,
-                color: '#1a0d00', fontSize: 11, fontWeight: 800,
-                cursor: 'pointer', letterSpacing: .5,
-                fontFamily: "'Inter', sans-serif",
-                transition: 'all .15s',
+                color: '#0D0800', fontSize: 11, fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: '-apple-system, Inter, sans-serif',
+                transition: 'transform 0.12s, opacity 0.12s',
               }}
-              onPointerDown={e => (e.currentTarget.style.transform = 'scale(.96)')}
+              onPointerDown={e => (e.currentTarget.style.transform = 'scale(0.95)')}
               onPointerUp={e   => (e.currentTarget.style.transform = 'scale(1)')}
             >
               Confirmer
@@ -418,22 +428,24 @@ function TeamBlock({ team, align }: { team: import('../data/wc2026Matches').Team
     }}>
       {isTBD ? (
         <div style={{
-          width: 36, height: 24,
+          width: 34, height: 23,
           borderRadius: 4,
-          background: 'rgba(255,255,255,.07)',
-          border: '1px solid rgba(255,255,255,.12)',
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(255,255,255,0.1)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 8, color: 'rgba(255,255,255,.25)', fontWeight: 700, letterSpacing: .5,
+          fontSize: 8, color: 'rgba(245,245,247,0.22)',
+          fontWeight: 700, letterSpacing: 0.5,
+          fontFamily: '-apple-system, Inter, sans-serif',
         }}>TBD</div>
       ) : (
         <img
           src={`https://flagcdn.com/w40/${team.code}.png`}
           alt={team.name}
           style={{
-            width: 36, height: 24,
+            width: 34, height: 23,
             objectFit: 'cover', borderRadius: 4,
-            border: '1px solid rgba(255,255,255,.15)',
-            boxShadow: '0 2px 8px rgba(0,0,0,.4)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
           }}
         />
       )}
@@ -441,12 +453,16 @@ function TeamBlock({ team, align }: { team: import('../data/wc2026Matches').Team
         <div style={{
           fontFamily: "'Bebas Neue', cursive",
           fontSize: 15, letterSpacing: 1.5,
-          color: isTBD ? 'rgba(255,255,255,.2)' : '#fff',
+          color: isTBD ? 'rgba(245,245,247,0.2)' : 'rgba(245,245,247,0.92)',
           lineHeight: 1,
         }}>
           {isTBD ? '???' : team.short}
         </div>
-        <div style={{ fontSize: 8, color: 'rgba(255,255,255,.3)', letterSpacing: .5, marginTop: 2 }}>
+        <div style={{
+          fontSize: 8, color: 'rgba(245,245,247,0.28)',
+          letterSpacing: 0.4, marginTop: 2,
+          fontFamily: '-apple-system, Inter, sans-serif',
+        }}>
           {isTBD ? 'À déterminer' : team.name}
         </div>
       </div>
@@ -461,35 +477,33 @@ function ScoreControl({
   const btnStyle: React.CSSProperties = {
     width: 28, height: 28,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    background: 'rgba(255,255,255,.06)',
-    border: '1px solid rgba(255,255,255,.1)',
+    background: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: 8,
-    color: 'rgba(255,255,255,.5)',
+    color: 'rgba(245,245,247,0.55)',
     fontSize: 16, fontWeight: 700,
     cursor: disabled ? 'default' : 'pointer',
-    transition: 'all .12s',
-    lineHeight: 1,
-    padding: 0,
+    transition: 'background 0.1s',
+    lineHeight: 1, padding: 0,
     userSelect: 'none',
-    opacity: disabled ? .35 : 1,
+    opacity: disabled ? 0.3 : 1,
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
       <button style={btnStyle} onClick={disabled ? undefined : onUp}
-        onPointerDown={e => { if (!disabled) (e.currentTarget.style.background = 'rgba(200,155,60,.25)') }}
-        onPointerUp={e   => { if (!disabled) (e.currentTarget.style.background = 'rgba(255,255,255,.06)') }}
+        onPointerDown={e => { if (!disabled) (e.currentTarget.style.background = 'rgba(200,155,60,0.2)') }}
+        onPointerUp={e   => { if (!disabled) (e.currentTarget.style.background = 'rgba(255,255,255,0.06)') }}
       >+</button>
       <div style={{
         fontFamily: "'Bebas Neue', cursive",
-        fontSize: 32, color: '#fff', lineHeight: 1,
-        minWidth: 28, textAlign: 'center',
-        textShadow: '0 0 12px rgba(200,155,60,.4)',
+        fontSize: 30, color: 'rgba(245,245,247,0.9)', lineHeight: 1,
+        minWidth: 26, textAlign: 'center',
       }}>
         {value}
       </div>
       <button style={btnStyle} onClick={disabled ? undefined : onDown}
-        onPointerDown={e => { if (!disabled) (e.currentTarget.style.background = 'rgba(200,155,60,.25)') }}
-        onPointerUp={e   => { if (!disabled) (e.currentTarget.style.background = 'rgba(255,255,255,.06)') }}
+        onPointerDown={e => { if (!disabled) (e.currentTarget.style.background = 'rgba(200,155,60,0.2)') }}
+        onPointerUp={e   => { if (!disabled) (e.currentTarget.style.background = 'rgba(255,255,255,0.06)') }}
       >−</button>
     </div>
   )

@@ -11,7 +11,7 @@ import './index.css'
 // ─── Sections ─────────────────────────────────────────────────────────────
 export type SectionId = 'globe' | 'paris' | 'classement'
 
-// ─── Custom SVG: target/bullseye for Paris ────────────────────────────────
+// ─── Icon: target/bullseye ────────────────────────────────────────────────
 function IconTarget({ size = 22, color = 'currentColor' }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round">
@@ -27,17 +27,20 @@ function IconTarget({ size = 22, color = 'currentColor' }: { size?: number; colo
 }
 
 const NAV_ITEMS = [
-  { id: 'globe'      as SectionId, Icon: IconGlobe,    label: 'Globe',       countryId: null },
-  { id: 'paris'      as SectionId, Icon: IconTarget,   label: 'Paris',       countryId: null },
-  { id: 'classement' as SectionId, Icon: IconTrophy,   label: 'Classement',  countryId: null },
+  { id: 'globe'      as SectionId, Icon: IconGlobe,  label: 'Globe'      },
+  { id: 'paris'      as SectionId, Icon: IconTarget, label: 'Paris'      },
+  { id: 'classement' as SectionId, Icon: IconTrophy, label: 'Classement' },
 ] as const
 
 // ─── App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [section, setSection]           = useState<SectionId>('globe')
+  const [section, setSection] = useState<SectionId>('globe')
   const [centerRequest] = useState<{ id: number; ts: number } | null>(null)
 
   const back = () => setSection('globe')
+
+  const gold = '#C89B3C'
+  const dim  = 'rgba(245,245,247,0.35)'
 
   return (
     <div style={{
@@ -57,21 +60,36 @@ export default function App() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 20px',
         zIndex: 10,
-        borderBottom: '1px solid rgba(200,155,60,.1)',
-        background: 'linear-gradient(180deg,rgba(10,22,40,.8) 0%,transparent 100%)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        background: 'rgba(7,9,15,0.75)',
+        backdropFilter: 'saturate(180%) blur(20px)',
+        WebkitBackdropFilter: 'saturate(180%) blur(20px)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <span style={{ fontSize: 20 }}>⚽</span>
+        {/* TRIVELA logo — clickable, returns to globe */}
+        <button
+          onClick={() => setSection('globe')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: '4px 6px', borderRadius: 8,
+            transition: 'opacity 0.2s',
+          }}
+          onPointerDown={e => (e.currentTarget.style.opacity = '0.6')}
+          onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
+        >
+          <span style={{ fontSize: 18, lineHeight: 1 }}>⚽</span>
           <span style={{
             fontFamily: "'Bebas Neue', cursive",
-            fontSize: 30, letterSpacing: 5,
-            color: 'var(--gold-lt)',
-            textShadow: '0 0 20px rgba(200,155,60,.45)',
+            fontSize: 28, letterSpacing: 4,
+            color: gold,
+            lineHeight: 1,
           }}>TRIVELA</span>
-        </div>
+        </button>
+
         <span style={{
-          fontSize: 9, fontWeight: 700, letterSpacing: 2,
-          color: 'rgba(200,155,60,.4)', textTransform: 'uppercase',
+          fontSize: 9, fontWeight: 700, letterSpacing: 2.5,
+          color: 'rgba(200,155,60,0.38)', textTransform: 'uppercase',
+          fontFamily: '-apple-system, Inter, sans-serif',
         }}>World Cup 2026</span>
       </header>
 
@@ -85,45 +103,67 @@ export default function App() {
               onNavigate={(s) => setSection(s as SectionId)}
               centerRequest={centerRequest}
             />
+
+            {/* Hint */}
             <p style={{
               position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',
-              fontSize: 9, letterSpacing: 2, textTransform: 'uppercase',
-              color: 'rgba(200,155,60,.3)', pointerEvents: 'none',
+              fontSize: 9, letterSpacing: 2.5, textTransform: 'uppercase',
+              color: 'rgba(245,245,247,0.22)', pointerEvents: 'none',
+              fontFamily: '-apple-system, Inter, sans-serif', fontWeight: 600,
               animation: 'fadeIn 2s ease 1.5s both',
             }}>
-              Appuyez sur un pays · Swipez pour explorer
+              Touchez un pays · Faites pivoter le globe
             </p>
 
-            {/* Quick-access banner */}
+            {/* Quick-access card */}
             <div style={{
               position: 'absolute', bottom: 16, left: 16, right: 16,
-              padding: '12px 18px',
-              background: 'rgba(6,13,26,.88)',
-              border: '1px solid rgba(200,155,60,.22)',
-              borderRadius: 16,
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
+              padding: '14px 18px',
+              background: 'rgba(7,9,15,0.72)',
+              border: '1px solid rgba(255,255,255,0.09)',
+              borderRadius: 18,
+              backdropFilter: 'blur(24px)',
+              WebkitBackdropFilter: 'blur(24px)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              animation: 'fadeSlideUp .6s ease .8s both',
+              gap: 12,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+              animation: 'fadeSlideUp .55s cubic-bezier(0.4,0,0.2,1) .8s both',
             }}>
               <div>
-                <div style={{ fontSize: 10, color: 'rgba(200,155,60,.6)', fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 2 }}>
+                <div style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: 1.8,
+                  color: 'rgba(200,155,60,0.7)', textTransform: 'uppercase',
+                  marginBottom: 3, fontFamily: '-apple-system, Inter, sans-serif',
+                }}>
                   Coupe du Monde 2026
                 </div>
-                <div style={{ fontSize: 12, color: 'rgba(255,255,255,.7)', fontWeight: 600 }}>
+                <div style={{
+                  fontSize: 13, color: 'rgba(245,245,247,0.72)', fontWeight: 500,
+                  fontFamily: '-apple-system, Inter, sans-serif',
+                }}>
                   72 matchs · Faites vos pronostics
                 </div>
               </div>
               <button
                 onClick={() => setSection('paris')}
                 style={{
-                  padding: '8px 16px',
-                  background: 'linear-gradient(135deg,#C89B3C,#F0E6D2)',
-                  border: 'none', borderRadius: 10,
-                  color: '#1a0d00', fontSize: 12, fontWeight: 800,
-                  cursor: 'pointer', letterSpacing: .5,
-                  fontFamily: "'Inter', sans-serif",
+                  padding: '9px 18px',
+                  background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
+                  border: 'none', borderRadius: 12,
+                  color: '#0D0800', fontSize: 12, fontWeight: 800,
+                  cursor: 'pointer', letterSpacing: 0.3,
+                  fontFamily: '-apple-system, Inter, sans-serif',
                   flexShrink: 0,
+                  transition: 'transform 0.15s, box-shadow 0.15s',
+                  boxShadow: '0 4px 16px rgba(200,155,60,0.35)',
+                }}
+                onPointerDown={e => {
+                  e.currentTarget.style.transform = 'scale(0.96)'
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(200,155,60,0.25)'
+                }}
+                onPointerUp={e => {
+                  e.currentTarget.style.transform = 'scale(1)'
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(200,155,60,0.35)'
                 }}
               >
                 Parier →
@@ -143,41 +183,41 @@ export default function App() {
       <nav style={{
         flexShrink: 0, height: 'var(--nav-h)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-around',
-        background: 'rgba(5,10,22,.96)',
-        borderTop: '1px solid rgba(200,155,60,.12)',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
+        background: 'rgba(7,9,15,0.82)',
+        borderTop: '1px solid rgba(255,255,255,0.07)',
+        backdropFilter: 'saturate(180%) blur(24px)',
+        WebkitBackdropFilter: 'saturate(180%) blur(24px)',
         zIndex: 20,
       }}>
         {NAV_ITEMS.map(({ id, Icon, label }) => {
           const active = section === id
-          const gold   = '#C89B3C'
-          const dim    = 'rgba(120,150,200,.5)'
           return (
             <button
               key={id}
               onClick={() => setSection(id)}
               style={{
                 flex: 1, display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center', gap: 3,
+                alignItems: 'center', justifyContent: 'center', gap: 4,
                 background: 'none', border: 'none', cursor: 'pointer',
-                padding: '5px 2px', borderRadius: 10,
+                padding: '6px 4px', borderRadius: 12,
+                transition: 'opacity 0.15s',
               }}
-              onPointerDown={e => (e.currentTarget.style.opacity = '.6')}
+              onPointerDown={e => (e.currentTarget.style.opacity = '0.5')}
               onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
             >
-              <Icon size={21} color={active ? gold : dim} />
+              <Icon size={22} color={active ? gold : dim} />
               <span style={{
-                fontSize: 9, fontWeight: 700, letterSpacing: .8,
+                fontSize: 10, fontWeight: 600, letterSpacing: 0.6,
                 color: active ? gold : dim,
-                fontFamily: "'Inter', sans-serif",
+                fontFamily: '-apple-system, Inter, sans-serif',
                 textTransform: 'uppercase',
+                transition: 'color 0.2s',
               }}>{label}</span>
               {active && (
                 <div style={{
-                  width: 20, height: 2, borderRadius: 1,
-                  background: `linear-gradient(90deg,transparent,${gold},transparent)`,
-                  boxShadow: `0 0 8px ${gold}88`,
+                  width: 18, height: 2, borderRadius: 1,
+                  background: gold,
+                  opacity: 0.8,
                 }} />
               )}
             </button>
