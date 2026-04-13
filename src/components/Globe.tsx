@@ -55,8 +55,6 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
   const triggerCenterRef  = useRef<(id: number) => void>(() => {})
   const zoomRef           = useRef(1)
   const velRef            = useRef({ x: 0, y: 0 })
-  const markerRefs        = useRef<Record<number, HTMLDivElement | null>>({})
-  const ftCentroidsRef    = useRef<Record<number, [number, number]>>({})
 
   const setPopupSync = useCallback((p: PopupState | null) => {
     popupRef.current    = p
@@ -139,9 +137,9 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     // Soft atmosphere halo
     const atmoGrad = defs.append('radialGradient').attr('id','atmo-grad')
       .attr('cx','50%').attr('cy','50%').attr('r','50%')
-    atmoGrad.append('stop').attr('offset','70%').attr('stop-color','transparent')
-    atmoGrad.append('stop').attr('offset','84%').attr('stop-color','#2a5cb8').attr('stop-opacity','.44')
-    atmoGrad.append('stop').attr('offset','95%').attr('stop-color','#5090e0').attr('stop-opacity','.15')
+    atmoGrad.append('stop').attr('offset','74%').attr('stop-color','transparent')
+    atmoGrad.append('stop').attr('offset','88%').attr('stop-color','#2a5cb8').attr('stop-opacity','.18')
+    atmoGrad.append('stop').attr('offset','97%').attr('stop-color','#5090e0').attr('stop-opacity','.06')
     atmoGrad.append('stop').attr('offset','100%').attr('stop-color','transparent')
 
     // Ocean sphere
@@ -190,9 +188,6 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
         if (!countries.features) return
         const features: any[] = countries.features
         featuresRef.current = features
-        features.filter((f: any) => FEATURED[parseInt(f.id)]).forEach((f: any) => {
-          ftCentroidsRef.current[parseInt(f.id)] = d3.geoCentroid(f) as [number, number]
-        })
 
         // ── Background countries (non-featured only — FIX: no bleed-through) ──
         gBgCountry.selectAll('.bg-country')
@@ -286,26 +281,6 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           gFtCountry.selectAll('.ft-country').attr('d', geoPath as any)
           gBorders.select('path').attr('d', geoPath as any)
 
-          // ── Floating marker badges ──────────────────────────────────
-          const rot = proj.rotate() as unknown as [number, number]
-          const [rlon, rlat] = rot
-          const globeCenter: [number, number] = [-rlon, -rlat]
-          for (const [idStr, lonlat] of Object.entries(ftCentroidsRef.current)) {
-            const mid = Number(idStr)
-            const mel = markerRefs.current[mid]
-            if (!mel) continue
-            if (selectedRef.current !== null) { mel.style.opacity = '0'; continue }
-            const dist = d3.geoDistance(lonlat, globeCenter)
-            if (dist >= Math.PI / 2) { mel.style.opacity = '0'; continue }
-            const pt = proj(lonlat)
-            if (!pt) { mel.style.opacity = '0'; continue }
-            const FADE = Math.PI / 5
-            const alpha = dist > Math.PI / 2 - FADE ? (Math.PI / 2 - dist) / FADE : 1
-            mel.style.opacity = alpha.toFixed(3)
-            mel.style.left    = pt[0] + 'px'
-            mel.style.top     = pt[1] + 'px'
-          }
-
           rafRef.current = requestAnimationFrame(animate)
         }
         rafRef.current = requestAnimationFrame(animate)
@@ -382,44 +357,6 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
 
   return (
     <div ref={containerRef} style={{ width:'100%', height:'100%', position:'relative' }}>
-
-      {/* Floating icon badges */}
-      {Object.entries(FEATURED).map(([idStr, info]) => (
-        <div
-          key={idStr}
-          ref={el => { markerRefs.current[Number(idStr)] = el }}
-          style={{
-            position: 'absolute', pointerEvents: 'none',
-            transform: 'translate(-50%, calc(-100% - 8px))',
-            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-            opacity: 0,
-          }}
-        >
-          <div style={{
-            width: 28, height: 28,
-            background: 'rgba(255,255,255,0.88)',
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-            border: '1.5px solid rgba(255,255,255,0.5)',
-            borderRadius: '50%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13,
-            boxShadow: '0 2px 10px rgba(0,0,0,0.35)',
-          }}>
-            {info.icon}
-          </div>
-          <div style={{
-            fontSize: 7, fontWeight: 700, letterSpacing: 0.8,
-            color: 'rgba(255,255,255,0.95)',
-            textShadow: '0 1px 4px rgba(0,0,0,0.9)',
-            textTransform: 'uppercase',
-            whiteSpace: 'nowrap',
-          }}>
-            {info.sectionName}
-          </div>
-        </div>
-      ))}
-
       <svg
         ref={svgRef}
         style={{
