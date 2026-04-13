@@ -5,23 +5,26 @@
 }
 
 :root {
-  --bg-deep: #060d1a;
-  --bg-dark: #0a1628;
-  --ocean-color: #0b1e36;
-  --country-base: #1a2e52;
-  --border-subtle: #1e3a5f;
-  --border-glow: #2a5aaa;
+  --bg-deep: #0a1520;
+  --bg-dark: #0d1c2e;
+  --ocean-color: #2C5F8A;
+  --ocean-shadow: #1F4666;
+  --ocean-light: #3F7FB2;
+  --country-base: #1F4A6E;
+  --border-subtle: #1A3A55;
+  --border-medium: #2A5F85;
   --text-primary: #f0f4ff;
   --text-secondary: #7ea8d8;
   --text-muted: #3d6080;
   --gold: #f0b429;
   --gold-light: #fdd068;
 
-  --brazil: #009C3B;
-  --senegal: #00A550;
-  --suisse: #FF0000;
-  --japon: #BC002D;
-  --usa: #3C3B6E;
+  /* Palette cartoon cohérente — 6 couleurs max */
+  --brazil: #5C946E;
+  --senegal: #D98C5F;
+  --suisse: #C65D5D;
+  --japon: #D9C97C;
+  --usa: #7FB77E;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -42,27 +45,28 @@ html, body {
   height: 100%;
 }
 
-/* ─── Globe pulse animations ────────────────────────────────────── */
+/* ─── Globe pulse animations — style cartoon, zéro glow ─────────── */
+/* Respiration subtile : variation de luminosité, pas de drop-shadow  */
 
 @keyframes pulse-brazil {
-  0%, 100% { fill: #009C3B; filter: drop-shadow(0 0 5px #009C3B88); }
-  50%       { fill: #00d44f; filter: drop-shadow(0 0 18px #009C3Bcc); }
+  0%, 100% { fill: #5C946E; }
+  50%       { fill: #7AB88A; }
 }
 @keyframes pulse-senegal {
-  0%, 100% { fill: #00A550; filter: drop-shadow(0 0 5px #00A55088); }
-  50%       { fill: #00d966; filter: drop-shadow(0 0 18px #00A550cc); }
+  0%, 100% { fill: #D98C5F; }
+  50%       { fill: #ECA878; }
 }
 @keyframes pulse-suisse {
-  0%, 100% { fill: #FF0000; filter: drop-shadow(0 0 5px #FF000088); }
-  50%       { fill: #ff5555; filter: drop-shadow(0 0 18px #FF0000cc); }
+  0%, 100% { fill: #C65D5D; }
+  50%       { fill: #D97878; }
 }
 @keyframes pulse-japon {
-  0%, 100% { fill: #BC002D; filter: drop-shadow(0 0 5px #BC002D88); }
-  50%       { fill: #e8003a; filter: drop-shadow(0 0 18px #BC002Dcc); }
+  0%, 100% { fill: #D9C97C; }
+  50%       { fill: #EAD898; }
 }
 @keyframes pulse-usa {
-  0%, 100% { fill: #3C3B6E; filter: drop-shadow(0 0 5px #3C3B6E88); }
-  50%       { fill: #5756a8; filter: drop-shadow(0 0 18px #3C3B6Ecc); }
+  0%, 100% { fill: #7FB77E; }
+  50%       { fill: #9ACA99; }
 }
 
 .pulse-brazil  { animation: pulse-brazil  2.4s ease-in-out infinite; cursor: pointer; }
@@ -71,13 +75,13 @@ html, body {
 .pulse-japon   { animation: pulse-japon   2.0s ease-in-out infinite; cursor: pointer; }
 .pulse-usa     { animation: pulse-usa     2.8s ease-in-out infinite; cursor: pointer; }
 
-.pulse-brazil.selected,
-.pulse-senegal.selected,
-.pulse-suisse.selected,
-.pulse-japon.selected,
-.pulse-usa.selected {
-  animation: none;
-  fill: transparent;
+/* Pays sélectionné : pas de glow, fill transparent (drapeau visible),
+   outline blanc très léger pour signifier la sélection */
+path.ft-country.selected {
+  animation: none !important;
+  fill: transparent !important;
+  stroke: rgba(255, 255, 255, 0.28) !important;
+  stroke-width: 1.5px !important;
 }
 
 /* ─── Page animations ───────────────────────────────────────────── */
