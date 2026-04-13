@@ -2,6 +2,8 @@ import { useState } from 'react'
 import PageLayout from './PageLayout'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
+import { saveBet } from '../services/auth'
+import type { UserProfile } from '../services/auth'
 
 type Tab = 'groupes' | 'eliminatoires'
 type Predictions = Record<string, { home: number; away: number }>
@@ -30,7 +32,7 @@ Object.entries(GROUPS).forEach(([g, teams]) => {
 })
 
 // ─── Component ─────────────────────────────────────────────────────────────
-export default function Paris({ onBack }: { onBack: () => void }) {
+export default function Paris({ onBack, currentUser }: { onBack: () => void; currentUser: UserProfile | null }) {
   const [tab,         setTab]         = useState<Tab>('groupes')
   const [activeGroup, setActiveGroup] = useState('A')
   const [koRound,     setKoRound]     = useState<string>('r32')
@@ -59,7 +61,26 @@ export default function Paris({ onBack }: { onBack: () => void }) {
     setConfirmed(prev => { const s = new Set(prev); s.delete(id); return s })
   }
 
-  const confirm = (id: string) => setConfirmed(prev => new Set(prev).add(id))
+  const confirm = (id: string) => {
+    setConfirmed(prev => new Set(prev).add(id))
+    if (currentUser) {
+      const match = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES].find(m => m.id === id)
+      if (match) {
+        const pred = predictions[id] ?? { home: 0, away: 0 }
+        saveBet({
+          userId: currentUser.id,
+          matchId: id,
+          home: match.home.name,
+          away: match.away.name,
+          homeScore: pred.home,
+          awayScore: pred.away,
+          stage: match.round === 'group'
+            ? `Groupe ${match.group} · J${match.matchday}`
+            : KO_LABELS[match.round as string] ?? String(match.round),
+        })
+      }
+    }
+  }
 
   const allGroupMatches = GROUP_MATCHES.filter(m => m.group === activeGroup)
   const koMatches       = KNOCKOUT_MATCHES.filter(m => m.round === koRound)
