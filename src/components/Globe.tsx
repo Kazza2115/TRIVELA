@@ -309,7 +309,10 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     <div ref={containerRef} style={{ width:'100%', height:'100%', position:'relative' }}>
       <svg
         ref={svgRef}
-        style={{ display:'block', touchAction:'none', userSelect:'none', cursor:'grab' }}
+        style={{
+          display: 'block', touchAction: 'none', userSelect: 'none', cursor: 'grab',
+          filter: 'drop-shadow(0 12px 40px rgba(0,0,0,0.18)) drop-shadow(0 4px 12px rgba(0,0,0,0.10))',
+        }}
         onMouseDown={() => { if (svgRef.current) svgRef.current.style.cursor = 'grabbing' }}
         onMouseUp={()   => { if (svgRef.current) svgRef.current.style.cursor = 'grab' }}
       />
@@ -321,12 +324,12 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
         }}>
           <div style={{
             width:28, height:28,
-            border:'2px solid rgba(200,155,60,.2)',
-            borderTopColor:'rgba(200,155,60,.8)',
+            border:'2px solid rgba(200,155,60,.25)',
+            borderTopColor:'#C89B3C',
             borderRadius:'50%',
             animation:'spin 0.75s linear infinite',
           }}/>
-          <span style={{ fontSize:10, letterSpacing:2.5, color:'rgba(200,155,60,.6)', textTransform:'uppercase' }}>
+          <span style={{ fontSize:10, letterSpacing:2, color:'#AEAEB2', textTransform:'uppercase', fontWeight:600 }}>
             Chargement…
           </span>
         </div>

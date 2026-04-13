@@ -7,34 +7,31 @@
 }
 
 :root {
-  /* ── Base palette ─────────────────────────────────────────────── */
-  --bg-deep:  #07090F;
-  --bg-card:  rgba(255,255,255,0.055);
-  --bg-card2: rgba(255,255,255,0.09);
+  /* ── Light mode palette ───────────────────────────────────────── */
+  --bg:       #F2F2F7;   /* Apple system background */
+  --bg-card:  #FFFFFF;   /* Cards / elevated surfaces */
+  --bg-fill:  #E5E5EA;   /* Secondary fills */
+  --bg-input: #F2F2F7;   /* Input / inset */
+
+  --text-1:   #1C1C1E;   /* Apple label */
+  --text-2:   #6E6E73;   /* Secondary label */
+  --text-3:   #AEAEB2;   /* Tertiary label */
+
+  --sep:      rgba(60,60,67,0.18);
+  --border:   rgba(60,60,67,0.12);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 8px rgba(0,0,0,0.05);
+  --shadow:    0 2px 8px rgba(0,0,0,0.10), 0 4px 20px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
+
   --gold:     #C89B3C;
+  --gold-dk:  #A07828;   /* darker gold for text on white */
   --gold-lt:  #E8D080;
-  --gold-dim: rgba(200,155,60,0.35);
-
-  /* ── Text ─────────────────────────────────────────────────────── */
-  --text-1: #F5F5F7;
-  --text-2: rgba(245,245,247,0.58);
-  --text-3: rgba(245,245,247,0.32);
-
-  /* ── Surfaces ─────────────────────────────────────────────────── */
-  --border:   rgba(255,255,255,0.09);
-  --border-lt: rgba(255,255,255,0.05);
-  --shadow:   0 2px 12px rgba(0,0,0,0.35);
-  --shadow-lg: 0 8px 32px rgba(0,0,0,0.45);
-
-  /* ── Country accents ──────────────────────────────────────────── */
-  --brazil: #009C3B;
-  --suisse: #D00020;
 
   /* ── Layout ───────────────────────────────────────────────────── */
   --header-h: 56px;
   --nav-h:    68px;
   --radius:   14px;
-  --radius-sm: 10px;
   --sat: env(safe-area-inset-top,    0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left,   0px);
@@ -48,7 +45,7 @@
 html, body {
   width: 100%; height: 100%;
   overflow: hidden;
-  background: var(--bg-deep);
+  background: var(--bg);
   color: var(--text-1);
   font-family: -apple-system, 'Inter', sans-serif;
   overscroll-behavior: none;
@@ -56,28 +53,28 @@ html, body {
 }
 #root { width: 100%; height: 100%; }
 
-/* ─── Globe: refined country glow (subtle) ────────────────────── */
+/* ─── Globe: country pulse animations ────────────────────────── */
+/* These appear on the dark sphere so keep coloured glows */
 @keyframes pulse-brazil {
-  0%,100% { fill:#009C3B; filter:drop-shadow(0 0 4px rgba(0,156,59,0.7)); }
-  50%     { fill:#00b845; filter:drop-shadow(0 0 8px rgba(0,184,69,0.9)); }
+  0%,100% { fill:#009C3B; filter:drop-shadow(0 0 5px rgba(0,156,59,0.8)); }
+  50%     { fill:#00b845; filter:drop-shadow(0 0 10px rgba(0,184,69,1)); }
 }
 @keyframes pulse-senegal {
-  0%,100% { fill:#00A550; filter:drop-shadow(0 0 4px rgba(0,165,80,0.7)); }
-  50%     { fill:#00c060; filter:drop-shadow(0 0 8px rgba(0,192,96,0.9)); }
+  0%,100% { fill:#00A550; filter:drop-shadow(0 0 5px rgba(0,165,80,0.8)); }
+  50%     { fill:#00c060; filter:drop-shadow(0 0 10px rgba(0,192,96,1)); }
 }
 @keyframes pulse-suisse {
-  0%,100% { fill:#D00020; filter:drop-shadow(0 0 4px rgba(208,0,32,0.7)); }
-  50%     { fill:#f00030; filter:drop-shadow(0 0 8px rgba(240,0,48,0.9)); }
+  0%,100% { fill:#D00020; filter:drop-shadow(0 0 5px rgba(208,0,32,0.8)); }
+  50%     { fill:#f00030; filter:drop-shadow(0 0 10px rgba(240,0,48,1)); }
 }
 @keyframes pulse-japon {
-  0%,100% { fill:#BC002D; filter:drop-shadow(0 0 4px rgba(188,0,45,0.7)); }
-  50%     { fill:#d80035; filter:drop-shadow(0 0 8px rgba(216,0,53,0.9)); }
+  0%,100% { fill:#BC002D; filter:drop-shadow(0 0 5px rgba(188,0,45,0.8)); }
+  50%     { fill:#d80035; filter:drop-shadow(0 0 10px rgba(216,0,53,1)); }
 }
 @keyframes pulse-usa {
-  0%,100% { fill:#3C3B6E; filter:drop-shadow(0 0 4px rgba(60,59,110,0.7)); }
-  50%     { fill:#5554a0; filter:drop-shadow(0 0 8px rgba(85,84,160,0.9)); }
+  0%,100% { fill:#3C3B6E; filter:drop-shadow(0 0 5px rgba(60,59,110,0.8)); }
+  50%     { fill:#5554a0; filter:drop-shadow(0 0 10px rgba(85,84,160,1)); }
 }
-
 .pulse-brazil  { animation: pulse-brazil  3s ease-in-out infinite; cursor: pointer; }
 .pulse-senegal { animation: pulse-senegal 3.2s ease-in-out infinite; cursor: pointer; }
 .pulse-suisse  { animation: pulse-suisse  2.8s ease-in-out infinite; cursor: pointer; }
@@ -96,18 +93,14 @@ html, body {
 
 /* ─── Animations ──────────────────────────────────────────────── */
 @keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(16px); }
+  from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
-@keyframes scaleIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
 @keyframes spin    { to { transform: rotate(360deg); } }
-@keyframes slideDown {
-  from { opacity: 0; transform: translateY(-10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
 
 /* ─── Scrollbar ───────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 2px; }

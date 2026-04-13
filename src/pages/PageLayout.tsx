@@ -13,93 +13,73 @@ export default function PageLayout({ onBack, accentColor, flag, title, subtitle,
   return (
     <div style={{
       width: '100%', height: '100%',
-      background: 'var(--bg-deep)',
+      background: 'var(--bg)',
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
-      animation: 'fadeIn 0.28s cubic-bezier(0.4,0,0.2,1)',
+      animation: 'fadeIn 0.22s ease',
     }}>
-      {/* Top bar */}
+      {/* Header */}
       <header style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        padding: '0 20px',
+        padding: '0 18px',
         height: 56,
-        borderBottom: '1px solid rgba(255,255,255,0.07)',
-        background: 'rgba(7,9,15,0.8)',
+        borderBottom: '1px solid var(--border)',
+        background: 'rgba(242,242,247,0.9)',
         backdropFilter: 'saturate(180%) blur(20px)',
         WebkitBackdropFilter: 'saturate(180%) blur(20px)',
         flexShrink: 0,
       }}>
-        {/* Back button */}
+        {/* Back */}
         <button
           onClick={onBack}
           style={{
-            display: 'flex', alignItems: 'center', gap: 5,
-            background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 10, padding: '7px 13px',
-            color: 'rgba(245,245,247,0.65)', fontSize: 13,
-            fontWeight: 500, cursor: 'pointer',
-            fontFamily: '-apple-system, Inter, sans-serif',
-            transition: 'background 0.15s, color 0.15s',
-            flexShrink: 0,
+            display: 'flex', alignItems: 'center', gap: 4,
+            background: 'none', border: 'none', borderRadius: 8,
+            color: accentColor, fontSize: 14, fontWeight: 600,
+            cursor: 'pointer', padding: '6px 2px',
+            transition: 'opacity 0.15s',
           }}
-          onPointerDown={e => {
-            ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.1)'
-            ;(e.currentTarget as HTMLButtonElement).style.color = '#fff'
-          }}
-          onPointerUp={e => {
-            ;(e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)'
-            ;(e.currentTarget as HTMLButtonElement).style.color = 'rgba(245,245,247,0.65)'
-          }}
+          onPointerDown={e => (e.currentTarget.style.opacity = '0.45')}
+          onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
         >
-          ‹ Retour
+          ‹ Globe
         </button>
 
-        {/* Divider */}
-        <div style={{ width: 1, height: 24, background: 'rgba(255,255,255,0.08)', flexShrink: 0 }} />
+        <div style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0 }} />
 
-        {/* Icon + title */}
         <span style={{ fontSize: 22, lineHeight: 1, flexShrink: 0 }}>{flag}</span>
+
         <div style={{ minWidth: 0 }}>
           <div style={{
             fontFamily: "'Bebas Neue', cursive",
-            fontSize: 24, letterSpacing: 3,
-            color: '#fff', lineHeight: 1,
+            fontSize: 22, letterSpacing: 2.5,
+            color: 'var(--text-1)', lineHeight: 1,
           }}>
             {title}
           </div>
           {subtitle && (
             <div style={{
-              fontSize: 10, color: 'rgba(245,245,247,0.38)',
-              marginTop: 1, letterSpacing: 0.4,
-              fontFamily: '-apple-system, Inter, sans-serif',
+              fontSize: 10, color: 'var(--text-3)',
+              marginTop: 1, letterSpacing: 0.3,
             }}>
               {subtitle}
             </div>
           )}
         </div>
 
-        {/* Brand mark */}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+        <div style={{ marginLeft: 'auto' }}>
           <span style={{
             fontFamily: "'Bebas Neue', cursive",
-            fontSize: 16, letterSpacing: 3,
-            color: `${accentColor}55`,
+            fontSize: 14, letterSpacing: 3,
+            color: 'var(--text-3)',
           }}>TRIVELA</span>
         </div>
       </header>
 
-      {/* Accent line */}
-      <div style={{
-        height: 1,
-        background: `linear-gradient(90deg, ${accentColor}60 0%, ${accentColor}20 60%, transparent 100%)`,
-        flexShrink: 0,
-      }} />
-
-      {/* Scrollable content */}
+      {/* Content */}
       <div style={{
         flex: 1, overflowY: 'auto',
-        padding: '22px 18px',
+        padding: '20px 16px',
         WebkitOverflowScrolling: 'touch',
       }}>
         {children}
