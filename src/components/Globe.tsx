@@ -259,15 +259,16 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           .attr('d', geoPath as any).attr('fill', 'none')
           .attr('stroke', C.border).attr('stroke-width', '0.4')
 
-        // Ocean labels — small enough to stay within ocean basins
+        // Ocean labels — italic, water-colour tint so they read as map text not holograms
         OCEAN_LABELS.forEach(({ lon, lat, name, rot }) => {
           gOceanText.append('text')
             .attr('class', 'ocean-label')
             .attr('text-anchor', 'middle')
             .attr('font-family', "'Bebas Neue', cursive")
+            .attr('font-style', 'italic')
             .attr('font-size', Math.min(Math.max(11, R * 0.09), 15))
-            .attr('letter-spacing', 2)
-            .attr('fill', 'rgba(255,255,255,0.82)')
+            .attr('letter-spacing', 3)
+            .attr('fill', 'rgba(190,220,245,0.78)')
             .attr('pointer-events', 'none')
             .attr('transform', () => {
               const p = proj([lon, lat])
@@ -393,7 +394,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
                 : 0
               d3.select(this)
                 .attr('transform', p ? `translate(${p[0]},${p[1]}) rotate(${rot})` : '')
-                .attr('opacity', alpha * 0.78)
+                .attr('opacity', alpha * 0.68)
                 .attr('font-size', Math.min(Math.max(11, curR * 0.09), 15))
             })
 
