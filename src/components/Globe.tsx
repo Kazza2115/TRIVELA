@@ -39,13 +39,14 @@ const C = {
 }
 
 // ─── Ocean labels ─────────────────────────────────────────────────────────
-// Placed deep in each ocean basin — far from any coastline.
-// South Atlantic chosen (widest stretch) so text doesn't touch land on mobile.
-const OCEAN_LABELS: { lon: number; lat: number; name: string; rot: number }[] = [
-  { lon: -135, lat:  10, name: 'PACIFIQUE',   rot: -4 },  // E. Pacific deep water
-  { lon:  175, lat:   5, name: 'PACIFIQUE',   rot:  4 },  // W. Pacific deep water
-  { lon:  -12, lat: -35, name: 'ATLANTIQUE',  rot: -6 },  // South Atlantic (widest)
-  { lon:   78, lat: -30, name: 'INDIEN',      rot:  5 },  // Central Indian Ocean
+// lon/lat — used ONLY to compute visibility (geoDistance) when globe rotates.
+// sx/sy   — fixed screen offsets as fraction of R from globe centre.
+//           Labels never move on screen; they only fade in/out.
+const OCEAN_LABELS: { lon: number; lat: number; name: string; rot: number; sx: number; sy: number }[] = [
+  { lon: -135, lat:  10, name: 'PACIFIQUE',  rot: -3, sx:  0.26, sy: -0.08 }, // E. Pacific
+  { lon:  175, lat:   5, name: 'PACIFIQUE',  rot:  3, sx:  0.26, sy: -0.08 }, // W. Pacific (same screen pos)
+  { lon:  -12, lat: -20, name: 'ATLANTIQUE', rot: -4, sx: -0.28, sy:  0.10 }, // South Atlantic
+  { lon:   78, lat: -20, name: 'INDIEN',     rot:  4, sx:  0.10, sy:  0.32 }, // Indian Ocean
 ]
 
 interface GlobeProps {
@@ -265,7 +266,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           .attr('stroke', C.border).attr('stroke-width', '0.60')
 
         // Ocean labels — barely-visible tint, same colour family as the ocean water
-        OCEAN_LABELS.forEach(({ lon, lat, name, rot }) => {
+        OCEAN_LABELS.forEach(({ name, rot, sx, sy }) => {
           gOceanText.append('text')
             .attr('class', 'ocean-label')
             .attr('text-anchor', 'middle')
@@ -275,10 +276,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
             .attr('letter-spacing', 4)
             .attr('fill', 'rgba(15,38,68,1)')
             .attr('pointer-events', 'none')
-            .attr('transform', () => {
-              const p = proj([lon, lat])
-              return p ? `translate(${p[0]},${p[1]}) rotate(${rot})` : ''
-            })
+            .attr('transform', `translate(${W/2 + sx*R},${H/2 + sy*R}) rotate(${rot})`)
             .text(name)
         })
 
@@ -384,24 +382,23 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
             .attr('cy', H / 2)
             .attr('r',  curR)
 
-          // Update ocean labels — move + fade when rotating to back side
+          // Update ocean labels — fixed screen position, only fade with rotation
           gOceanText.selectAll<SVGTextElement, unknown>('.ocean-label')
             .each(function (_, i) {
-              const { lon, lat, rot } = OCEAN_LABELS[i]
-              const p = proj([lon, lat])
-              // Angular distance from globe center to label position
+              const { lon, lat, rot, sx, sy } = OCEAN_LABELS[i]
+              // Angular distance from globe centre — used only for opacity
               const d = d3.geoDistance(
                 [lon, lat],
                 [-proj.rotate()[0], -proj.rotate()[1]],
               )
-              // Wide fade zone — labels dissolve long before the horizon
               const maxD     = Math.PI / 2
-              const fadeZone = 0.65  // ~37° — labels gone well before the limb
+              const fadeZone = 0.55
               const alpha = d < maxD - fadeZone ? 1
                 : d < maxD ? (maxD - d) / fadeZone
                 : 0
               d3.select(this)
-                .attr('transform', p ? `translate(${p[0]},${p[1]}) rotate(${rot})` : '')
+                // Position tracks zoom (curR) but never changes with rotation
+                .attr('transform', `translate(${W/2 + sx*curR},${H/2 + sy*curR}) rotate(${rot})`)
                 .attr('opacity', alpha * 0.50)
                 .attr('font-size', Math.min(Math.max(11, curR * 0.09), 15))
             })
