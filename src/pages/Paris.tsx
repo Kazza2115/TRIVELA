@@ -21,6 +21,24 @@ const KO_LABELS: Record<string, string> = {
   sf: 'Demi-finales', '3rd': '3e place', final: 'Finale',
 }
 
+// ─── Bet lockout — 1h30 before kickoff ────────────────────────────────────
+const FR_MONTHS: Record<string, number> = {
+  'Jan': 0, 'Fév': 1, 'Mar': 2, 'Avr': 3, 'Mai': 4, 'Juin': 5,
+  'Juil': 6, 'Aoû': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Déc': 11,
+}
+function isMatchLocked(match: Match): boolean {
+  // Parse "12 Juin" + "21:00"
+  const parts = match.date.split(' ')
+  const day   = parseInt(parts[0], 10)
+  const mon   = FR_MONTHS[parts[1]?.slice(0, 4).replace('û', 'û')]
+    ?? FR_MONTHS[parts[1]?.slice(0, 3)]
+    ?? -1
+  if (isNaN(day) || mon === -1) return false
+  const [hh, mm] = match.time.split(':').map(Number)
+  const kickoff  = new Date(2026, mon, day, hh, mm, 0).getTime()
+  return Date.now() >= kickoff - 90 * 60 * 1000
+}
+
 // ─── Static lookups ────────────────────────────────────────────────────────
 const TEAM_TO_GROUP: Record<string, string> = {}
 const SHORT_TO_TEAM: Record<string, Team>   = {}
@@ -58,6 +76,10 @@ export default function Paris({ onBack, currentUser }: { onBack: () => void; cur
         away: side === 'away' ? Math.max(0, cur.away + delta) : cur.away,
       }}
     })
+    setConfirmed(prev => { const s = new Set(prev); s.delete(id); return s })
+  }
+
+  const edit = (id: string) => {
     setConfirmed(prev => { const s = new Set(prev); s.delete(id); return s })
   }
 
@@ -175,23 +197,32 @@ export default function Paris({ onBack, currentUser }: { onBack: () => void; cur
           {/* All 3 matchdays */}
           {([1, 2, 3] as const).map(md => {
             const mdMatches = allGroupMatches.filter(m => m.matchday === md)
-            const dateLabel = mdMatches[0]?.date ?? ''
+            const dates = [...new Set(mdMatches.map(m => m.date))].join(' – ')
             return (
-              <div key={md} style={{ marginBottom: 22 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <div key={md} style={{ marginBottom: 26 }}>
+                {/* Journée header — gold accent, clear section break */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  marginBottom: 12, marginTop: md === 1 ? 0 : 6,
+                  padding: '9px 14px',
+                  background: 'linear-gradient(90deg, rgba(200,155,60,0.10) 0%, rgba(200,155,60,0.03) 100%)',
+                  borderLeft: '3px solid #C89B3C',
+                  borderRadius: '0 10px 10px 0',
+                }}>
                   <span style={{
-                    fontSize: 10, fontWeight: 700, letterSpacing: 1.2,
-                    color: 'var(--text-3)', textTransform: 'uppercase', whiteSpace: 'nowrap',
+                    fontFamily: "'Bebas Neue', cursive",
+                    fontSize: 16, letterSpacing: 2,
+                    color: '#A07828',
                   }}>
                     Journée {md}
                   </span>
-                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-                  {dateLabel && (
+                  <div style={{ flex: 1, height: 1, background: 'rgba(200,155,60,0.25)' }} />
+                  {dates && (
                     <span style={{
-                      fontSize: 9, fontWeight: 600, color: 'var(--text-3)',
-                      letterSpacing: 0.5, whiteSpace: 'nowrap',
+                      fontSize: 10, fontWeight: 600, color: 'var(--text-2)',
+                      letterSpacing: 0.4, whiteSpace: 'nowrap',
                     }}>
-                      {dateLabel}
+                      {dates}
                     </span>
                   )}
                 </div>
@@ -202,6 +233,7 @@ export default function Paris({ onBack, currentUser }: { onBack: () => void; cur
                       delay={i * 55}
                       onIncrement={(s, d) => setPrediction(m.id, s, d)}
                       onConfirm={() => confirm(m.id)}
+                      onEdit={() => edit(m.id)}
                     />
                   ))}
                 </div>
@@ -250,6 +282,7 @@ export default function Paris({ onBack, currentUser }: { onBack: () => void; cur
                 delay={i * 45}
                 onIncrement={(s, d) => setPrediction(m.id, s, d)}
                 onConfirm={() => confirm(m.id)}
+                onEdit={() => edit(m.id)}
               />
             ))}
           </div>
@@ -340,11 +373,13 @@ interface MatchCardProps {
   delay: number
   onIncrement: (side: 'home' | 'away', delta: number) => void
   onConfirm: () => void
+  onEdit: () => void
 }
 
-function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm }: MatchCardProps) {
-  const pred  = prediction ?? { home: 0, away: 0 }
-  const isTBD = match.home.code === 'un'
+function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
+  const pred   = prediction ?? { home: 0, away: 0 }
+  const isTBD  = match.home.code === 'un'
+  const locked = isMatchLocked(match)
 
   return (
     <div style={{
@@ -354,9 +389,13 @@ function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm
       boxShadow: confirmed ? '0 4px 20px rgba(200,155,60,0.12), var(--shadow)' : 'var(--shadow)',
       animation: `fadeSlideUp .3s cubic-bezier(0.4,0,0.2,1) ${delay}ms both`,
       transition: 'border-color 0.22s, box-shadow 0.22s',
+      opacity: locked ? 0.75 : 1,
     }}>
-      {confirmed && (
+      {confirmed && !locked && (
         <div style={{ height: 3, background: 'linear-gradient(90deg,transparent,#C89B3C 20%,#E8D080 50%,#C89B3C 80%,transparent)' }} />
+      )}
+      {locked && (
+        <div style={{ height: 3, background: 'linear-gradient(90deg,transparent,rgba(110,110,115,0.5) 20%,rgba(174,174,178,0.7) 50%,rgba(110,110,115,0.5) 80%,transparent)' }} />
       )}
 
       {/* Meta row */}
@@ -374,10 +413,10 @@ function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span>{match.date}</span>
           <span style={{
-            background: 'rgba(200,155,60,0.12)',
-            border: '1px solid rgba(200,155,60,0.25)',
+            background: locked ? 'rgba(110,110,115,0.1)' : 'rgba(200,155,60,0.12)',
+            border: `1px solid ${locked ? 'rgba(110,110,115,0.25)' : 'rgba(200,155,60,0.25)'}`,
             borderRadius: 5, padding: '1px 5px',
-            color: '#A07828', fontWeight: 700,
+            color: locked ? 'var(--text-3)' : '#A07828', fontWeight: 700,
           }}>
             {match.time}
           </span>
@@ -399,13 +438,13 @@ function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm
       }}>
         <TeamBlock team={match.home} align="left" />
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <ScoreControl value={pred.home} disabled={isTBD || confirmed}
+          <ScoreControl value={pred.home} disabled={isTBD || locked || confirmed}
             onUp={() => onIncrement('home', 1)} onDown={() => onIncrement('home', -1)} />
           <span style={{
             fontFamily: "'Bebas Neue', cursive",
             fontSize: 24, color: 'var(--text-3)', letterSpacing: 2, userSelect: 'none',
           }}>:</span>
-          <ScoreControl value={pred.away} disabled={isTBD || confirmed}
+          <ScoreControl value={pred.away} disabled={isTBD || locked || confirmed}
             onUp={() => onIncrement('away', 1)} onDown={() => onIncrement('away', -1)} />
         </div>
         <TeamBlock team={match.away} align="right" />
@@ -421,9 +460,27 @@ function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm
           &nbsp;·&nbsp;
           <span style={{ color: 'rgba(160,120,40,0.7)', fontWeight: 600 }}>+1</span> bon résultat
         </div>
-        {!isTBD && (
+        {locked ? (
+          <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700, letterSpacing: 0.5 }}>
+            🔒 Verrouillé
+          </div>
+        ) : !isTBD && (
           confirmed ? (
-            <div style={{ fontSize: 11, color: '#22c55e', fontWeight: 700 }}>✓ Enregistré</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 11, color: '#22c55e', fontWeight: 700 }}>✓ Enregistré</div>
+              <button onClick={onEdit} style={{
+                padding: '5px 12px',
+                background: 'var(--bg-fill)',
+                border: '1px solid var(--border)', borderRadius: 8,
+                color: 'var(--text-2)', fontSize: 11, fontWeight: 600,
+                cursor: 'pointer', transition: 'opacity 0.1s',
+              }}
+                onPointerDown={e => (e.currentTarget.style.opacity = '0.5')}
+                onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
+              >
+                Modifier
+              </button>
+            </div>
           ) : (
             <button onClick={onConfirm} style={{
               padding: '6px 14px',
