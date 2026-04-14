@@ -18,9 +18,9 @@ export const FEATURED: Record<number, {
   840: { name:'USA',     code:'us', color:'#3C3B6E',                              sectionId:'paris',      sectionName:'Paris 2026',  icon:'⚡' },
 }
 
-/** All non-featured countries: soft blue-grey ghost so they read on the ocean. */
+/** All non-featured countries: paper-white so continents are clearly readable. */
 function landColor(_numericId: number): string {
-  return 'rgba(200,215,228,0.30)'
+  return 'rgba(245,246,248,0.72)'
 }
 
 /** Slightly brighten a hex color for the selected state. Skips url() fills. */
@@ -563,37 +563,6 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
         onMouseDown={() => { if (svgRef.current) svgRef.current.style.cursor = 'grabbing' }}
         onMouseUp={()   => { if (svgRef.current) svgRef.current.style.cursor = 'grab' }}
       />
-
-      {/* Zoom buttons */}
-      {isLoaded && (
-        <div style={{ position: 'absolute', right: 14, bottom: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {['+', '−'].map((label, i) => (
-            <button key={label}
-              onClick={() => {
-                if (!projRef.current || !baseRRef.current) return
-                postZoomAnimRef.current = null
-                zoomRef.current = i === 0
-                  ? Math.min(3.5, zoomRef.current * 1.3)
-                  : Math.max(0.4, zoomRef.current / 1.3)
-                projRef.current.scale(baseRRef.current * zoomRef.current)
-              }}
-              style={{
-                width: 32, height: 32, borderRadius: 10,
-                background: 'rgba(255,255,255,0.82)',
-                backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-                border: '1px solid rgba(255,255,255,0.5)',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
-                fontSize: 18, fontWeight: 300, color: '#1C1C1E',
-                cursor: 'pointer', lineHeight: 1,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                transition: 'opacity 0.12s',
-              }}
-              onPointerDown={e => (e.currentTarget.style.opacity = '0.5')}
-              onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
-            >{label}</button>
-          ))}
-        </div>
-      )}
 
       {/* Loading spinner */}
       {!isLoaded && (

@@ -9,10 +9,10 @@ const RARITY_LABEL: Record<Rarity, string> = {
   bronze: 'Bronze', silver: 'Argent', gold: 'Or', carnage: 'Carnage',
 }
 
-// Build alphabetical team list from groups
-const ALL_TEAMS = Object.values(GROUPS)
-  .flat()
-  .sort((a, b) => a.name.localeCompare(b.name, 'fr'))
+// Build alphabetical team list (sorted by French name, unique by short code)
+const ALL_TEAMS = Array.from(
+  new Map(Object.values(GROUPS).flat().map(t => [t.short, t])).values()
+).sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }))
 
 function rarityOrder(r: Rarity): number {
   return r === 'carnage' ? 4 : r === 'gold' ? 3 : r === 'silver' ? 2 : 1
@@ -96,9 +96,12 @@ export default function MonAlbum({ onBack }: { onBack: () => void }) {
               <img src={`https://flagcdn.com/w40/${t.code}.png`} alt={t.name}
                 style={{ width: 20, height: 14, borderRadius: 2, objectFit: 'cover' }} />
               <span style={{
-                fontSize: 10, fontWeight: 700, letterSpacing: 0.3,
+                fontSize: 9, fontWeight: 700, letterSpacing: 0.2,
                 color: active ? '#A07828' : 'var(--text-2)',
-              }}>{t.short}</span>
+                whiteSpace: 'nowrap',
+              }}>
+                {t.name.length > 9 ? t.name.slice(0, 8) + '.' : t.name}
+              </span>
               {complete && <span style={{ fontSize: 8, color: '#22c55e' }}>✓</span>}
             </button>
           )

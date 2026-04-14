@@ -29,50 +29,38 @@ const NAV_ITEMS: {
 ]
 
 export default function App() {
-  const [section,       setSection]       = useState<SectionId>('globe')
-  const [centerRequest] = useState<{ id: number; ts: number } | null>(null)
-  const [currentUser,   setCurrentUser]   = useState<UserProfile | null>(() => getSession())
-  const [showAuth,      setShowAuth]      = useState(false)
-  const [showProfile,   setShowProfile]   = useState(false)
+  const [section,     setSection]     = useState<SectionId>('globe')
+  const [centerRequest]               = useState<{ id: number; ts: number } | null>(null)
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => getSession())
+  const [showAuth,    setShowAuth]    = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
 
-  // ── Parier banner swipe-to-dismiss ─────────────────────────────────────
-  const [bannerShown,   setBannerShown]   = useState(true)
-  const bannerRef       = useRef<HTMLDivElement>(null)
-  const swipeStartY     = useRef(0)
+  // ── Parier banner — smooth swipe-to-dismiss ────────────────────────────────
+  // bannerShown drives the CSS transition (always rendered, never unmounted).
+  // dragOffset follows the finger in real time; when it resets to 0 the CSS
+  // transition springs it back (or finishes the dismiss).
+  const [bannerShown,  setBannerShown]  = useState(true)
+  const [dragOffset,   setDragOffset]   = useState(0)
+  const swipeRef = useRef({ active: false, startY: 0 })
 
   const handleBannerTouchStart = (e: React.TouchEvent) => {
-    swipeStartY.current = e.touches[0].clientY
+    if (!bannerShown) return
+    swipeRef.current = { active: true, startY: e.touches[0].clientY }
   }
   const handleBannerTouchMove = (e: React.TouchEvent) => {
-    if (!bannerRef.current) return
-    const dy = Math.max(0, e.touches[0].clientY - swipeStartY.current)
-    bannerRef.current.style.transform = `translateY(${Math.min(dy * 0.75, 80)}px)`
-    bannerRef.current.style.opacity   = String(Math.max(0, 1 - dy / 90))
+    if (!swipeRef.current.active) return
+    const dy = Math.max(0, e.touches[0].clientY - swipeRef.current.startY)
+    setDragOffset(Math.min(dy * 0.8, 120))
   }
   const handleBannerTouchEnd = (e: React.TouchEvent) => {
-    const dy = e.changedTouches[0].clientY - swipeStartY.current
-    if (dy > 52) {
-      // Snap out then unmount
-      if (bannerRef.current) {
-        bannerRef.current.style.transition = 'transform 0.2s ease, opacity 0.2s ease'
-        bannerRef.current.style.transform  = 'translateY(90px)'
-        bannerRef.current.style.opacity    = '0'
-      }
-      setTimeout(() => setBannerShown(false), 210)
-    } else {
-      // Spring back
-      if (bannerRef.current) {
-        bannerRef.current.style.transition = 'transform 0.25s cubic-bezier(0.34,1.56,0.64,1), opacity 0.25s'
-        bannerRef.current.style.transform  = ''
-        bannerRef.current.style.opacity    = ''
-        setTimeout(() => {
-          if (bannerRef.current) bannerRef.current.style.transition = ''
-        }, 260)
-      }
-    }
+    if (!swipeRef.current.active) return
+    swipeRef.current.active = false
+    const dy = e.changedTouches[0].clientY - swipeRef.current.startY
+    setDragOffset(0)          // always reset → triggers spring-back OR final dismiss
+    if (dy > 52) setBannerShown(false)
   }
 
-  // ── Country flag flash on nav tap ──────────────────────────────────────
+  // ── Country flag flash on nav tap ──────────────────────────────────────────
   const [flagFlash, setFlagFlash] = useState<{
     code: string; name: string; label: string
   } | null>(null)
@@ -81,11 +69,17 @@ export default function App() {
   const openAuth     = () => setShowAuth(true)
   const handleAuth   = (user: UserProfile) => { setCurrentUser(user); setShowAuth(false) }
   const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
-
-  const navigateTo = (s: string) => setSection(s as SectionId)
+  const navigateTo   = (s: string) => setSection(s as SectionId)
 
   const gold   = '#C89B3C'
   const dimCol = '#AEAEB2'
+
+  // Derived banner style values
+  const bannerTranslate = bannerShown ? dragOffset : 130
+  const bannerOpacity   = bannerShown ? Math.max(0, 1 - dragOffset / 100) : 0
+  const bannerTransition = dragOffset > 0
+    ? 'none'
+    : 'transform 0.44s cubic-bezier(0.34,1.15,0.64,1), opacity 0.36s ease'
 
   return (
     <div style={{
@@ -168,71 +162,74 @@ export default function App() {
               Touchez un pays · Faites pivoter
             </p>
 
-            {/* ── Parier banner — swipe down to dismiss ───────────── */}
-            {bannerShown ? (
-              <div
-                ref={bannerRef}
-                onTouchStart={handleBannerTouchStart}
-                onTouchMove={handleBannerTouchMove}
-                onTouchEnd={handleBannerTouchEnd}
-                style={{
-                  position: 'absolute', bottom: 16, left: 16, right: 16,
-                  padding: '20px 18px 16px',
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border)', borderRadius: 20,
-                  boxShadow: 'var(--shadow-lg)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-                  animation: 'fadeSlideUp .5s cubic-bezier(0.4,0,0.2,1) .8s both',
-                  touchAction: 'none',
-                }}
-              >
-                {/* Drag handle */}
-                <div style={{
-                  position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
-                  width: 36, height: 4, borderRadius: 2,
-                  background: 'rgba(0,0,0,0.10)',
-                  pointerEvents: 'none',
-                }} />
-                <div>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: gold,
-                    textTransform: 'uppercase', marginBottom: 3 }}>
-                    Coupe du Monde 2026
-                  </div>
-                  <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 500 }}>
-                    72 matchs · Faites vos pronostics
-                  </div>
+            {/* ── Parier banner — always mounted, CSS transition for show/hide ── */}
+            <div
+              onTouchStart={handleBannerTouchStart}
+              onTouchMove={handleBannerTouchMove}
+              onTouchEnd={handleBannerTouchEnd}
+              style={{
+                position: 'absolute', bottom: 16, left: 16, right: 16,
+                padding: '20px 18px 16px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)', borderRadius: 20,
+                boxShadow: 'var(--shadow-lg)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                touchAction: 'none',
+                // Smooth slide driven by dragOffset (during drag) or bannerShown (transition)
+                transition: bannerTransition,
+                transform: `translateY(${bannerTranslate}px)`,
+                opacity: bannerOpacity,
+                pointerEvents: bannerShown ? 'auto' : 'none',
+              }}
+            >
+              {/* Drag handle pill */}
+              <div style={{
+                position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
+                width: 36, height: 4, borderRadius: 2, background: 'rgba(0,0,0,0.10)',
+                pointerEvents: 'none',
+              }} />
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: gold,
+                  textTransform: 'uppercase', marginBottom: 3 }}>
+                  Coupe du Monde 2026
                 </div>
-                <button onClick={() => setSection('paris')} style={{
-                  padding: '10px 18px',
-                  background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
-                  border: 'none', borderRadius: 12, color: '#0D0800', fontSize: 13, fontWeight: 700,
-                  cursor: 'pointer', flexShrink: 0,
-                  boxShadow: '0 4px 14px rgba(200,155,60,0.4)',
-                  transition: 'transform 0.12s, box-shadow 0.12s',
-                }}
-                  onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.96)'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(200,155,60,0.25)' }}
-                  onPointerUp={e   => { e.currentTarget.style.transform = 'scale(1)';    e.currentTarget.style.boxShadow = '0 4px 14px rgba(200,155,60,0.4)' }}
-                >
-                  Parier →
-                </button>
+                <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 500 }}>
+                  72 matchs · Faites vos pronostics
+                </div>
               </div>
-            ) : (
-              /* Restore pill when banner is dismissed */
-              <button
-                onClick={() => setBannerShown(true)}
-                style={{
-                  position: 'absolute', bottom: 16, right: 16,
-                  padding: '9px 16px',
-                  background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
-                  border: 'none', borderRadius: 20,
-                  color: '#0D0800', fontSize: 12, fontWeight: 700,
-                  cursor: 'pointer', boxShadow: '0 4px 14px rgba(200,155,60,0.4)',
-                  animation: 'fadeIn 0.3s ease both',
-                }}
+              <button onClick={() => setSection('paris')} style={{
+                padding: '10px 18px',
+                background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
+                border: 'none', borderRadius: 12, color: '#0D0800', fontSize: 13, fontWeight: 700,
+                cursor: 'pointer', flexShrink: 0,
+                boxShadow: '0 4px 14px rgba(200,155,60,0.4)',
+                transition: 'transform 0.12s, box-shadow 0.12s',
+              }}
+                onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.96)'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(200,155,60,0.25)' }}
+                onPointerUp={e   => { e.currentTarget.style.transform = 'scale(1)';    e.currentTarget.style.boxShadow = '0 4px 14px rgba(200,155,60,0.4)' }}
               >
-                ⚡ Parier
+                Parier →
               </button>
-            )}
+            </div>
+
+            {/* ── Restore pill — slides up from below when banner is hidden ── */}
+            <button
+              onClick={() => setBannerShown(true)}
+              style={{
+                position: 'absolute', bottom: 16, right: 16,
+                padding: '9px 18px',
+                background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
+                border: 'none', borderRadius: 20,
+                color: '#0D0800', fontSize: 12, fontWeight: 700,
+                cursor: 'pointer', boxShadow: '0 4px 14px rgba(200,155,60,0.4)',
+                transition: 'opacity 0.36s ease, transform 0.44s cubic-bezier(0.34,1.15,0.64,1)',
+                opacity: bannerShown ? 0 : 1,
+                transform: bannerShown ? 'translateY(50px)' : 'translateY(0)',
+                pointerEvents: bannerShown ? 'none' : 'auto',
+              }}
+            >
+              ⚡ Parier
+            </button>
           </div>
         )}
 
@@ -260,7 +257,6 @@ export default function App() {
             <button key={id}
               onClick={() => {
                 if (countryId !== null && countryCode) {
-                  // Show flag flash, navigate under it, clear after animation
                   setFlagFlash({ code: countryCode, name: countryName ?? '', label })
                   setSection(id)
                   setTimeout(() => setFlagFlash(null), 1000)
@@ -289,7 +285,7 @@ export default function App() {
         })}
       </nav>
 
-      {/* ── Country flag flash overlay ────────────────────────── */}
+      {/* ── Country flag flash overlay ─────────────────────────── */}
       {flagFlash && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
@@ -299,7 +295,6 @@ export default function App() {
           animation: 'flagEnter 1000ms ease-in-out forwards',
           pointerEvents: 'none',
         }}>
-          {/* Flag image */}
           <img
             src={`https://flagcdn.com/w640/${flagFlash.code}.png`}
             alt={flagFlash.name}
@@ -310,7 +305,6 @@ export default function App() {
               border: '2px solid rgba(255,255,255,0.12)',
             }}
           />
-          {/* Country name + section label */}
           <div style={{ textAlign: 'center' }}>
             <div style={{
               fontFamily: "'Bebas Neue', cursive",
