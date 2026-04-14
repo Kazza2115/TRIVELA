@@ -1,40 +1,59 @@
-// ─── Trivela Logo — curved football-inspired SVG ─────────────────────────
-// Inspired by the "trivela" technique: a curved outside-of-the-foot shot.
+// ─── Trivela Logo — football boot kicking a ball, trivela curve ───────────────
 
 export default function TrivelaLogo({ size = 140, color = '#C89B3C' }: { size?: number; color?: string }) {
   const w = size
-  const h = size * 0.38
+  const h = Math.round(size * 0.38)
   return (
-    <svg width={w} height={h} viewBox="0 0 260 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Curved motion arc — the "trivela" kick path */}
+    <svg width={w} height={h} viewBox="0 0 290 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+      {/* ── Football boot (side profile, right-pointing toe, kicking pose) ── */}
+      {/* Main boot body */}
       <path
-        d="M20 75 Q60 10, 130 50 T240 25"
-        stroke={color}
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        fill="none"
-        opacity="0.35"
-        strokeDasharray="4 6"
+        d="M 12,92 Q 6,96 16,97 L 54,97 L 66,82 L 63,68 Q 54,58 36,56 L 20,58 Q 11,60 11,72 L 11,88 Z"
+        fill={color} opacity="0.90"
       />
-      {/* Second thinner arc for depth */}
+      {/* Ankle cuff rising from the back of the boot */}
       <path
-        d="M30 80 Q70 20, 135 52 T235 30"
-        stroke={color}
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        fill="none"
-        opacity="0.18"
+        d="M 20,58 L 17,36 Q 16,26 22,24 L 28,24 Q 34,26 32,36 L 30,58 Z"
+        fill={color} opacity="0.90"
       />
-      {/* Small football at the arc start */}
-      <circle cx="18" cy="76" r="6" fill={color} opacity="0.7" />
-      {/* Tiny pentagon on the ball */}
+      {/* Sole strip (slightly darker) */}
       <path
-        d="M16.2 74.8 L18 73.5 L19.8 74.8 L19.2 76.8 L16.8 76.8Z"
-        fill="rgba(0,0,0,0.3)"
+        d="M 14,97 L 54,97 L 66,84"
+        stroke="rgba(0,0,0,0.22)" strokeWidth="3.5" strokeLinecap="round" fill="none"
       />
-      {/* TRIVELA text — main wordmark */}
+      {/* Lace stitching on vamp */}
+      <path d="M 24,66 L 40,61" stroke="rgba(0,0,0,0.22)" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M 25,72 L 44,66" stroke="rgba(0,0,0,0.22)" strokeWidth="1.8" strokeLinecap="round" />
+      {/* Studs */}
+      <rect x="20" y="97" width="6" height="5" rx="2" fill={color} opacity="0.50" />
+      <rect x="33" y="97" width="6" height="5" rx="2" fill={color} opacity="0.50" />
+      <rect x="47" y="96" width="6" height="5" rx="2" fill={color} opacity="0.50" />
+
+      {/* ── Football (being struck by the outside of the boot toe) ── */}
+      <circle cx="81" cy="70" r="13" fill={color} opacity="0.92" />
+      {/* Pentagon patch */}
+      <path d="M 78,65 L 81,63 L 84,65 L 83,70 L 79,70 Z" fill="rgba(0,0,0,0.22)" />
+      {/* Second patch */}
+      <path d="M 72,73 L 74,69 L 79,70 L 79,75 L 74,76 Z" fill="rgba(0,0,0,0.14)" />
+      {/* Shine */}
+      <circle cx="77" cy="66" r="3" fill="rgba(255,255,255,0.38)" />
+
+      {/* ── Trivela curve — outside-of-foot curving trajectory ── */}
+      <path
+        d="M 92,58 Q 130,24 178,28 T 284,18"
+        stroke={color} strokeWidth="2.2" strokeLinecap="round"
+        strokeDasharray="5 8" fill="none" opacity="0.28"
+      />
+      <path
+        d="M 94,63 Q 134,32 180,34 T 282,24"
+        stroke={color} strokeWidth="1.1" strokeLinecap="round"
+        fill="none" opacity="0.14"
+      />
+
+      {/* ── TRIVELA wordmark ── */}
       <text
-        x="130" y="68"
+        x="195" y="78"
         textAnchor="middle"
         fontFamily="'Bebas Neue', cursive"
         fontSize="52"
@@ -43,17 +62,14 @@ export default function TrivelaLogo({ size = 140, color = '#C89B3C' }: { size?: 
       >
         TRIVELA
       </text>
-      {/* Underline swoosh — the trivela curve */}
+
+      {/* Underline swoosh */}
       <path
-        d="M48 78 Q130 92, 212 76"
-        stroke={color}
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        fill="none"
-        opacity="0.6"
+        d="M 106,87 Q 196,103 286,87"
+        stroke={color} strokeWidth="2.2" strokeLinecap="round"
+        fill="none" opacity="0.55"
       />
-      {/* Small dot at the end of swoosh — ball trajectory endpoint */}
-      <circle cx="214" cy="75.5" r="2.5" fill={color} opacity="0.5" />
+      <circle cx="288" cy="86.5" r="2.2" fill={color} opacity="0.45" />
     </svg>
   )
 }

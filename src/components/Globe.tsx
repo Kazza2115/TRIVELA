@@ -18,9 +18,9 @@ export const FEATURED: Record<number, {
   840: { name:'USA',     code:'us', color:'#3C3B6E',                              sectionId:'paris',      sectionName:'Paris 2026',  icon:'⚡' },
 }
 
-/** All non-featured countries: nearly transparent so the ocean colour shows through. */
+/** All non-featured countries: soft blue-grey ghost so they read on the ocean. */
 function landColor(_numericId: number): string {
-  return 'rgba(255,255,255,0.10)'
+  return 'rgba(200,215,228,0.30)'
 }
 
 /** Slightly brighten a hex color for the selected state. Skips url() fills. */
