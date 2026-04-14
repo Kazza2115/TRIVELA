@@ -24,7 +24,7 @@ const NAV_ITEMS: {
   { id: 'globe',      Icon: IconGlobe,  label: 'Globe',      countryId: null },
   { id: 'album',      Icon: IconAlbum,  label: 'Album',      countryId: 724, countryCode: 'es', countryName: 'Espagne',  sectionName: 'Mon Album'   },
   { id: 'packs',      Icon: IconPacks,  label: 'Packs',      countryId: 76,  countryCode: 'br', countryName: 'Brésil',   sectionName: 'Mes Packs'   },
-  { id: 'paris',      Icon: IconBolt,   label: 'Paris',      countryId: 840, countryCode: 'us', countryName: 'USA',      sectionName: 'Paris 2026'  },
+  { id: 'paris',      Icon: IconBolt,   label: 'Paris',      countryId: 840, countryCode: 'us', countryName: 'USA',      sectionName: 'Paris'       },
   { id: 'classement', Icon: IconTrophy, label: 'Classement', countryId: 686, countryCode: 'sn', countryName: 'Sénégal',  sectionName: 'Classement'  },
 ]
 
@@ -197,7 +197,14 @@ export default function App() {
                   72 matchs · Faites vos pronostics
                 </div>
               </div>
-              <button onClick={() => setSection('paris')} style={{
+              <button onClick={() => {
+                setCenterRequest({ id: 840, ts: Date.now() })
+                setTimeout(() => {
+                  setFlagFlash({ code: 'us', countryName: 'USA', sectionName: 'Paris' })
+                  setSection('paris')
+                  setTimeout(() => setFlagFlash(null), 1000)
+                }, 900)
+              }} style={{
                 padding: '10px 18px',
                 background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
                 border: 'none', borderRadius: 12, color: '#0D0800', fontSize: 13, fontWeight: 700,
