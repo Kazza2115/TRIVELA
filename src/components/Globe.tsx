@@ -4,16 +4,18 @@ import { feature } from 'topojson-client'
 import type { Topology } from 'topojson-specification'
 import CountryPopup from './CountryPopup'
 
-// ─── Featured countries (cartoon palette) ─────────────────────────────────
+// ─── Featured countries — vivid national flag colours ─────────────────────
+// svgFill overrides the SVG path fill (allows gradients).
+// color is used everywhere else (popup, CSS borders, brighten()).
 export const FEATURED: Record<number, {
-  name: string; code: string; color: string
+  name: string; code: string; color: string; svgFill?: string
   sectionId: string; sectionName: string; icon: string
 }> = {
-  76:  { name:'Brésil',  code:'br', color:'#D98C5F', sectionId:'packs',      sectionName:'Mes Packs',   icon:'📦' },
-  686: { name:'Sénégal', code:'sn', color:'#D9C97C', sectionId:'classement', sectionName:'Classement',  icon:'🏆' },
-  724: { name:'Espagne', code:'es', color:'#C65D5D', sectionId:'album',      sectionName:'Mon Album',   icon:'📖' },
-  392: { name:'Japon',   code:'jp', color:'#6B8FA3', sectionId:'echange',    sectionName:'Échange',     icon:'🔄' },
-  840: { name:'USA',     code:'us', color:'#7FB77E', sectionId:'paris',      sectionName:'Paris 2026',  icon:'⚡' },
+  76:  { name:'Brésil',  code:'br', color:'#009B3A',                              sectionId:'packs',      sectionName:'Mes Packs',   icon:'📦' },
+  686: { name:'Sénégal', code:'sn', color:'#FCDD09',                              sectionId:'classement', sectionName:'Classement',  icon:'🏆' },
+  724: { name:'Espagne', code:'es', color:'#C60B1E',                              sectionId:'album',      sectionName:'Mon Album',   icon:'📖' },
+  392: { name:'Japon',   code:'jp', color:'#BC002D', svgFill:'url(#japan-grad)', sectionId:'echange',    sectionName:'Échange',     icon:'🔄' },
+  840: { name:'USA',     code:'us', color:'#3C3B6E',                              sectionId:'paris',      sectionName:'Paris 2026',  icon:'⚡' },
 }
 
 /** All non-featured countries use a single muted grey — featured ones stand out. */
@@ -21,8 +23,9 @@ function landColor(_numericId: number): string {
   return '#C9CDD6'
 }
 
-/** Slightly brighten a hex color for the selected state. */
+/** Slightly brighten a hex color for the selected state. Skips url() fills. */
 function brighten(hex: string, amount = 0.13): string {
+  if (hex.startsWith('url(')) return hex
   const c = d3.hsl(hex)
   c.l = Math.min(1, c.l + amount)
   return c.formatHex()
@@ -36,12 +39,13 @@ const C = {
 }
 
 // ─── Ocean labels ─────────────────────────────────────────────────────────
-// Positioned in open-water areas, spaced to be readable from any angle
+// Placed deep in each ocean basin — far from any coastline.
+// South Atlantic chosen (widest stretch) so text doesn't touch land on mobile.
 const OCEAN_LABELS: { lon: number; lat: number; name: string; rot: number }[] = [
-  { lon: -140, lat:  10, name: 'PACIFIQUE',   rot: -5  },  // Central Pacific (east)
-  { lon:  170, lat: -15, name: 'PACIFIQUE',   rot:  5  },  // Central Pacific (west)
-  { lon:  -28, lat:   8, name: 'ATLANTIQUE',  rot: -10 },  // Central Atlantic
-  { lon:   75, lat: -28, name: 'INDIEN',      rot:   8 },  // Indian Ocean
+  { lon: -135, lat:  10, name: 'PACIFIQUE',   rot: -4 },  // E. Pacific deep water
+  { lon:  175, lat:   5, name: 'PACIFIQUE',   rot:  4 },  // W. Pacific deep water
+  { lon:  -12, lat: -35, name: 'ATLANTIQUE',  rot: -6 },  // South Atlantic (widest)
+  { lon:   78, lat: -30, name: 'INDIEN',      rot:  5 },  // Central Indian Ocean
 ]
 
 interface GlobeProps {
@@ -98,7 +102,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
       if (prev !== null) {
         svg.select(`defs #clip-flag-${prev}`).remove()
         svg.select(`.ft-country.country-${prev}`).classed('selected', false)
-          .attr('fill', FEATURED[prev]?.color ?? '')
+          .attr('fill', FEATURED[prev]?.svgFill ?? FEATURED[prev]?.color ?? '')
           .attr('stroke', 'rgba(0,0,0,0.15)')
       }
     }
@@ -119,7 +123,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
         if (prev !== null) {
           svg.select(`defs #clip-flag-${prev}`).remove()
           svg.select(`.ft-country.country-${prev}`).classed('selected', false)
-            .attr('fill', FEATURED[prev]?.color ?? '')
+            .attr('fill', FEATURED[prev]?.svgFill ?? FEATURED[prev]?.color ?? '')
             .attr('stroke', 'rgba(0,0,0,0.15)')
         }
       }
@@ -180,6 +184,14 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     vigGrad.append('stop').attr('offset', '60%').attr('stop-color', 'transparent')
     vigGrad.append('stop').attr('offset', '100%').attr('stop-color', 'rgba(0,0,0,0.18)')
 
+    // Japan flag gradient — white centre (sun) → crimson edges
+    const japanGrad = defs.append('radialGradient').attr('id', 'japan-grad')
+      .attr('gradientUnits', 'objectBoundingBox')
+      .attr('cx', '50%').attr('cy', '50%').attr('r', '80%')
+    japanGrad.append('stop').attr('offset', '0%').attr('stop-color', '#FAFAFA')
+    japanGrad.append('stop').attr('offset', '45%').attr('stop-color', '#F0B0B0')
+    japanGrad.append('stop').attr('offset', '100%').attr('stop-color', '#BC002D')
+
     // ── Layer groups ──────────────────────────────────────────────────
     const gSphere    = svg.append('g').attr('class', 'g-sphere')
     const gGrid      = svg.append('g').attr('class', 'g-grid')
@@ -230,7 +242,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           .join('path')
           .attr('class', (d: any) => `ft-country ft-featured country-${parseInt(d.id)}`)
           .attr('d', geoPath as any)
-          .attr('fill',   (d: any) => FEATURED[parseInt(d.id)].color)
+          .attr('fill',   (d: any) => FEATURED[parseInt(d.id)].svgFill ?? FEATURED[parseInt(d.id)].color)
           .attr('stroke', 'rgba(0,0,0,0.15)')
           .attr('stroke-width', '0.6')
           .style('cursor', 'pointer')
@@ -245,15 +257,15 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           .attr('d', geoPath as any).attr('fill', 'none')
           .attr('stroke', C.border).attr('stroke-width', '0.4')
 
-        // Ocean labels — readable, large enough, semi-transparent white
+        // Ocean labels — small enough to stay within ocean basins
         OCEAN_LABELS.forEach(({ lon, lat, name, rot }) => {
           gOceanText.append('text')
             .attr('class', 'ocean-label')
             .attr('text-anchor', 'middle')
             .attr('font-family', "'Bebas Neue', cursive")
-            .attr('font-size', Math.max(13, R * 0.11))
-            .attr('letter-spacing', 5)
-            .attr('fill', 'rgba(255,255,255,0.38)')
+            .attr('font-size', Math.min(Math.max(11, R * 0.09), 15))
+            .attr('letter-spacing', 2)
+            .attr('fill', 'rgba(255,255,255,0.40)')
             .attr('pointer-events', 'none')
             .attr('transform', () => {
               const p = proj([lon, lat])
@@ -370,7 +382,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
               d3.select(this)
                 .attr('transform', p ? `translate(${p[0]},${p[1]}) rotate(${rot})` : '')
                 .attr('opacity', alpha * 0.42)
-                .attr('font-size', Math.max(13, curR * 0.11))
+                .attr('font-size', Math.min(Math.max(11, curR * 0.09), 15))
             })
 
           // ── CRITICAL FIX: update flag overlay every frame ──────────
@@ -426,7 +438,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
         gFlags.selectAll('*').remove()
         defs.select(`#clip-flag-${prev}`).remove()
         svg.select(`.ft-country.country-${prev}`).classed('selected', false)
-          .attr('fill', FEATURED[prev]?.color ?? '')
+          .attr('fill', FEATURED[prev]?.svgFill ?? FEATURED[prev]?.color ?? '')
           .attr('stroke', 'rgba(0,0,0,0.15)')
         isRotRef.current = true
       }
