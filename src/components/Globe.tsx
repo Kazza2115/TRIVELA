@@ -30,88 +30,93 @@ const CONF_COLOR: Record<string, [number, number, number]> = {
   OFC:      [6,   182, 212],  // cyan (no featured country)
 }
 
-// ─── Qualified teams: ISO numeric ID → { confederation, FIFA rank } ─────────
-// FIFA ranking order ~Jan 2026, 48 WC2026 qualified nations.
-// England + Scotland both map to ISO 826 (United Kingdom in topojson).
-const QUALIFIED: Record<number, { conf: string; rank: number }> = {
-  //  CONMEBOL
-  32:  { conf: 'CONMEBOL', rank:  1 },  // Argentina
-  76:  { conf: 'CONMEBOL', rank:  5 },  // Brazil       ← featured
-  170: { conf: 'CONMEBOL', rank:  9 },  // Colombia
-  858: { conf: 'CONMEBOL', rank: 16 },  // Uruguay
-  218: { conf: 'CONMEBOL', rank: 21 },  // Ecuador
-  862: { conf: 'CONMEBOL', rank: 39 },  // Venezuela
-  600: { conf: 'CONMEBOL', rank: 38 },  // Paraguay
-  //  UEFA
-  250: { conf: 'UEFA',     rank:  2 },  // France
-  724: { conf: 'UEFA',     rank:  3 },  // Spain        ← featured
-  826: { conf: 'UEFA',     rank:  4 },  // England / Scotland (ISO 826)
-  620: { conf: 'UEFA',     rank:  7 },  // Portugal
-  528: { conf: 'UEFA',     rank:  8 },  // Netherlands
-  380: { conf: 'UEFA',     rank: 10 },  // Italy
-  56:  { conf: 'UEFA',     rank:  6 },  // Belgium
-  756: { conf: 'UEFA',     rank: 18 },  // Switzerland
-  191: { conf: 'UEFA',     rank: 15 },  // Croatia
-  208: { conf: 'UEFA',     rank: 19 },  // Denmark
-  40:  { conf: 'UEFA',     rank: 25 },  // Austria
-  276: { conf: 'UEFA',     rank: 11 },  // Germany
-  688: { conf: 'UEFA',     rank: 28 },  // Serbia
-  792: { conf: 'UEFA',     rank: 26 },  // Turkey
-  804: { conf: 'UEFA',     rank: 24 },  // Ukraine
-  203: { conf: 'UEFA',     rank: 41 },  // Czech Republic
-  70:  { conf: 'UEFA',     rank: 43 },  // Bosnia-Herzegovina
-  752: { conf: 'UEFA',     rank: 33 },  // Sweden
-  578: { conf: 'UEFA',     rank: 32 },  // Norway
-  //  CONCACAF
-  840: { conf: 'CONCACAF', rank: 14 },  // USA          ← featured
-  484: { conf: 'CONCACAF', rank: 20 },  // Mexico
-  124: { conf: 'CONCACAF', rank: 30 },  // Canada
-  591: { conf: 'CONCACAF', rank: 44 },  // Panama
-  188: { conf: 'CONCACAF', rank: 35 },  // Costa Rica
-  388: { conf: 'CONCACAF', rank: 51 },  // Jamaica
-  340: { conf: 'CONCACAF', rank: 52 },  // Honduras
-  332: { conf: 'CONCACAF', rank: 55 },  // Haiti
-  531: { conf: 'CONCACAF', rank: 56 },  // Curaçao
-  //  AFC
-  392: { conf: 'AFC',      rank: 13 },  // Japan        ← featured
-  410: { conf: 'AFC',      rank: 22 },  // South Korea
-  364: { conf: 'AFC',      rank: 27 },  // Iran
-  36:  { conf: 'AFC',      rank: 23 },  // Australia
-  682: { conf: 'AFC',      rank: 36 },  // Saudi Arabia
-  368: { conf: 'AFC',      rank: 47 },  // Iraq
-  400: { conf: 'AFC',      rank: 46 },  // Jordan
-  860: { conf: 'AFC',      rank: 49 },  // Uzbekistan
-  634: { conf: 'AFC',      rank: 45 },  // Qatar
-  //  CAF
-  686: { conf: 'CAF',      rank: 17 },  // Senegal      ← featured
-  504: { conf: 'CAF',      rank: 12 },  // Morocco
-  818: { conf: 'CAF',      rank: 31 },  // Egypt
-  566: { conf: 'CAF',      rank: 34 },  // Nigeria
-  384: { conf: 'CAF',      rank: 29 },  // Ivory Coast
-  710: { conf: 'CAF',      rank: 37 },  // South Africa
-  120: { conf: 'CAF',      rank: 48 },  // Cameroon
-  12:  { conf: 'CAF',      rank: 42 },  // Algeria
-  180: { conf: 'CAF',      rank: 53 },  // DR Congo
-  788: { conf: 'CAF',      rank: 40 },  // Tunisia
-  132: { conf: 'CAF',      rank: 54 },  // Cabo Verde
-  288: { conf: 'CAF',      rank: 50 },  // Ghana
-  //  OFC
-  554: { conf: 'OFC',      rank: 57 },  // New Zealand
+// ─── Qualified teams: ISO numeric ID → { conf, confRank } ───────────────────
+// confRank = rank within the confederation (1 = best in that conf).
+// England + Scotland both → ISO 826 (United Kingdom in world-atlas topojson).
+const QUALIFIED: Record<number, { conf: string; confRank: number }> = {
+  //  CONMEBOL — 7 teams, sorted by FIFA rank
+  32:  { conf: 'CONMEBOL', confRank: 1 },  // Argentina
+  76:  { conf: 'CONMEBOL', confRank: 2 },  // Brazil       ← featured
+  170: { conf: 'CONMEBOL', confRank: 3 },  // Colombia
+  858: { conf: 'CONMEBOL', confRank: 4 },  // Uruguay
+  218: { conf: 'CONMEBOL', confRank: 5 },  // Ecuador
+  600: { conf: 'CONMEBOL', confRank: 6 },  // Paraguay
+  862: { conf: 'CONMEBOL', confRank: 7 },  // Venezuela
+  //  UEFA — 19 teams, sorted by FIFA rank
+  250: { conf: 'UEFA',     confRank:  1 },  // France
+  724: { conf: 'UEFA',     confRank:  2 },  // Spain        ← featured
+  826: { conf: 'UEFA',     confRank:  3 },  // England / Scotland (ISO 826)
+  56:  { conf: 'UEFA',     confRank:  4 },  // Belgium
+  620: { conf: 'UEFA',     confRank:  5 },  // Portugal
+  528: { conf: 'UEFA',     confRank:  6 },  // Netherlands
+  380: { conf: 'UEFA',     confRank:  7 },  // Italy
+  276: { conf: 'UEFA',     confRank:  8 },  // Germany
+  191: { conf: 'UEFA',     confRank:  9 },  // Croatia
+  756: { conf: 'UEFA',     confRank: 10 },  // Switzerland
+  208: { conf: 'UEFA',     confRank: 11 },  // Denmark
+  804: { conf: 'UEFA',     confRank: 12 },  // Ukraine
+  40:  { conf: 'UEFA',     confRank: 13 },  // Austria
+  792: { conf: 'UEFA',     confRank: 14 },  // Turkey
+  688: { conf: 'UEFA',     confRank: 15 },  // Serbia
+  578: { conf: 'UEFA',     confRank: 16 },  // Norway
+  752: { conf: 'UEFA',     confRank: 17 },  // Sweden
+  203: { conf: 'UEFA',     confRank: 18 },  // Czech Republic
+  70:  { conf: 'UEFA',     confRank: 19 },  // Bosnia-Herzegovina
+  //  CONCACAF — 9 teams
+  840: { conf: 'CONCACAF', confRank: 1 },  // USA          ← featured
+  484: { conf: 'CONCACAF', confRank: 2 },  // Mexico
+  124: { conf: 'CONCACAF', confRank: 3 },  // Canada
+  188: { conf: 'CONCACAF', confRank: 4 },  // Costa Rica
+  591: { conf: 'CONCACAF', confRank: 5 },  // Panama
+  388: { conf: 'CONCACAF', confRank: 6 },  // Jamaica
+  340: { conf: 'CONCACAF', confRank: 7 },  // Honduras
+  332: { conf: 'CONCACAF', confRank: 8 },  // Haiti
+  531: { conf: 'CONCACAF', confRank: 9 },  // Curaçao
+  //  AFC — 9 teams
+  392: { conf: 'AFC',      confRank: 1 },  // Japan        ← featured
+  410: { conf: 'AFC',      confRank: 2 },  // South Korea
+  36:  { conf: 'AFC',      confRank: 3 },  // Australia
+  364: { conf: 'AFC',      confRank: 4 },  // Iran
+  682: { conf: 'AFC',      confRank: 5 },  // Saudi Arabia
+  634: { conf: 'AFC',      confRank: 6 },  // Qatar
+  400: { conf: 'AFC',      confRank: 7 },  // Jordan
+  368: { conf: 'AFC',      confRank: 8 },  // Iraq
+  860: { conf: 'AFC',      confRank: 9 },  // Uzbekistan
+  //  CAF — 12 teams
+  504: { conf: 'CAF',      confRank:  1 },  // Morocco
+  686: { conf: 'CAF',      confRank:  2 },  // Senegal      ← featured
+  384: { conf: 'CAF',      confRank:  3 },  // Ivory Coast
+  818: { conf: 'CAF',      confRank:  4 },  // Egypt
+  566: { conf: 'CAF',      confRank:  5 },  // Nigeria
+  710: { conf: 'CAF',      confRank:  6 },  // South Africa
+  788: { conf: 'CAF',      confRank:  7 },  // Tunisia
+  12:  { conf: 'CAF',      confRank:  8 },  // Algeria
+  120: { conf: 'CAF',      confRank:  9 },  // Cameroon
+  288: { conf: 'CAF',      confRank: 10 },  // Ghana
+  180: { conf: 'CAF',      confRank: 11 },  // DR Congo
+  132: { conf: 'CAF',      confRank: 12 },  // Cabo Verde
+  //  OFC — 1 team
+  554: { conf: 'OFC',      confRank: 1 },  // New Zealand
 }
-const MAX_RANK = 57
+
+// Total teams per confederation (for normalising the rank factor)
+const CONF_TOTAL: Record<string, number> = {
+  CONMEBOL: 7, UEFA: 19, CONCACAF: 9, AFC: 9, CAF: 12, OFC: 1,
+}
 
 function landColor(numericId: number): string {
   const q = QUALIFIED[numericId]
   if (!q) return 'rgba(245,246,248,0.85)'  // non-qualified: paper-white
-  // Rank factor: 1.0 = best (rank 1), 0.0 = worst
-  const factor = 1 - (q.rank - 1) / (MAX_RANK - 1)
-  // Mix: 22% (weakest) → 48% (strongest) — blended into near-white base
-  const mix    = 0.22 + factor * 0.26
+  const total  = CONF_TOTAL[q.conf]
+  // factor 1.0 = #1 in confederation (most vivid), 0.0 = last
+  const factor = total > 1 ? 1 - (q.confRank - 1) / (total - 1) : 1
+  // Mix 30% (weakest) → 68% (strongest) — blended into near-white base
+  const mix    = 0.30 + factor * 0.38
   const [r, g, b] = CONF_COLOR[q.conf]
   const wr = Math.round(245 * (1 - mix) + r * mix)
   const wg = Math.round(246 * (1 - mix) + g * mix)
   const wb = Math.round(248 * (1 - mix) + b * mix)
-  return `rgba(${wr},${wg},${wb},0.92)`
+  return `rgba(${wr},${wg},${wb},0.94)`
 }
 
 /** Slightly brighten a hex color for the selected state. Skips url() fills. */
