@@ -33,8 +33,8 @@ function brighten(hex: string, amount = 0.13): string {
 
 // ─── Globe palette ─────────────────────────────────────────────────────────
 const C = {
-  border:   'rgba(255, 255, 255, 0.10)',
-  bgStroke: 'rgba(255, 255, 255, 0.10)',
+  border:   'rgba(28, 42, 60, 0.65)',   // dark navy — clearly delineates countries
+  bgStroke: 'rgba(28, 42, 60, 0.30)',   // lighter version for individual country fills
   grid:     'rgba(255, 255, 255, 0.07)',
 }
 
@@ -257,18 +257,18 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
         // Country borders
         gBorders.append('path').datum(countries as any)
           .attr('d', geoPath as any).attr('fill', 'none')
-          .attr('stroke', C.border).attr('stroke-width', '0.4')
+          .attr('stroke', C.border).attr('stroke-width', '0.85')
 
-        // Ocean labels — italic, water-colour tint so they read as map text not holograms
+        // Ocean labels — barely-visible tint, same colour family as the ocean water
         OCEAN_LABELS.forEach(({ lon, lat, name, rot }) => {
           gOceanText.append('text')
             .attr('class', 'ocean-label')
             .attr('text-anchor', 'middle')
             .attr('font-family', "'Bebas Neue', cursive")
             .attr('font-style', 'italic')
-            .attr('font-size', Math.min(Math.max(11, R * 0.09), 15))
-            .attr('letter-spacing', 3)
-            .attr('fill', 'rgba(190,220,245,0.78)')
+            .attr('font-size', Math.min(Math.max(10, R * 0.08), 13))
+            .attr('letter-spacing', 4)
+            .attr('fill', 'rgba(160,200,230,0.55)')
             .attr('pointer-events', 'none')
             .attr('transform', () => {
               const p = proj([lon, lat])
@@ -386,15 +386,15 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
                 [lon, lat],
                 [-proj.rotate()[0], -proj.rotate()[1]],
               )
-              // Fade in over the last 20° before the limb so labels appear smoothly
-              const maxD   = Math.PI / 2
-              const fadeZone = 0.35  // ~20°
+              // Wide fade zone — labels dissolve long before the horizon
+              const maxD     = Math.PI / 2
+              const fadeZone = 0.65  // ~37° — labels gone well before the limb
               const alpha = d < maxD - fadeZone ? 1
                 : d < maxD ? (maxD - d) / fadeZone
                 : 0
               d3.select(this)
                 .attr('transform', p ? `translate(${p[0]},${p[1]}) rotate(${rot})` : '')
-                .attr('opacity', alpha * 0.68)
+                .attr('opacity', alpha * 0.42)
                 .attr('font-size', Math.min(Math.max(11, curR * 0.09), 15))
             })
 
