@@ -186,6 +186,11 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     vigGrad.append('stop').attr('offset', '60%').attr('stop-color', 'transparent')
     vigGrad.append('stop').attr('offset', '100%').attr('stop-color', 'rgba(0,0,0,0.18)')
 
+    // Globe clip — constrains ocean labels (and anything else) to the sphere boundary
+    const globeClip = defs.append('clipPath').attr('id', 'globe-clip')
+    globeClip.append('circle')
+      .attr('cx', W / 2).attr('cy', H / 2).attr('r', R)
+
     // Japan flag gradient — white centre (sun) → crimson edges
     const japanGrad = defs.append('radialGradient').attr('id', 'japan-grad')
       .attr('gradientUnits', 'objectBoundingBox')
@@ -201,7 +206,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     const gFtCountry = svg.append('g').attr('class', 'g-ft-countries')
     const gFlags     = svg.append('g').attr('class', 'g-flags')
     const gBorders   = svg.append('g').attr('class', 'g-borders')
-    const gOceanText = svg.append('g').attr('class', 'g-ocean-text')
+    const gOceanText = svg.append('g').attr('class', 'g-ocean-text').attr('clip-path', 'url(#globe-clip)')
     const gVig       = svg.append('g').attr('class', 'g-vig')   // vignette circle
 
     // Ocean sphere
@@ -365,6 +370,9 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           // Keep vignette circle in sync with globe radius
           const curR = proj.scale()
           gVig.select('circle').attr('r', curR)
+
+          // Keep globe clip in sync with current radius so labels stay inside
+          defs.select('#globe-clip circle').attr('r', curR)
 
           // Sync userSpaceOnUse gradient coordinates with current zoom radius
           defs.select('#sphere-grad')
