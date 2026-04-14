@@ -30,7 +30,7 @@ const NAV_ITEMS: {
 
 export default function App() {
   const [section,     setSection]     = useState<SectionId>('globe')
-  const [centerRequest]               = useState<{ id: number; ts: number } | null>(null)
+  const [centerRequest, setCenterRequest] = useState<{ id: number; ts: number } | null>(null)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => getSession())
   const [showAuth,    setShowAuth]    = useState(false)
   const [showProfile, setShowProfile] = useState(false)
@@ -256,12 +256,21 @@ export default function App() {
           return (
             <button key={id}
               onClick={() => {
-                if (countryId !== null && countryCode && sectionName) {
+                if (countryId === null) { setSection('globe'); return }
+                if (!countryCode || !sectionName) { setSection(id); return }
+
+                const flash = () => {
                   setFlagFlash({ code: countryCode, countryName: countryName ?? '', sectionName })
                   setSection(id)
                   setTimeout(() => setFlagFlash(null), 1000)
+                }
+
+                if (section === 'globe') {
+                  // Globe visible — rotate to country first, then flash + navigate
+                  setCenterRequest({ id: countryId, ts: Date.now() })
+                  setTimeout(flash, 900)
                 } else {
-                  setSection(id)
+                  flash()
                 }
               }}
               style={{
