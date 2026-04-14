@@ -36,13 +36,13 @@ export default function CountryPopup({ countryId, onNavigate, onClose }: Props) 
         pointerEvents: visible ? 'all' : 'none',
       }}
     >
-      {/* Glass card */}
+      {/* Glass card — no glow, clean shadow */}
       <div style={{
-        background: 'rgba(8, 18, 38, 0.88)',
+        background: 'rgba(8, 18, 38, 0.90)',
         border: `1.5px solid ${country.color}55`,
         borderRadius: 18,
         overflow: 'hidden',
-        boxShadow: `0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px ${country.color}22, 0 0 40px ${country.color}18`,
+        boxShadow: '0 12px 40px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.25)',
         backdropFilter: 'blur(20px)',
       }}>
         {/* Color banner */}
@@ -61,7 +61,7 @@ export default function CountryPopup({ countryId, onNavigate, onClose }: Props) 
                 width: 48, height: 32,
                 objectFit: 'cover',
                 borderRadius: 6,
-                boxShadow: `0 4px 14px ${country.color}44`,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.30)',
                 border: '1px solid rgba(255,255,255,0.12)',
               }}
             />
@@ -129,15 +129,15 @@ export default function CountryPopup({ countryId, onNavigate, onClose }: Props) 
                 justifyContent: 'center',
                 gap: 6,
                 transition: 'all 0.2s',
-                boxShadow: `0 4px 16px ${country.color}44`,
+                boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
               }}
               onMouseEnter={e => {
-                ;(e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)'
-                ;(e.currentTarget as HTMLButtonElement).style.boxShadow = `0 8px 24px ${country.color}66`
+                ;(e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'
+                ;(e.currentTarget as HTMLButtonElement).style.opacity = '0.88'
               }}
               onMouseLeave={e => {
                 ;(e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)'
-                ;(e.currentTarget as HTMLButtonElement).style.boxShadow = `0 4px 16px ${country.color}44`
+                ;(e.currentTarget as HTMLButtonElement).style.opacity = '1'
               }}
             >
               Explorer →

@@ -2,36 +2,30 @@ import { useState } from 'react'
 import Globe        from './components/Globe'
 import Paris        from './pages/Paris'
 import Classement   from './pages/Classement'
+import MonAlbum     from './pages/MonAlbum'
+import MesPacks     from './pages/MesPacks'
 import AuthModal    from './components/AuthModal'
 import ProfileModal from './components/ProfileModal'
+import TrivelaLogo  from './components/TrivelaLogo'
 import { getSession } from './services/auth'
 import type { UserProfile } from './services/auth'
 import {
-  IconGlobe, IconTrophy,
+  IconGlobe, IconTrophy, IconPacks, IconAlbum, IconBolt,
 } from './components/NavIcons'
 import './index.css'
 
-export type SectionId = 'globe' | 'paris' | 'classement'
+export type SectionId = 'globe' | 'paris' | 'classement' | 'album' | 'packs'
 
-function IconTarget({ size = 22, color = 'currentColor' }: { size?: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round">
-      <circle cx="12" cy="12" r="9.5" />
-      <circle cx="12" cy="12" r="5.5" />
-      <circle cx="12" cy="12" r="1.5" fill={color} stroke="none" />
-      <line x1="12" y1="2.5" x2="12" y2="6" />
-      <line x1="12" y1="18" x2="12" y2="21.5" />
-      <line x1="2.5" y1="12" x2="6" y2="12" />
-      <line x1="18" y1="12" x2="21.5" y2="12" />
-    </svg>
-  )
-}
-
-const NAV_ITEMS = [
-  { id: 'globe'      as SectionId, Icon: IconGlobe,  label: 'Globe',      countryId: null },
-  { id: 'paris'      as SectionId, Icon: IconTarget, label: 'Paris',      countryId: 840  },
-  { id: 'classement' as SectionId, Icon: IconTrophy, label: 'Classement', countryId: 686  },
-] as const
+const NAV_ITEMS: {
+  id: SectionId; Icon: React.FC<{ size?: number; color?: string }>
+  label: string; countryId: number | null
+}[] = [
+  { id: 'globe',      Icon: IconGlobe,  label: 'Globe',      countryId: null },
+  { id: 'album',      Icon: IconAlbum,  label: 'Album',      countryId: 724  },
+  { id: 'packs',      Icon: IconPacks,  label: 'Packs',      countryId: 76   },
+  { id: 'paris',      Icon: IconBolt,   label: 'Paris',      countryId: 840  },
+  { id: 'classement', Icon: IconTrophy, label: 'Classement', countryId: 686  },
+]
 
 export default function App() {
   const [section,       setSection]       = useState<SectionId>('globe')
@@ -44,6 +38,8 @@ export default function App() {
   const openAuth     = () => setShowAuth(true)
   const handleAuth   = (user: UserProfile) => { setCurrentUser(user); setShowAuth(false) }
   const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
+
+  const navigateTo = (s: string) => setSection(s as SectionId)
 
   const gold   = '#C89B3C'
   const dimCol = '#AEAEB2'
@@ -69,17 +65,14 @@ export default function App() {
       }}>
         {/* Logo */}
         <button onClick={() => setSection('globe')} style={{
-          display: 'flex', alignItems: 'center', gap: 7,
           background: 'none', border: 'none', cursor: 'pointer',
-          padding: '4px 6px', borderRadius: 8, transition: 'opacity 0.18s',
+          padding: '4px 2px', borderRadius: 8, transition: 'opacity 0.18s',
+          display: 'flex', alignItems: 'center',
         }}
           onPointerDown={e => (e.currentTarget.style.opacity = '0.5')}
           onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
         >
-          <span style={{ fontSize: 18, lineHeight: 1 }}>⚽</span>
-          <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 27, letterSpacing: 4, color: gold, lineHeight: 1 }}>
-            TRIVELA
-          </span>
+          <TrivelaLogo size={110} color={gold} />
         </button>
 
         {/* Auth area */}
@@ -123,7 +116,7 @@ export default function App() {
 
         {section === 'globe' && (
           <div style={{ width: '100%', height: '100%', position: 'relative', background: 'var(--bg)' }}>
-            <Globe onNavigate={(s) => setSection(s as SectionId)} centerRequest={centerRequest} />
+            <Globe onNavigate={navigateTo} centerRequest={centerRequest} />
 
             <p style={{
               position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',
@@ -168,7 +161,9 @@ export default function App() {
           </div>
         )}
 
-        {section === 'paris'      && <Paris onBack={back} currentUser={currentUser} />}
+        {section === 'album'      && <MonAlbum  onBack={back} />}
+        {section === 'packs'      && <MesPacks  onBack={back} />}
+        {section === 'paris'      && <Paris      onBack={back} currentUser={currentUser} />}
         {section === 'classement' && (
           <Classement onBack={back} currentUser={currentUser} onOpenAuth={openAuth} />
         )}
@@ -192,6 +187,8 @@ export default function App() {
                 if (countryId !== null) {
                   setSection('globe')
                   setCenterRequest({ id: countryId, ts: Date.now() })
+                  // After centering, navigate (slight delay for globe animation)
+                  setTimeout(() => setSection(id), 900)
                 } else {
                   setSection(id)
                 }
@@ -207,7 +204,7 @@ export default function App() {
             >
               <Icon size={22} color={active ? gold : dimCol} />
               <span style={{
-                fontSize: 10, fontWeight: 600, letterSpacing: 0.5,
+                fontSize: 9, fontWeight: 600, letterSpacing: 0.4,
                 color: active ? gold : dimCol, textTransform: 'uppercase',
                 transition: 'color 0.2s',
               }}>{label}</span>

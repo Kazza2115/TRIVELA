@@ -53,46 +53,19 @@ html, body {
 }
 #root { width: 100%; height: 100%; }
 
-/* ─── Globe: country pulse animations ────────────────────────── */
-/* These appear on the dark sphere so keep coloured glows */
-@keyframes pulse-brazil {
-  0%,100% { fill:#009C3B; filter:drop-shadow(0 0 5px rgba(0,156,59,0.8)); }
-  50%     { fill:#00b845; filter:drop-shadow(0 0 10px rgba(0,184,69,1)); }
+/* ─── Globe: featured country animations (no glow) ───────────────── */
+/* Subtle breathe — opacity only, no filter, no glow */
+@keyframes ft-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.80; }
 }
-@keyframes pulse-senegal {
-  0%,100% { fill:#00A550; filter:drop-shadow(0 0 5px rgba(0,165,80,0.8)); }
-  50%     { fill:#00c060; filter:drop-shadow(0 0 10px rgba(0,192,96,1)); }
+.ft-featured {
+  animation: ft-breathe 3.2s ease-in-out infinite;
+  cursor: pointer;
 }
-@keyframes pulse-suisse {
-  0%,100% { fill:#D00020; filter:drop-shadow(0 0 5px rgba(208,0,32,0.8)); }
-  50%     { fill:#f00030; filter:drop-shadow(0 0 10px rgba(240,0,48,1)); }
-}
-@keyframes pulse-espagne {
-  0%,100% { fill:#C60B1E; filter:drop-shadow(0 0 5px rgba(198,11,30,0.8)); }
-  50%     { fill:#e01020; filter:drop-shadow(0 0 10px rgba(224,16,32,1)); }
-}
-@keyframes pulse-japon {
-  0%,100% { fill:#BC002D; filter:drop-shadow(0 0 5px rgba(188,0,45,0.8)); }
-  50%     { fill:#d80035; filter:drop-shadow(0 0 10px rgba(216,0,53,1)); }
-}
-@keyframes pulse-usa {
-  0%,100% { fill:#3C3B6E; filter:drop-shadow(0 0 5px rgba(60,59,110,0.8)); }
-  50%     { fill:#5554a0; filter:drop-shadow(0 0 10px rgba(85,84,160,1)); }
-}
-.pulse-brazil   { animation: pulse-brazil   3s   ease-in-out infinite; cursor: pointer; }
-.pulse-senegal  { animation: pulse-senegal  3.2s ease-in-out infinite; cursor: pointer; }
-.pulse-espagne  { animation: pulse-espagne  2.8s ease-in-out infinite; cursor: pointer; }
-.pulse-japon    { animation: pulse-japon    3.4s ease-in-out infinite; cursor: pointer; }
-.pulse-usa      { animation: pulse-usa      3.6s ease-in-out infinite; cursor: pointer; }
-
-.pulse-brazil.selected,
-.pulse-senegal.selected,
-.pulse-espagne.selected,
-.pulse-japon.selected,
-.pulse-usa.selected {
+/* Selected: animation stops, flag shows on top — just keep the outline */
+.ft-featured.selected {
   animation: none;
-  fill: transparent;
-  filter: none;
 }
 
 /* ─── Animations ──────────────────────────────────────────────── */
@@ -103,6 +76,50 @@ html, body {
 @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
 @keyframes scaleIn { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
 @keyframes spin    { to { transform: rotate(360deg); } }
+
+/* ─── Card rarity styles ─────────────────────────────────────── */
+.card-bronze {
+  background: linear-gradient(145deg, #c9a364 0%, #a17d44 40%, #8c6a34 100%);
+  border: 2px solid #b08d4c;
+}
+.card-silver {
+  background: linear-gradient(145deg, #e0e0e8 0%, #b8b8c8 40%, #9898a8 100%);
+  border: 2px solid #c0c0cc;
+}
+.card-gold {
+  background: linear-gradient(145deg, #ffd700 0%, #daa520 35%, #b8860b 70%, #daa520 100%);
+  border: 2px solid #e8c32a;
+}
+.card-carnage {
+  background: linear-gradient(145deg, #ff1744 0%, #d50000 30%, #ff1744 50%, #ff6f00 70%, #ff1744 100%);
+  border: 2px solid #ff3d00;
+  animation: carnagePulse 2.5s ease-in-out infinite;
+}
+@keyframes carnagePulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(255,23,68,0.4), 0 4px 16px rgba(0,0,0,0.2); }
+  50%      { box-shadow: 0 0 24px rgba(255,23,68,0.65), 0 4px 16px rgba(0,0,0,0.2); }
+}
+
+/* Pack opening animations */
+@keyframes packShake {
+  0%,100% { transform: rotate(0deg); }
+  15%     { transform: rotate(-4deg); }
+  30%     { transform: rotate(4deg); }
+  45%     { transform: rotate(-4deg); }
+  60%     { transform: rotate(3deg); }
+  75%     { transform: rotate(-2deg); }
+  90%     { transform: rotate(1deg); }
+}
+@keyframes packBurst {
+  0%   { transform: scale(1); opacity:1; }
+  50%  { transform: scale(1.15); opacity:1; }
+  100% { transform: scale(1.3); opacity:0; }
+}
+@keyframes cardReveal {
+  0%   { transform: scale(0.3) rotateY(90deg); opacity: 0; }
+  50%  { transform: scale(1.05) rotateY(0deg); opacity: 1; }
+  100% { transform: scale(1) rotateY(0deg); opacity: 1; }
+}
 
 /* ─── Scrollbar ───────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 3px; height: 3px; }
