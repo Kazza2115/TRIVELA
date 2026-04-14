@@ -106,7 +106,7 @@ const CONF_TOTAL: Record<string, number> = {
 
 function landColor(numericId: number): string {
   const q = QUALIFIED[numericId]
-  if (!q) return 'rgba(90,95,105,0.90)'  // non-qualified: dark slate
+  if (!q) return 'rgba(128,133,142,0.90)'  // non-qualified: medium slate
   const total  = CONF_TOTAL[q.conf]
   // factor 1.0 = #1 in confederation (most vivid), 0.0 = last
   const factor = total > 1 ? 1 - (q.confRank - 1) / (total - 1) : 1
@@ -138,6 +138,7 @@ const C = {
 interface GlobeProps {
   onNavigate: (section: string) => void
   centerRequest?: { id: number; ts: number } | null
+  isActive?: boolean
 }
 interface PopupState { countryId: number; x: number; y: number }
 interface CenteringState {
@@ -150,7 +151,7 @@ function shortestPath(from: number, to: number): number {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────
-export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
+export default function Globe({ onNavigate, centerRequest, isActive }: GlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const svgRef       = useRef<SVGSVGElement>(null)
   const [popup,    setPopup]    = useState<PopupState | null>(null)
@@ -195,6 +196,11 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     }
     isRotRef.current = true
   }, [setPopupSync])
+
+  // Close popup when the globe is hidden (user navigated away)
+  useEffect(() => {
+    if (isActive === false) handleClose()
+  }, [isActive, handleClose])
 
   const triggerCenter = useCallback((countryId: number) => {
     if (featuresRef.current.length === 0) { pendingCenterRef.current = countryId; return }

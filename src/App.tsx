@@ -154,7 +154,7 @@ export default function App() {
           width: '100%', height: '100%', position: 'relative', background: 'var(--bg)',
           display: section === 'globe' ? 'block' : 'none',
         }}>
-          <Globe onNavigate={navigateTo} centerRequest={centerRequest} />
+          <Globe onNavigate={navigateTo} centerRequest={centerRequest} isActive={section === 'globe'} />
 
             <p style={{
               position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',
