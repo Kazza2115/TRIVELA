@@ -18,9 +18,9 @@ export const FEATURED: Record<number, {
   840: { name:'USA',     code:'us', color:'#3C3B6E',                              sectionId:'paris',      sectionName:'Paris 2026',  icon:'⚡' },
 }
 
-/** All non-featured countries use a single muted grey — featured ones stand out. */
+/** All non-featured countries: nearly transparent so the ocean colour shows through. */
 function landColor(_numericId: number): string {
-  return '#C9CDD6'
+  return 'rgba(255,255,255,0.10)'
 }
 
 /** Slightly brighten a hex color for the selected state. Skips url() fills. */
@@ -33,8 +33,8 @@ function brighten(hex: string, amount = 0.13): string {
 
 // ─── Globe palette ─────────────────────────────────────────────────────────
 const C = {
-  border:   'rgba(0, 0, 0, 0.20)',
-  bgStroke: 'rgba(0, 0, 0, 0.12)',
+  border:   'rgba(255, 255, 255, 0.10)',
+  bgStroke: 'rgba(255, 255, 255, 0.10)',
   grid:     'rgba(255, 255, 255, 0.07)',
 }
 
@@ -171,16 +171,18 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     // ── Defs ──────────────────────────────────────────────────────────
     const defs = svg.append('defs')
 
-    // Ocean — soft cartoon gradient, no glow
+    // Ocean — soft cartoon gradient, userSpaceOnUse so coords update with zoom
     const sphereGrad = defs.append('radialGradient').attr('id', 'sphere-grad')
-      .attr('cx', '35%').attr('cy', '30%').attr('r', '65%')
+      .attr('gradientUnits', 'userSpaceOnUse')
+      .attr('cx', W / 2 - 0.3 * R).attr('cy', H / 2 - 0.4 * R).attr('r', 1.3 * R)
     sphereGrad.append('stop').attr('offset', '0%').attr('stop-color', '#3F7FB2')
     sphereGrad.append('stop').attr('offset', '55%').attr('stop-color', '#2C5F8A')
     sphereGrad.append('stop').attr('offset', '100%').attr('stop-color', '#1F4666')
 
-    // Subtle vignette on the globe edge (no glow — just soft darkening)
+    // Subtle vignette on the globe edge (userSpaceOnUse so it tracks zoom)
     const vigGrad = defs.append('radialGradient').attr('id', 'vig-grad')
-      .attr('cx', '50%').attr('cy', '50%').attr('r', '50%')
+      .attr('gradientUnits', 'userSpaceOnUse')
+      .attr('cx', W / 2).attr('cy', H / 2).attr('r', R)
     vigGrad.append('stop').attr('offset', '60%').attr('stop-color', 'transparent')
     vigGrad.append('stop').attr('offset', '100%').attr('stop-color', 'rgba(0,0,0,0.18)')
 
@@ -362,6 +364,16 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           // Keep vignette circle in sync with globe radius
           const curR = proj.scale()
           gVig.select('circle').attr('r', curR)
+
+          // Sync userSpaceOnUse gradient coordinates with current zoom radius
+          defs.select('#sphere-grad')
+            .attr('cx', W / 2 - 0.3 * curR)
+            .attr('cy', H / 2 - 0.4 * curR)
+            .attr('r',  1.3 * curR)
+          defs.select('#vig-grad')
+            .attr('cx', W / 2)
+            .attr('cy', H / 2)
+            .attr('r',  curR)
 
           // Update ocean labels — move + fade when rotating to back side
           gOceanText.selectAll<SVGTextElement, unknown>('.ocean-label')
@@ -547,7 +559,6 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
         ref={svgRef}
         style={{
           display: 'block', touchAction: 'none', userSelect: 'none', cursor: 'grab',
-          filter: 'drop-shadow(0 6px 20px rgba(0,0,0,0.15))',
         }}
         onMouseDown={() => { if (svgRef.current) svgRef.current.style.cursor = 'grabbing' }}
         onMouseUp={()   => { if (svgRef.current) svgRef.current.style.cursor = 'grab' }}
