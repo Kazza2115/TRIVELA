@@ -259,19 +259,14 @@ export default function App() {
                 if (countryId === null) { setSection('globe'); return }
                 if (!countryCode || !sectionName) { setSection(id); return }
 
-                const flash = () => {
+                // Always: show globe, rotate to country, then flash + navigate
+                setSection('globe')
+                setCenterRequest({ id: countryId, ts: Date.now() })
+                setTimeout(() => {
                   setFlagFlash({ code: countryCode, countryName: countryName ?? '', sectionName })
                   setSection(id)
                   setTimeout(() => setFlagFlash(null), 1000)
-                }
-
-                if (section === 'globe') {
-                  // Globe visible — rotate to country first, then flash + navigate
-                  setCenterRequest({ id: countryId, ts: Date.now() })
-                  setTimeout(flash, 900)
-                } else {
-                  flash()
-                }
+                }, 900)
               }}
               style={{
                 flex: 1, display: 'flex', flexDirection: 'column',
