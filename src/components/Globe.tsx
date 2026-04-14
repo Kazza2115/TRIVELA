@@ -38,13 +38,6 @@ const C = {
   grid:     'rgba(255, 255, 255, 0.07)',
 }
 
-// ─── Ocean labels ─────────────────────────────────────────────────────────
-const OCEAN_LABELS: { lon: number; lat: number; name: string }[] = [
-  { lon: -135, lat:  10, name: 'PACIFIQUE'  }, // E. Pacific
-  { lon:  175, lat:   5, name: 'PACIFIQUE'  }, // W. Pacific
-  { lon:  -12, lat: -20, name: 'ATLANTIQUE' }, // South Atlantic
-  { lon:   78, lat: -20, name: 'INDIEN'     }, // Indian Ocean
-]
 
 interface GlobeProps {
   onNavigate: (section: string) => void
@@ -184,12 +177,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     vigGrad.append('stop').attr('offset', '60%').attr('stop-color', 'transparent')
     vigGrad.append('stop').attr('offset', '100%').attr('stop-color', 'rgba(0,0,0,0.18)')
 
-    // Globe clip — constrains ocean labels (and anything else) to the sphere boundary
-    const globeClip = defs.append('clipPath').attr('id', 'globe-clip')
-    globeClip.append('circle')
-      .attr('cx', W / 2).attr('cy', H / 2).attr('r', R)
-
-    // Japan flag gradient — white centre (sun) → crimson edges
+// Japan flag gradient — white centre (sun) → crimson edges
     const japanGrad = defs.append('radialGradient').attr('id', 'japan-grad')
       .attr('gradientUnits', 'objectBoundingBox')
       .attr('cx', '50%').attr('cy', '50%').attr('r', '80%')
@@ -204,8 +192,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     const gFtCountry = svg.append('g').attr('class', 'g-ft-countries')
     const gFlags     = svg.append('g').attr('class', 'g-flags')
     const gBorders   = svg.append('g').attr('class', 'g-borders')
-    const gOceanText = svg.append('g').attr('class', 'g-ocean-text').attr('clip-path', 'url(#globe-clip)')
-    const gVig       = svg.append('g').attr('class', 'g-vig')   // vignette circle
+const gVig       = svg.append('g').attr('class', 'g-vig')   // vignette circle
 
     // Ocean sphere
     const sphereShape = { type: 'Sphere' } as Parameters<typeof geoPath>[0]
@@ -262,24 +249,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           .attr('d', geoPath as any).attr('fill', 'none')
           .attr('stroke', C.border).attr('stroke-width', '0.60')
 
-        // Ocean labels — barely-visible tint, same colour family as the ocean water
-        OCEAN_LABELS.forEach(({ lon, lat, name }) => {
-          const p = proj([lon, lat])
-          gOceanText.append('text')
-            .attr('class', 'ocean-label')
-            .attr('text-anchor', 'middle')
-            .attr('font-family', "'Bebas Neue', cursive")
-            .attr('font-style', 'italic')
-            .attr('font-size', Math.min(Math.max(10, R * 0.08), 13))
-            .attr('letter-spacing', 4)
-            .attr('fill', 'rgba(15,38,68,1)')
-            .attr('pointer-events', 'none')
-            .attr('opacity', 0)
-            .attr('transform', p ? `translate(${p[0]},${p[1]})` : 'translate(-9999,-9999)')
-            .text(name)
-        })
-
-        setIsLoaded(true)
+setIsLoaded(true)
 
         if (pendingCenterRef.current !== undefined) {
           triggerCenterRef.current(pendingCenterRef.current)
@@ -368,10 +338,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           const curR = proj.scale()
           gVig.select('circle').attr('r', curR)
 
-          // Keep globe clip in sync with current radius so labels stay inside
-          defs.select('#globe-clip circle').attr('r', curR)
-
-          // Sync userSpaceOnUse gradient coordinates with current zoom radius
+// Sync userSpaceOnUse gradient coordinates with current zoom radius
           defs.select('#sphere-grad')
             .attr('cx', W / 2 - 0.3 * curR)
             .attr('cy', H / 2 - 0.4 * curR)
@@ -381,27 +348,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
             .attr('cy', H / 2)
             .attr('r',  curR)
 
-          // Update ocean labels — follow globe projection, letters stay upright
-          gOceanText.selectAll<SVGTextElement, unknown>('.ocean-label')
-            .each(function (_, i) {
-              const { lon, lat } = OCEAN_LABELS[i]
-              const p = proj([lon, lat])
-              const d = d3.geoDistance(
-                [lon, lat],
-                [-proj.rotate()[0], -proj.rotate()[1]],
-              )
-              const maxD     = Math.PI / 2
-              const fadeZone = 0.60
-              const alpha = d < maxD - fadeZone ? 1
-                : d < maxD ? (maxD - d) / fadeZone
-                : 0
-              d3.select(this)
-                .attr('transform', p ? `translate(${p[0]},${p[1]})` : 'translate(-9999,-9999)')
-                .attr('opacity', p ? alpha * 0.50 : 0)
-                .attr('font-size', Math.min(Math.max(11, curR * 0.09), 15))
-            })
-
-          // ── CRITICAL FIX: update flag overlay every frame ──────────
+// ── CRITICAL FIX: update flag overlay every frame ──────────
           // Without this, the flag image drifts when zooming because its
           // SVG x/y/w/h and clip-path were computed at selection time only.
           if (selectedRef.current !== null) {
