@@ -33,8 +33,8 @@ function brighten(hex: string, amount = 0.13): string {
 
 // ─── Globe palette ─────────────────────────────────────────────────────────
 const C = {
-  border:   'rgba(28, 42, 60, 0.65)',   // dark navy — clearly delineates countries
-  bgStroke: 'rgba(28, 42, 60, 0.30)',   // lighter version for individual country fills
+  border:   'rgba(45, 62, 82, 0.48)',   // softer navy — visible but not harsh
+  bgStroke: 'rgba(45, 62, 82, 0.22)',   // lighter for individual country fills
   grid:     'rgba(255, 255, 255, 0.07)',
 }
 
@@ -175,9 +175,9 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     const sphereGrad = defs.append('radialGradient').attr('id', 'sphere-grad')
       .attr('gradientUnits', 'userSpaceOnUse')
       .attr('cx', W / 2 - 0.3 * R).attr('cy', H / 2 - 0.4 * R).attr('r', 1.3 * R)
-    sphereGrad.append('stop').attr('offset', '0%').attr('stop-color', '#3F7FB2')
-    sphereGrad.append('stop').attr('offset', '55%').attr('stop-color', '#2C5F8A')
-    sphereGrad.append('stop').attr('offset', '100%').attr('stop-color', '#1F4666')
+    sphereGrad.append('stop').attr('offset', '0%').attr('stop-color', '#5496C8')
+    sphereGrad.append('stop').attr('offset', '55%').attr('stop-color', '#3C74A6')
+    sphereGrad.append('stop').attr('offset', '100%').attr('stop-color', '#285880')
 
     // Subtle vignette on the globe edge (userSpaceOnUse so it tracks zoom)
     const vigGrad = defs.append('radialGradient').attr('id', 'vig-grad')
@@ -257,7 +257,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
         // Country borders
         gBorders.append('path').datum(countries as any)
           .attr('d', geoPath as any).attr('fill', 'none')
-          .attr('stroke', C.border).attr('stroke-width', '0.85')
+          .attr('stroke', C.border).attr('stroke-width', '0.60')
 
         // Ocean labels — barely-visible tint, same colour family as the ocean water
         OCEAN_LABELS.forEach(({ lon, lat, name, rot }) => {
