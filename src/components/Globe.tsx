@@ -16,13 +16,9 @@ export const FEATURED: Record<number, {
   840: { name:'USA',     code:'us', color:'#7FB77E', sectionId:'paris',      sectionName:'Paris 2026',  icon:'⚡' },
 }
 
-// ─── Cartoon land palette (6 colors, no glow) ─────────────────────────────
-const LAND_COLORS = ['#7FB77E', '#5C946E', '#D9C97C', '#D98C5F', '#C65D5D', '#6B8FA3']
-
-/** Deterministic, stable color per country (Fibonacci hash). */
-function landColor(numericId: number): string {
-  const h = (Math.imul(numericId, 0x9e3779b9) >>> 0)
-  return LAND_COLORS[h % LAND_COLORS.length]
+/** All non-featured countries use a single muted grey — featured ones stand out. */
+function landColor(_numericId: number): string {
+  return '#C9CDD6'
 }
 
 /** Slightly brighten a hex color for the selected state. */
@@ -39,12 +35,13 @@ const C = {
   grid:     'rgba(255, 255, 255, 0.07)',
 }
 
-// ─── Ocean labels (lon, lat, name, rotation) ──────────────────────────────
+// ─── Ocean labels ─────────────────────────────────────────────────────────
+// Positioned in open-water areas, spaced to be readable from any angle
 const OCEAN_LABELS: { lon: number; lat: number; name: string; rot: number }[] = [
-  { lon: -150, lat: -10, name: 'Océan Pacifique', rot: -8 },
-  { lon:   60, lat: -15, name: 'Océan Pacifique', rot: 5 },
-  { lon:  -30, lat:  12, name: 'Océan Atlantique', rot: -12 },
-  { lon:   70, lat: -25, name: 'Océan Indien',     rot: 6 },
+  { lon: -140, lat:  10, name: 'PACIFIQUE',   rot: -5  },  // Central Pacific (east)
+  { lon:  170, lat: -15, name: 'PACIFIQUE',   rot:  5  },  // Central Pacific (west)
+  { lon:  -28, lat:   8, name: 'ATLANTIQUE',  rot: -10 },  // Central Atlantic
+  { lon:   75, lat: -28, name: 'INDIEN',      rot:   8 },  // Indian Ocean
 ]
 
 interface GlobeProps {
@@ -248,15 +245,15 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           .attr('d', geoPath as any).attr('fill', 'none')
           .attr('stroke', C.border).attr('stroke-width', '0.4')
 
-        // Ocean labels — positioned at lon/lat, slightly rotated for style
+        // Ocean labels — readable, large enough, semi-transparent white
         OCEAN_LABELS.forEach(({ lon, lat, name, rot }) => {
           gOceanText.append('text')
             .attr('class', 'ocean-label')
             .attr('text-anchor', 'middle')
             .attr('font-family', "'Bebas Neue', cursive")
-            .attr('font-size', R * 0.08)
-            .attr('letter-spacing', 4)
-            .attr('fill', 'rgba(255,255,255,0.13)')
+            .attr('font-size', Math.max(13, R * 0.11))
+            .attr('letter-spacing', 5)
+            .attr('fill', 'rgba(255,255,255,0.38)')
             .attr('pointer-events', 'none')
             .attr('transform', () => {
               const p = proj([lon, lat])
@@ -354,20 +351,26 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           const curR = proj.scale()
           gVig.select('circle').attr('r', curR)
 
-          // Update ocean labels — move + hide when on back side
+          // Update ocean labels — move + fade when rotating to back side
           gOceanText.selectAll<SVGTextElement, unknown>('.ocean-label')
             .each(function (_, i) {
               const { lon, lat, rot } = OCEAN_LABELS[i]
               const p = proj([lon, lat])
+              // Angular distance from globe center to label position
               const d = d3.geoDistance(
                 [lon, lat],
                 [-proj.rotate()[0], -proj.rotate()[1]],
               )
-              const visible = d < Math.PI / 2
+              // Fade in over the last 20° before the limb so labels appear smoothly
+              const maxD   = Math.PI / 2
+              const fadeZone = 0.35  // ~20°
+              const alpha = d < maxD - fadeZone ? 1
+                : d < maxD ? (maxD - d) / fadeZone
+                : 0
               d3.select(this)
                 .attr('transform', p ? `translate(${p[0]},${p[1]}) rotate(${rot})` : '')
-                .attr('opacity', visible ? 0.13 : 0)
-                .attr('font-size', curR * 0.08)
+                .attr('opacity', alpha * 0.42)
+                .attr('font-size', Math.max(13, curR * 0.11))
             })
 
           // ── CRITICAL FIX: update flag overlay every frame ──────────
@@ -429,8 +432,9 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
       }
     })
 
-    // ── Drag ────────────────────────────────────────────────────────
+    // ── Drag (mouse-only — touch handled by explicit touch listeners below) ──
     const dragBehavior = d3.drag<SVGSVGElement, unknown>()
+      .filter((event: Event) => event instanceof MouseEvent)
       .on('start', (event) => {
         if (selectedRef.current || centeringRef.current) return
         isRotRef.current = false
