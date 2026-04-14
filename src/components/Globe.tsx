@@ -102,13 +102,16 @@ const MAX_RANK = 57
 
 function landColor(numericId: number): string {
   const q = QUALIFIED[numericId]
-  if (!q) return 'rgba(245,246,248,0.72)'  // non-qualified: paper-white
+  if (!q) return 'rgba(245,246,248,0.85)'  // non-qualified: paper-white
   // Rank factor: 1.0 = best (rank 1), 0.0 = worst
   const factor = 1 - (q.rank - 1) / (MAX_RANK - 1)
-  // Alpha: 0.13 (weakest) → 0.32 (strongest non-featured)
-  const alpha  = 0.13 + factor * 0.19
+  // Mix: 22% (weakest) → 48% (strongest) — blended into near-white base
+  const mix    = 0.22 + factor * 0.26
   const [r, g, b] = CONF_COLOR[q.conf]
-  return `rgba(${r},${g},${b},${alpha})`
+  const wr = Math.round(245 * (1 - mix) + r * mix)
+  const wg = Math.round(246 * (1 - mix) + g * mix)
+  const wb = Math.round(248 * (1 - mix) + b * mix)
+  return `rgba(${wr},${wg},${wb},0.92)`
 }
 
 /** Slightly brighten a hex color for the selected state. Skips url() fills. */
