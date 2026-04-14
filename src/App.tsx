@@ -240,7 +240,6 @@ export default function App() {
             >
               ⚡ Parier
             </button>
-          </div>
         </div>
 
         {section === 'album'      && <MonAlbum  onBack={back} />}
