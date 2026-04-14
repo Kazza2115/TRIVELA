@@ -19,8 +19,96 @@ export const FEATURED: Record<number, {
 }
 
 /** All non-featured countries: paper-white so continents are clearly readable. */
-function landColor(_numericId: number): string {
-  return 'rgba(245,246,248,0.72)'
+
+// ─── Confederation palette ──────────────────────────────────────────────────
+const CONF_COLOR: Record<string, [number, number, number]> = {
+  CONMEBOL: [34,  197, 94 ],  // green  — South America
+  UEFA:     [59,  130, 246],  // blue   — Europe
+  CONCACAF: [249, 115, 22 ],  // orange — North/Central America & Caribbean
+  AFC:      [239, 68,  68 ],  // red    — Asia
+  CAF:      [234, 179, 8  ],  // yellow — Africa
+  OFC:      [6,   182, 212],  // cyan   — Oceania
+}
+
+// ─── Qualified teams: ISO numeric ID → { confederation, FIFA rank } ─────────
+// FIFA ranking order ~Jan 2026, 48 WC2026 qualified nations.
+// England + Scotland both map to ISO 826 (United Kingdom in topojson).
+const QUALIFIED: Record<number, { conf: string; rank: number }> = {
+  //  CONMEBOL
+  32:  { conf: 'CONMEBOL', rank:  1 },  // Argentina
+  76:  { conf: 'CONMEBOL', rank:  5 },  // Brazil       ← featured
+  170: { conf: 'CONMEBOL', rank:  9 },  // Colombia
+  858: { conf: 'CONMEBOL', rank: 16 },  // Uruguay
+  218: { conf: 'CONMEBOL', rank: 21 },  // Ecuador
+  862: { conf: 'CONMEBOL', rank: 39 },  // Venezuela
+  600: { conf: 'CONMEBOL', rank: 38 },  // Paraguay
+  //  UEFA
+  250: { conf: 'UEFA',     rank:  2 },  // France
+  724: { conf: 'UEFA',     rank:  3 },  // Spain        ← featured
+  826: { conf: 'UEFA',     rank:  4 },  // England / Scotland (ISO 826)
+  620: { conf: 'UEFA',     rank:  7 },  // Portugal
+  528: { conf: 'UEFA',     rank:  8 },  // Netherlands
+  380: { conf: 'UEFA',     rank: 10 },  // Italy
+  56:  { conf: 'UEFA',     rank:  6 },  // Belgium
+  756: { conf: 'UEFA',     rank: 18 },  // Switzerland
+  191: { conf: 'UEFA',     rank: 15 },  // Croatia
+  208: { conf: 'UEFA',     rank: 19 },  // Denmark
+  40:  { conf: 'UEFA',     rank: 25 },  // Austria
+  276: { conf: 'UEFA',     rank: 11 },  // Germany
+  688: { conf: 'UEFA',     rank: 28 },  // Serbia
+  792: { conf: 'UEFA',     rank: 26 },  // Turkey
+  804: { conf: 'UEFA',     rank: 24 },  // Ukraine
+  203: { conf: 'UEFA',     rank: 41 },  // Czech Republic
+  70:  { conf: 'UEFA',     rank: 43 },  // Bosnia-Herzegovina
+  752: { conf: 'UEFA',     rank: 33 },  // Sweden
+  578: { conf: 'UEFA',     rank: 32 },  // Norway
+  //  CONCACAF
+  840: { conf: 'CONCACAF', rank: 14 },  // USA          ← featured
+  484: { conf: 'CONCACAF', rank: 20 },  // Mexico
+  124: { conf: 'CONCACAF', rank: 30 },  // Canada
+  591: { conf: 'CONCACAF', rank: 44 },  // Panama
+  188: { conf: 'CONCACAF', rank: 35 },  // Costa Rica
+  388: { conf: 'CONCACAF', rank: 51 },  // Jamaica
+  340: { conf: 'CONCACAF', rank: 52 },  // Honduras
+  332: { conf: 'CONCACAF', rank: 55 },  // Haiti
+  531: { conf: 'CONCACAF', rank: 56 },  // Curaçao
+  //  AFC
+  392: { conf: 'AFC',      rank: 13 },  // Japan        ← featured
+  410: { conf: 'AFC',      rank: 22 },  // South Korea
+  364: { conf: 'AFC',      rank: 27 },  // Iran
+  36:  { conf: 'AFC',      rank: 23 },  // Australia
+  682: { conf: 'AFC',      rank: 36 },  // Saudi Arabia
+  368: { conf: 'AFC',      rank: 47 },  // Iraq
+  400: { conf: 'AFC',      rank: 46 },  // Jordan
+  860: { conf: 'AFC',      rank: 49 },  // Uzbekistan
+  634: { conf: 'AFC',      rank: 45 },  // Qatar
+  //  CAF
+  686: { conf: 'CAF',      rank: 17 },  // Senegal      ← featured
+  504: { conf: 'CAF',      rank: 12 },  // Morocco
+  818: { conf: 'CAF',      rank: 31 },  // Egypt
+  566: { conf: 'CAF',      rank: 34 },  // Nigeria
+  384: { conf: 'CAF',      rank: 29 },  // Ivory Coast
+  710: { conf: 'CAF',      rank: 37 },  // South Africa
+  120: { conf: 'CAF',      rank: 48 },  // Cameroon
+  12:  { conf: 'CAF',      rank: 42 },  // Algeria
+  180: { conf: 'CAF',      rank: 53 },  // DR Congo
+  788: { conf: 'CAF',      rank: 40 },  // Tunisia
+  132: { conf: 'CAF',      rank: 54 },  // Cabo Verde
+  288: { conf: 'CAF',      rank: 50 },  // Ghana
+  //  OFC
+  554: { conf: 'OFC',      rank: 57 },  // New Zealand
+}
+const MAX_RANK = 57
+
+function landColor(numericId: number): string {
+  const q = QUALIFIED[numericId]
+  if (!q) return 'rgba(245,246,248,0.72)'  // non-qualified: paper-white
+  // Rank factor: 1.0 = best (rank 1), 0.0 = worst
+  const factor = 1 - (q.rank - 1) / (MAX_RANK - 1)
+  // Alpha: 0.13 (weakest) → 0.32 (strongest non-featured)
+  const alpha  = 0.13 + factor * 0.19
+  const [r, g, b] = CONF_COLOR[q.conf]
+  return `rgba(${r},${g},${b},${alpha})`
 }
 
 /** Slightly brighten a hex color for the selected state. Skips url() fills. */
