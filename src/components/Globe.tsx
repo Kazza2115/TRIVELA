@@ -267,7 +267,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
             .attr('font-family', "'Bebas Neue', cursive")
             .attr('font-size', Math.min(Math.max(11, R * 0.09), 15))
             .attr('letter-spacing', 2)
-            .attr('fill', 'rgba(255,255,255,0.40)')
+            .attr('fill', 'rgba(255,255,255,0.82)')
             .attr('pointer-events', 'none')
             .attr('transform', () => {
               const p = proj([lon, lat])
@@ -393,7 +393,7 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
                 : 0
               d3.select(this)
                 .attr('transform', p ? `translate(${p[0]},${p[1]}) rotate(${rot})` : '')
-                .attr('opacity', alpha * 0.42)
+                .attr('opacity', alpha * 0.78)
                 .attr('font-size', Math.min(Math.max(11, curR * 0.09), 15))
             })
 
