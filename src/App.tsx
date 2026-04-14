@@ -19,13 +19,13 @@ export type SectionId = 'globe' | 'paris' | 'classement' | 'album' | 'packs'
 const NAV_ITEMS: {
   id: SectionId; Icon: React.FC<{ size?: number; color?: string }>
   label: string; countryId: number | null
-  countryCode?: string; countryName?: string
+  countryCode?: string; countryName?: string; sectionName?: string
 }[] = [
   { id: 'globe',      Icon: IconGlobe,  label: 'Globe',      countryId: null },
-  { id: 'album',      Icon: IconAlbum,  label: 'Album',      countryId: 724, countryCode: 'es', countryName: 'Espagne'  },
-  { id: 'packs',      Icon: IconPacks,  label: 'Packs',      countryId: 76,  countryCode: 'br', countryName: 'Brésil'   },
-  { id: 'paris',      Icon: IconBolt,   label: 'Paris',      countryId: 840, countryCode: 'us', countryName: 'USA'      },
-  { id: 'classement', Icon: IconTrophy, label: 'Classement', countryId: 686, countryCode: 'sn', countryName: 'Sénégal'  },
+  { id: 'album',      Icon: IconAlbum,  label: 'Album',      countryId: 724, countryCode: 'es', countryName: 'Espagne',  sectionName: 'Mon Album'   },
+  { id: 'packs',      Icon: IconPacks,  label: 'Packs',      countryId: 76,  countryCode: 'br', countryName: 'Brésil',   sectionName: 'Mes Packs'   },
+  { id: 'paris',      Icon: IconBolt,   label: 'Paris',      countryId: 840, countryCode: 'us', countryName: 'USA',      sectionName: 'Paris 2026'  },
+  { id: 'classement', Icon: IconTrophy, label: 'Classement', countryId: 686, countryCode: 'sn', countryName: 'Sénégal',  sectionName: 'Classement'  },
 ]
 
 export default function App() {
@@ -62,7 +62,7 @@ export default function App() {
 
   // ── Country flag flash on nav tap ──────────────────────────────────────────
   const [flagFlash, setFlagFlash] = useState<{
-    code: string; name: string; label: string
+    code: string; countryName: string; sectionName: string
   } | null>(null)
 
   const back         = () => setSection('globe')
@@ -251,13 +251,13 @@ export default function App() {
         WebkitBackdropFilter: 'saturate(180%) blur(24px)',
         zIndex: 20,
       }}>
-        {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode, countryName }) => {
+        {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode, countryName, sectionName }) => {
           const active = section === id
           return (
             <button key={id}
               onClick={() => {
-                if (countryId !== null && countryCode) {
-                  setFlagFlash({ code: countryCode, name: countryName ?? '', label })
+                if (countryId !== null && countryCode && sectionName) {
+                  setFlagFlash({ code: countryCode, countryName: countryName ?? '', sectionName })
                   setSection(id)
                   setTimeout(() => setFlagFlash(null), 1000)
                 } else {
@@ -285,41 +285,50 @@ export default function App() {
         })}
       </nav>
 
-      {/* ── Country flag flash overlay ─────────────────────────── */}
+      {/* ── Section flash overlay ─────────────────────────────────
+           Shows the section name + country flag when tapping a nav item.
+           Each child has its own staggered entrance animation.          ── */}
       {flagFlash && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 200,
           display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', gap: 22,
-          background: 'rgba(8,16,32,0.96)',
+          alignItems: 'center', justifyContent: 'center', gap: 20,
+          background: 'rgba(8,16,32,0.97)',
           animation: 'flagEnter 1000ms ease-in-out forwards',
           pointerEvents: 'none',
         }}>
+          {/* Section name — hero element, slides up with bounce */}
+          <div style={{
+            fontFamily: "'Bebas Neue', cursive",
+            fontSize: 52, letterSpacing: 6,
+            color: '#E8D080', lineHeight: 1,
+            textAlign: 'center',
+            animation: 'fadeSlideUp 0.42s cubic-bezier(0.34,1.2,0.64,1) 0.05s both',
+          }}>
+            {flagFlash.sectionName}
+          </div>
+
+          {/* Country flag — scales in slightly after the title */}
           <img
             src={`https://flagcdn.com/w640/${flagFlash.code}.png`}
-            alt={flagFlash.name}
+            alt={flagFlash.countryName}
             style={{
-              width: 220, height: 'auto',
-              borderRadius: 14,
-              boxShadow: '0 12px 48px rgba(0,0,0,0.55)',
-              border: '2px solid rgba(255,255,255,0.12)',
+              width: 200, height: 'auto',
+              borderRadius: 12,
+              boxShadow: '0 16px 56px rgba(0,0,0,0.60)',
+              border: '2px solid rgba(255,255,255,0.14)',
+              animation: 'scaleIn 0.38s cubic-bezier(0.34,1.2,0.64,1) 0.16s both',
             }}
           />
-          <div style={{ textAlign: 'center' }}>
-            <div style={{
-              fontFamily: "'Bebas Neue', cursive",
-              fontSize: 40, letterSpacing: 4,
-              color: '#E8D080', lineHeight: 1,
-            }}>
-              {flagFlash.name}
-            </div>
-            <div style={{
-              fontSize: 12, fontWeight: 600, letterSpacing: 2,
-              color: 'rgba(255,255,255,0.45)',
-              textTransform: 'uppercase', marginTop: 6,
-            }}>
-              {flagFlash.label}
-            </div>
+
+          {/* Country name — small caption, fades in last */}
+          <div style={{
+            fontSize: 11, fontWeight: 700, letterSpacing: 3,
+            color: 'rgba(255,255,255,0.38)',
+            textTransform: 'uppercase',
+            animation: 'fadeIn 0.32s ease 0.28s both',
+          }}>
+            {flagFlash.countryName}
           </div>
         </div>
       )}
