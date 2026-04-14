@@ -149,9 +149,12 @@ export default function App() {
       {/* ── Content ───────────────────────────────────────────── */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', zIndex: 1 }}>
 
-        {section === 'globe' && (
-          <div style={{ width: '100%', height: '100%', position: 'relative', background: 'var(--bg)' }}>
-            <Globe onNavigate={navigateTo} centerRequest={centerRequest} />
+        {/* Globe — always mounted so it never reloads; hidden when in another section */}
+        <div style={{
+          width: '100%', height: '100%', position: 'relative', background: 'var(--bg)',
+          display: section === 'globe' ? 'block' : 'none',
+        }}>
+          <Globe onNavigate={navigateTo} centerRequest={centerRequest} />
 
             <p style={{
               position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',
@@ -238,7 +241,7 @@ export default function App() {
               ⚡ Parier
             </button>
           </div>
-        )}
+        </div>
 
         {section === 'album'      && <MonAlbum  onBack={back} />}
         {section === 'packs'      && <MesPacks  onBack={back} />}
