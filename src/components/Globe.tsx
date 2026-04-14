@@ -106,17 +106,17 @@ const CONF_TOTAL: Record<string, number> = {
 
 function landColor(numericId: number): string {
   const q = QUALIFIED[numericId]
-  if (!q) return 'rgba(245,246,248,0.85)'  // non-qualified: paper-white
+  if (!q) return 'rgba(90,95,105,0.90)'  // non-qualified: dark slate
   const total  = CONF_TOTAL[q.conf]
   // factor 1.0 = #1 in confederation (most vivid), 0.0 = last
   const factor = total > 1 ? 1 - (q.confRank - 1) / (total - 1) : 1
-  // Mix 30% (weakest) → 68% (strongest) — blended into near-white base
-  const mix    = 0.30 + factor * 0.38
+  // Mix 30% (weakest) → 70% (strongest) — blended into dark grey base for richer colors
+  const mix    = 0.30 + factor * 0.40
   const [r, g, b] = CONF_COLOR[q.conf]
-  const wr = Math.round(245 * (1 - mix) + r * mix)
-  const wg = Math.round(246 * (1 - mix) + g * mix)
-  const wb = Math.round(248 * (1 - mix) + b * mix)
-  return `rgba(${wr},${wg},${wb},0.94)`
+  const wr = Math.round(90  * (1 - mix) + r * mix)
+  const wg = Math.round(95  * (1 - mix) + g * mix)
+  const wb = Math.round(105 * (1 - mix) + b * mix)
+  return `rgba(${wr},${wg},${wb},0.95)`
 }
 
 /** Slightly brighten a hex color for the selected state. Skips url() fills. */
@@ -258,20 +258,27 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
     // ── Defs ──────────────────────────────────────────────────────────
     const defs = svg.append('defs')
 
-    // Ocean — soft cartoon gradient, userSpaceOnUse so coords update with zoom
+    // Ocean — deep dark gradient
     const sphereGrad = defs.append('radialGradient').attr('id', 'sphere-grad')
       .attr('gradientUnits', 'userSpaceOnUse')
       .attr('cx', W / 2 - 0.3 * R).attr('cy', H / 2 - 0.4 * R).attr('r', 1.3 * R)
-    sphereGrad.append('stop').attr('offset', '0%').attr('stop-color', '#5496C8')
-    sphereGrad.append('stop').attr('offset', '55%').attr('stop-color', '#3C74A6')
-    sphereGrad.append('stop').attr('offset', '100%').attr('stop-color', '#285880')
+    sphereGrad.append('stop').attr('offset', '0%').attr('stop-color', '#1E5A8A')
+    sphereGrad.append('stop').attr('offset', '55%').attr('stop-color', '#0F3860')
+    sphereGrad.append('stop').attr('offset', '100%').attr('stop-color', '#061A38')
 
-    // Subtle vignette on the globe edge (userSpaceOnUse so it tracks zoom)
+    // Vignette — strong edge darkening for depth
     const vigGrad = defs.append('radialGradient').attr('id', 'vig-grad')
       .attr('gradientUnits', 'userSpaceOnUse')
       .attr('cx', W / 2).attr('cy', H / 2).attr('r', R)
-    vigGrad.append('stop').attr('offset', '60%').attr('stop-color', 'transparent')
-    vigGrad.append('stop').attr('offset', '100%').attr('stop-color', 'rgba(0,0,0,0.18)')
+    vigGrad.append('stop').attr('offset', '48%').attr('stop-color', 'transparent')
+    vigGrad.append('stop').attr('offset', '100%').attr('stop-color', 'rgba(0,0,0,0.52)')
+
+    // Country shadow filter — subtle drop shadow between nations
+    const shadowF = defs.append('filter').attr('id', 'land-shadow')
+      .attr('x', '-8%').attr('y', '-8%').attr('width', '116%').attr('height', '116%')
+    shadowF.append('feDropShadow')
+      .attr('dx', '0').attr('dy', '1').attr('stdDeviation', '1.5')
+      .attr('flood-color', 'rgba(0,0,0,0.55)')
 
 // Japan flag gradient — white centre (sun) → crimson edges
     const japanGrad = defs.append('radialGradient').attr('id', 'japan-grad')
@@ -294,7 +301,7 @@ const gVig       = svg.append('g').attr('class', 'g-vig')   // vignette circle
     const sphereShape = { type: 'Sphere' } as Parameters<typeof geoPath>[0]
     gSphere.append('path').datum(sphereShape).attr('d', geoPath)
       .attr('fill', 'url(#sphere-grad)')
-      .attr('stroke', '#1F4666').attr('stroke-width', '1')
+      .attr('stroke', '#061020').attr('stroke-width', '1.2')
 
     // Graticule — very subtle white lines, no glow
     gGrid.append('path').datum(d3.geoGraticule().step([30, 30])())
@@ -314,7 +321,8 @@ const gVig       = svg.append('g').attr('class', 'g-vig')   // vignette circle
         const features: any[] = countries.features
         featuresRef.current = features
 
-        // Background countries — deterministic cartoon palette
+        // Background countries — confederation colors + shadow
+        gBgCountry.attr('filter', 'url(#land-shadow)')
         gBgCountry.selectAll('.bg-country')
           .data(features.filter((d: any) => !FEATURED[parseInt(d.id)]))
           .join('path')
@@ -322,17 +330,18 @@ const gVig       = svg.append('g').attr('class', 'g-vig')   // vignette circle
           .attr('d', geoPath as any)
           .attr('fill', (d: any) => landColor(parseInt(d.id)))
           .attr('stroke', C.bgStroke)
-          .attr('stroke-width', '0.4')
+          .attr('stroke-width', '0.5')
 
-        // Featured countries — cartoon colors, no glow
+        // Featured countries — vivid flag colors + shadow
+        gFtCountry.attr('filter', 'url(#land-shadow)')
         gFtCountry.selectAll('.ft-country')
           .data(features.filter((d: any) => FEATURED[parseInt(d.id)]))
           .join('path')
           .attr('class', (d: any) => `ft-country ft-featured country-${parseInt(d.id)}`)
           .attr('d', geoPath as any)
           .attr('fill',   (d: any) => FEATURED[parseInt(d.id)].svgFill ?? FEATURED[parseInt(d.id)].color)
-          .attr('stroke', 'rgba(0,0,0,0.15)')
-          .attr('stroke-width', '0.6')
+          .attr('stroke', 'rgba(0,0,0,0.30)')
+          .attr('stroke-width', '0.7')
           .style('cursor', 'pointer')
           .on('click', (_event: MouseEvent, d: any) => {
             const id = parseInt(d.id)
