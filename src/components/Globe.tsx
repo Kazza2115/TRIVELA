@@ -371,11 +371,6 @@ setIsLoaded(true)
         let prevT = 0
         let prevR0 = NaN, prevR1 = NaN, prevProjScale = NaN
         const animate = (t: number) => {
-          // Cap at ~30fps — halves CPU/GPU load on 60Hz displays
-          if (prevT !== 0 && t - prevT < 32) {
-            rafRef.current = requestAnimationFrame(animate)
-            return
-          }
           const dt = prevT === 0 ? 0 : Math.min((t - prevT) / 1000, 0.05)
           prevT = t
 
