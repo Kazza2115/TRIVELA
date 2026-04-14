@@ -279,12 +279,6 @@ export default function Globe({ onNavigate, centerRequest, isActive }: GlobeProp
     vigGrad.append('stop').attr('offset', '48%').attr('stop-color', 'transparent')
     vigGrad.append('stop').attr('offset', '100%').attr('stop-color', 'rgba(0,0,0,0.52)')
 
-    // Country shadow filter — subtle drop shadow between nations
-    const shadowF = defs.append('filter').attr('id', 'land-shadow')
-      .attr('x', '-8%').attr('y', '-8%').attr('width', '116%').attr('height', '116%')
-    shadowF.append('feDropShadow')
-      .attr('dx', '0').attr('dy', '1').attr('stdDeviation', '1.5')
-      .attr('flood-color', 'rgba(0,0,0,0.55)')
 
 // Japan flag gradient — white centre (sun) → crimson edges
     const japanGrad = defs.append('radialGradient').attr('id', 'japan-grad')
@@ -327,19 +321,25 @@ const gVig       = svg.append('g').attr('class', 'g-vig')   // vignette circle
         const features: any[] = countries.features
         featuresRef.current = features
 
-        // Background countries — confederation colors + shadow
-        gBgCountry.attr('filter', 'url(#land-shadow)')
-        gBgCountry.selectAll('.bg-country')
-          .data(features.filter((d: any) => !FEATURED[parseInt(d.id)]))
+        // Background countries — grouped by color (180+ paths → ~7)
+        const colorGroups = new Map<string, any[]>()
+        features.filter((d: any) => !FEATURED[parseInt(d.id)]).forEach((feat: any) => {
+          const color = landColor(parseInt(feat.id))
+          if (!colorGroups.has(color)) colorGroups.set(color, [])
+          colorGroups.get(color)!.push(feat)
+        })
+        gBgCountry.selectAll('path')
+          .data([...colorGroups.entries()].map(([color, feats]) => ({
+            color,
+            geom: { type: 'FeatureCollection' as const, features: feats },
+          })))
           .join('path')
-          .attr('class', 'bg-country')
-          .attr('d', geoPath as any)
-          .attr('fill', (d: any) => landColor(parseInt(d.id)))
+          .attr('fill', (d: any) => d.color)
           .attr('stroke', C.bgStroke)
           .attr('stroke-width', '0.5')
+          .attr('d', (d: any) => geoPath(d.geom as any) ?? '')
 
-        // Featured countries — vivid flag colors + shadow
-        gFtCountry.attr('filter', 'url(#land-shadow)')
+        // Featured countries — vivid flag colors
         gFtCountry.selectAll('.ft-country')
           .data(features.filter((d: any) => FEATURED[parseInt(d.id)]))
           .join('path')
@@ -369,7 +369,13 @@ setIsLoaded(true)
 
         // ── Animation loop ──────────────────────────────────────────
         let prevT = 0
+        let prevR0 = NaN, prevR1 = NaN, prevProjScale = NaN
         const animate = (t: number) => {
+          // Cap at ~30fps — halves CPU/GPU load on 60Hz displays
+          if (prevT !== 0 && t - prevT < 32) {
+            rafRef.current = requestAnimationFrame(animate)
+            return
+          }
           const dt = prevT === 0 ? 0 : Math.min((t - prevT) / 1000, 0.05)
           prevT = t
 
@@ -438,57 +444,46 @@ setIsLoaded(true)
             }
           }
 
-          // Redraw all geo paths
-          gSphere.select('path').attr('d', geoPath(sphereShape) ?? '')
-          gGrid.select('path').attr('d', geoPath as any)
-          gBgCountry.selectAll('.bg-country').attr('d', geoPath as any)
-          gFtCountry.selectAll('.ft-country').attr('d', geoPath as any)
-          gBorders.select('path').attr('d', geoPath as any)
-
-          // Keep vignette circle in sync with globe radius
+          // Dirty flag — only update SVG when projection actually changed
           const curR = proj.scale()
-          gVig.select('circle').attr('r', curR)
+          const [r0, r1] = rotRef.current
+          if (r0 !== prevR0 || r1 !== prevR1 || curR !== prevProjScale) {
+            prevR0 = r0; prevR1 = r1; prevProjScale = curR
 
-// Sync userSpaceOnUse gradient coordinates with current zoom radius
-          defs.select('#sphere-grad')
-            .attr('cx', W / 2 - 0.3 * curR)
-            .attr('cy', H / 2 - 0.4 * curR)
-            .attr('r',  1.3 * curR)
-          defs.select('#vig-grad')
-            .attr('cx', W / 2)
-            .attr('cy', H / 2)
-            .attr('r',  curR)
+            // Redraw all geo paths
+            gSphere.select('path').attr('d', geoPath(sphereShape) ?? '')
+            gGrid.select('path').attr('d', geoPath as any)
+            gBgCountry.selectAll('path').attr('d', (d: any) => geoPath(d.geom as any) ?? '')
+            gFtCountry.selectAll('.ft-country').attr('d', geoPath as any)
+            gBorders.select('path').attr('d', geoPath as any)
 
-// ── CRITICAL FIX: update flag overlay every frame ──────────
-          // Without this, the flag image drifts when zooming because its
-          // SVG x/y/w/h and clip-path were computed at selection time only.
-          if (selectedRef.current !== null) {
-            const selFeat = featuresRef.current.find(
-              (f: any) => parseInt(f.id) === selectedRef.current
-            )
-            if (selFeat) {
-              const pathStr = geoPath(selFeat as any)
-              if (pathStr) {
-                const [[fx0, fy0], [fx1, fy1]] = geoPath.bounds(selFeat as any)
-                gFlags.select('image')
-                  .attr('x', fx0).attr('y', fy0)
-                  .attr('width',  Math.max(fx1 - fx0, 1))
-                  .attr('height', Math.max(fy1 - fy0, 1))
-                defs.select(`#clip-flag-${selectedRef.current} path`).attr('d', pathStr)
-              }
-            }
-          }
+            // Vignette + gradient sync
+            gVig.select('circle').attr('r', curR)
+            defs.select('#sphere-grad')
+              .attr('cx', W / 2 - 0.3 * curR).attr('cy', H / 2 - 0.4 * curR).attr('r', 1.3 * curR)
+            defs.select('#vig-grad')
+              .attr('cx', W / 2).attr('cy', H / 2).attr('r', curR)
 
-          // Keep popup wrapper anchored to country centroid during zoom/pan
-          if (selectedRef.current !== null && popupWrapRef.current) {
-            const selFeat = featuresRef.current.find(
-              (f: any) => parseInt(f.id) === selectedRef.current
-            )
-            if (selFeat) {
-              const c = geoPath.centroid(selFeat as any)
-              if (isFinite(c[0]) && isFinite(c[1])) {
-                popupWrapRef.current.style.left = c[0] + 'px'
-                popupWrapRef.current.style.top  = c[1] + 'px'
+            // Flag overlay + popup anchor (single feature lookup)
+            if (selectedRef.current !== null) {
+              const selFeat = featuresRef.current.find(
+                (f: any) => parseInt(f.id) === selectedRef.current
+              )
+              if (selFeat) {
+                const pathStr = geoPath(selFeat as any)
+                if (pathStr) {
+                  const [[fx0, fy0], [fx1, fy1]] = geoPath.bounds(selFeat as any)
+                  gFlags.select('image')
+                    .attr('x', fx0).attr('y', fy0)
+                    .attr('width',  Math.max(fx1 - fx0, 1))
+                    .attr('height', Math.max(fy1 - fy0, 1))
+                  defs.select(`#clip-flag-${selectedRef.current} path`).attr('d', pathStr)
+                }
+                const c = geoPath.centroid(selFeat as any)
+                if (isFinite(c[0]) && isFinite(c[1]) && popupWrapRef.current) {
+                  popupWrapRef.current.style.left = c[0] + 'px'
+                  popupWrapRef.current.style.top  = c[1] + 'px'
+                }
               }
             }
           }
