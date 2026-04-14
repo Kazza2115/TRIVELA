@@ -39,14 +39,11 @@ const C = {
 }
 
 // ─── Ocean labels ─────────────────────────────────────────────────────────
-// lon/lat — used ONLY to compute visibility (geoDistance) when globe rotates.
-// sx/sy   — fixed screen offsets as fraction of R from globe centre.
-//           Labels never move on screen; they only fade in/out.
-const OCEAN_LABELS: { lon: number; lat: number; name: string; rot: number; sx: number; sy: number }[] = [
-  { lon: -135, lat:  10, name: 'PACIFIQUE',  rot: -3, sx:  0.26, sy: -0.08 }, // E. Pacific
-  { lon:  175, lat:   5, name: 'PACIFIQUE',  rot:  3, sx:  0.26, sy: -0.08 }, // W. Pacific (same screen pos)
-  { lon:  -12, lat: -20, name: 'ATLANTIQUE', rot: -4, sx: -0.28, sy:  0.10 }, // South Atlantic
-  { lon:   78, lat: -20, name: 'INDIEN',     rot:  4, sx:  0.10, sy:  0.32 }, // Indian Ocean
+const OCEAN_LABELS: { lon: number; lat: number; name: string }[] = [
+  { lon: -135, lat:  10, name: 'PACIFIQUE'  }, // E. Pacific
+  { lon:  175, lat:   5, name: 'PACIFIQUE'  }, // W. Pacific
+  { lon:  -12, lat: -20, name: 'ATLANTIQUE' }, // South Atlantic
+  { lon:   78, lat: -20, name: 'INDIEN'     }, // Indian Ocean
 ]
 
 interface GlobeProps {
@@ -266,7 +263,8 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
           .attr('stroke', C.border).attr('stroke-width', '0.60')
 
         // Ocean labels — barely-visible tint, same colour family as the ocean water
-        OCEAN_LABELS.forEach(({ name, rot, sx, sy }) => {
+        OCEAN_LABELS.forEach(({ lon, lat, name }) => {
+          const p = proj([lon, lat])
           gOceanText.append('text')
             .attr('class', 'ocean-label')
             .attr('text-anchor', 'middle')
@@ -276,7 +274,8 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
             .attr('letter-spacing', 4)
             .attr('fill', 'rgba(15,38,68,1)')
             .attr('pointer-events', 'none')
-            .attr('transform', `translate(${W/2 + sx*R},${H/2 + sy*R}) rotate(${rot})`)
+            .attr('opacity', 0)
+            .attr('transform', p ? `translate(${p[0]},${p[1]})` : 'translate(-9999,-9999)')
             .text(name)
         })
 
@@ -382,24 +381,23 @@ export default function Globe({ onNavigate, centerRequest }: GlobeProps) {
             .attr('cy', H / 2)
             .attr('r',  curR)
 
-          // Update ocean labels — fixed screen position, only fade with rotation
+          // Update ocean labels — follow globe projection, letters stay upright
           gOceanText.selectAll<SVGTextElement, unknown>('.ocean-label')
             .each(function (_, i) {
-              const { lon, lat, rot, sx, sy } = OCEAN_LABELS[i]
-              // Angular distance from globe centre — used only for opacity
+              const { lon, lat } = OCEAN_LABELS[i]
+              const p = proj([lon, lat])
               const d = d3.geoDistance(
                 [lon, lat],
                 [-proj.rotate()[0], -proj.rotate()[1]],
               )
               const maxD     = Math.PI / 2
-              const fadeZone = 0.55
+              const fadeZone = 0.60
               const alpha = d < maxD - fadeZone ? 1
                 : d < maxD ? (maxD - d) / fadeZone
                 : 0
               d3.select(this)
-                // Position tracks zoom (curR) but never changes with rotation
-                .attr('transform', `translate(${W/2 + sx*curR},${H/2 + sy*curR}) rotate(${rot})`)
-                .attr('opacity', alpha * 0.50)
+                .attr('transform', p ? `translate(${p[0]},${p[1]})` : 'translate(-9999,-9999)')
+                .attr('opacity', p ? alpha * 0.50 : 0)
                 .attr('font-size', Math.min(Math.max(11, curR * 0.09), 15))
             })
 
