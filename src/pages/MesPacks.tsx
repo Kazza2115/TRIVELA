@@ -204,6 +204,7 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
   }
 
   return (
+  <>
     <PageLayout
       onBack={onBack}
       accentColor="#C89B3C"
@@ -362,16 +363,19 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      {/* ── Pack opening overlay ──────────────────────────────── */}
-      {phase !== 'idle' && openingType && (
-        <PackOpeningOverlay
-          phase={phase}
-          packType={openingType}
-          cards={revealCards}
-          onClose={handleClose}
-        />
-      )}
     </PageLayout>
+
+    {/* ── Pack opening overlay — rendered OUTSIDE PageLayout so position:fixed
+        covers the full viewport without being clipped by overflow:hidden ancestors */}
+    {phase !== 'idle' && openingType && (
+      <PackOpeningOverlay
+        phase={phase}
+        packType={openingType}
+        cards={revealCards}
+        onClose={handleClose}
+      />
+    )}
+  </>
   )
 }
 
