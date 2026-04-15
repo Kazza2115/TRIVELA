@@ -152,8 +152,8 @@ export default function App() {
         )}
       </header>
 
-      {/* ── Content ── paddingBottom reserves space above the floating nav */}
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', zIndex: 1, paddingBottom: 100 }}>
+      {/* ── Content ── fills edge-to-edge; nav floats on top via position:absolute */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', zIndex: 1 }}>
 
         {/* Globe — always mounted so it never reloads; hidden when in another section */}
         <div style={{
@@ -269,7 +269,6 @@ export default function App() {
       }}>
         {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode, countryName, sectionName }, idx) => {
           const active    = activeNav === id
-          const onGlobe   = section === 'globe'   // glass card only when globe bg is dark
           const bottomPx  = FUNNEL_BOTTOM_PX[idx]
           const leftPct   = (idx + 0.5) * 20      // 10%, 30%, 50%, 70%, 90%
           const isGlobe   = id === 'globe'
@@ -297,19 +296,18 @@ export default function App() {
                 width: 64,
                 display: 'flex', flexDirection: 'column',
                 alignItems: 'center', justifyContent: 'center', gap: 4,
-                // On globe (dark bg): glass card. On other pages: invisible card, just icon+label
                 background: active
                   ? 'rgba(200,155,60,0.10)'
-                  : onGlobe ? 'rgba(242,242,247,0.94)' : 'transparent',
+                  : 'rgba(242,242,247,0.94)',
                 border: active
                   ? `1px solid ${gold}55`
-                  : onGlobe ? '1px solid rgba(60,60,67,0.13)' : 'none',
+                  : '1px solid rgba(60,60,67,0.13)',
                 borderRadius: 14,
-                backdropFilter: onGlobe || active ? 'saturate(180%) blur(20px)' : 'none',
-                WebkitBackdropFilter: onGlobe || active ? 'saturate(180%) blur(20px)' : 'none',
+                backdropFilter: 'saturate(180%) blur(20px)',
+                WebkitBackdropFilter: 'saturate(180%) blur(20px)',
                 boxShadow: active
                   ? `0 2px 10px ${gold}22`
-                  : onGlobe ? '0 1px 6px rgba(0,0,0,0.07)' : 'none',
+                  : '0 1px 6px rgba(0,0,0,0.07)',
                 cursor: 'pointer',
                 padding: '8px 4px 7px',
                 transition: 'opacity 0.15s, background 0.2s, border-color 0.2s, box-shadow 0.2s',
