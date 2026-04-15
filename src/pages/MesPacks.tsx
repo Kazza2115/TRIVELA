@@ -501,19 +501,36 @@ function PackOpeningOverlay({
             Carte {revealIdx + 1} / {sorted.length}
           </div>
 
-          {/* Card — swipeable */}
-          <div
+          {/* Card stack — current card with ghost cards peeking behind */}
+          <div style={{ position: 'relative', width: 200 }}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
             onClick={advance}
-            style={{ cursor: cardAnim === 'idle' ? 'pointer' : 'default' }}
           >
-            <BigRevealCard
-              card={currentCard}
-              anim={cardAnim}
-              isLast={isLast}
-              bestColor={bestColor}
-            />
+            {/* Ghost cards (unrevealed, stacked behind) */}
+            {sorted.slice(revealIdx + 1, revealIdx + 4).map((_, i) => (
+              <div key={i} style={{
+                position: 'absolute',
+                top: (i + 1) * 5,
+                left: (i + 1) * 13,
+                zIndex: 9 - i,
+                opacity: 1 - (i + 1) * 0.22,
+                transform: `rotate(${(i + 1) * 3}deg)`,
+                pointerEvents: 'none',
+              }}>
+                <CardBack type={packType} />
+              </div>
+            ))}
+
+            {/* Current card (front) */}
+            <div style={{ position: 'relative', zIndex: 10, cursor: cardAnim === 'idle' ? 'pointer' : 'default' }}>
+              <BigRevealCard
+                card={currentCard}
+                anim={cardAnim}
+                isLast={isLast}
+                bestColor={bestColor}
+              />
+            </div>
           </div>
 
           {/* Swipe hint / CTA */}
@@ -563,6 +580,34 @@ function PackOpeningOverlay({
   )
 }
 
+// ─── Card Back (face-down ghost card in the stack) ───────────────────────────
+function CardBack({ type }: { type: PackType }) {
+  const v = PACK_VISUALS[type]
+  return (
+    <div style={{
+      width: 200, height: 260, borderRadius: 20, overflow: 'hidden',
+      background: v.gradient,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.45)',
+    }}>
+      <div style={{
+        margin: 11, height: 'calc(100% - 22px)',
+        border: '1px solid rgba(255,255,255,0.28)',
+        borderRadius: 12,
+        background: 'rgba(0,0,0,0.16)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <svg width="56" height="56" viewBox="0 0 56 56" fill="none" opacity="0.32">
+          <polygon points="28,4 52,28 28,52 4,28"
+            stroke="white" strokeWidth="1.5" fill="none"/>
+          <polygon points="28,14 42,28 28,42 14,28"
+            stroke="white" strokeWidth="1.5" fill="none"/>
+          <circle cx="28" cy="28" r="5" fill="white"/>
+        </svg>
+      </div>
+    </div>
+  )
+}
+
 // ─── Big Reveal Card (one-by-one overlay) ────────────────────────────────────
 function BigRevealCard({
   card, anim, isLast, bestColor,
@@ -580,10 +625,12 @@ function BigRevealCard({
     anim === 'out' ? 'bigCardExit 0.38s ease-in forwards' :
     'none'
 
+  // Outer wrapper handles animation — NO overflow:hidden so corners are never clipped
+  // Inner div handles the visual card with overflow:hidden for content clipping
   return (
+    <div style={{ animation, display: 'inline-block', verticalAlign: 'top' }}>
     <div className={`card-${r}`} style={{
       width: 200, borderRadius: 20, overflow: 'hidden', position: 'relative',
-      animation,
       // Last card: pulsing glow border
       boxShadow: isLast
         ? `0 0 0 2px ${rarCol}, 0 0 28px ${rarCol}, 0 0 60px ${bestColor}55`
@@ -664,6 +711,7 @@ function BigRevealCard({
           }}>{card.trait}</span>
         </div>
       </div>
-    </div>
+    </div>  {/* end inner visual card */}
+    </div>  /* end animation wrapper */
   )
 }
