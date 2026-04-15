@@ -28,8 +28,8 @@ const NAV_ITEMS: {
   { id: 'classement', Icon: IconTrophy, label: 'Classement', countryId: 686, countryCode: 'sn', countryName: 'Sénégal',  sectionName: 'Classement'  },
 ]
 
-// Funnel heights: distance from nav bottom — outer items sit highest on screen
-const FUNNEL_BOTTOM_PX = [52, 28, 6, 28, 52]
+// Funnel: outer items overflow above the nav band, center sits inside
+const FUNNEL_BOTTOM_PX = [34, 20, 5, 20, 34]
 
 export default function App() {
   const [section,     setSection]     = useState<SectionId>('globe')
@@ -257,14 +257,18 @@ export default function App() {
       </div>
 
       {/* ── Bottom nav — funnel shape ─────────────────────────── */}
-      {/* Nav floats over the content (position absolute) so no grey band shows
-          behind the cards. activeNav tracks what the user tapped immediately,
-          so Globe doesn't flash gold during the 900ms globe-spin transition. */}
+      {/* Flex item so it creates a deliberate (small) separator band.
+          overflow:visible lets outer items float above the band.
+          z-index:20 keeps them painted above the content (z-index:1). */}
       <nav style={{
-        position: 'absolute',
-        bottom: 'var(--sab)',
-        left: 0, right: 0,
-        height: 100,
+        flexShrink: 0,
+        height: 72,
+        position: 'relative',
+        overflow: 'visible',
+        background: 'rgba(242,242,247,0.92)',
+        borderTop: '1px solid rgba(60,60,67,0.10)',
+        backdropFilter: 'saturate(180%) blur(24px)',
+        WebkitBackdropFilter: 'saturate(180%) blur(24px)',
         zIndex: 20,
       }}>
         {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode, countryName, sectionName }, idx) => {

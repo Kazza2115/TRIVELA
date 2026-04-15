@@ -76,10 +76,10 @@ export default function PageLayout({ onBack, accentColor, flag, title, subtitle,
         </div>
       </header>
 
-      {/* Content — paddingBottom 116px = 16px normal + 100px nav clearance */}
+      {/* Content */}
       <div style={{
         flex: 1, overflowY: 'auto',
-        padding: '20px 16px 116px',
+        padding: '20px 16px 88px',
         WebkitOverflowScrolling: 'touch',
       }}>
         {children}
