@@ -74,19 +74,21 @@ export default function App() {
   const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
   const navigateTo   = (s: string) => { setSection(s as SectionId); setActiveNav(s as SectionId) }
 
-  // Called by Globe when the centering animation finishes (nav-triggered only).
-  // At this point the SVG flag is already fading in — start the CSS zoom after a
-  // brief pause so the flag is partially visible before we dive in.
+  // Called by Globe when centering finishes (nav-triggered).
+  // Wait 180ms so the SVG flag fade-in is visible, then trigger the D3 zoom.
   const handleCentered = (_countryId: number) => {
+    if (!diveTargetRef.current) return
+    setTimeout(() => setDivingIn(true), 180)
+  }
+
+  // Called by Globe when its D3 projection zoom animation finishes.
+  const handleDiveComplete = () => {
     const target = diveTargetRef.current
     if (!target) return
     diveTargetRef.current = null
-    setTimeout(() => setDivingIn(true), 180)          // let flag fade-in begin
-    setTimeout(() => {
-      setDivingIn(false)
-      setSection(target)
-      setActiveNav(target)
-    }, 180 + 520)                                      // 180ms pause + 520ms zoom
+    setDivingIn(false)
+    setSection(target)
+    setActiveNav(target)
   }
 
   // Rotate globe to country, show SVG flag, then zoom into it and navigate
@@ -175,18 +177,14 @@ export default function App() {
       {/* ── Content ── fills edge-to-edge; nav floats on top via position:absolute */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', zIndex: 1 }}>
 
-        {/* Globe — CSS scale zooms on dive; willChange promotes to GPU compositor */}
+        {/* Globe — D3 projection zoom drives the dive; no CSS scale = no blur */}
         <div style={{
           width: '100%', height: '100%', position: 'relative', background: 'var(--bg)',
           display: section === 'globe' ? 'block' : 'none',
-          transform: divingIn ? 'scale(2.6)' : 'scale(1)',
-          transition: divingIn ? 'transform 0.52s cubic-bezier(0.55,0,1,1)' : 'none',
-          transformOrigin: 'center center',
-          willChange: divingIn ? 'transform' : 'auto',
         }}>
           <Globe onNavigate={navigateTo} centerRequest={centerRequest}
             isActive={section === 'globe'} interactive={!divingIn}
-            onCentered={handleCentered} />
+            onCentered={handleCentered} onDiveComplete={handleDiveComplete} />
 
             <p style={{
               position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',
