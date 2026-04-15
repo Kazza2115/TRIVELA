@@ -174,7 +174,7 @@ export default function Globe({ onNavigate, isActive }: GlobeProps) {
   const postZoomAnimRef   = useRef<{ start: number; from: number; to: number } | null>(null)
   const popupWrapRef      = useRef<HTMLDivElement | null>(null)
   // Dive animation — set when Explorer is clicked; drives D3 projection zoom
-  const diveAnimRef       = useRef<{ start: number; target: string } | null>(null)
+  const diveAnimRef       = useRef<{ start: number; target: string; fromScale: number } | null>(null)
   const onNavigateRef     = useRef(onNavigate)
 
   const setPopupSync = useCallback((p: PopupState | null) => {
@@ -251,10 +251,10 @@ export default function Globe({ onNavigate, isActive }: GlobeProps) {
     popupRef.current = null
     setPopup(null)
     postZoomAnimRef.current = null
-    if (projRef.current && baseRRef.current > 0) {
-      projRef.current.scale(baseRRef.current * zoomRef.current)
-    }
-    diveAnimRef.current = { start: performance.now(), target: sectionId }
+    // Capture the current scale so the animation starts from exactly where the
+    // user is — avoids the de-zoom glitch when they had already pinched in.
+    const fromScale = projRef.current?.scale() ?? baseRRef.current
+    diveAnimRef.current = { start: performance.now(), target: sectionId, fromScale }
   }, [])
 
   useEffect(() => {
@@ -393,10 +393,12 @@ setIsLoaded(true)
           // Dive animation: D3 projection zoom triggered by clicking Explorer in the popup.
           // Redraws at native resolution every frame — no CSS scale, no blur artifacts.
           if (diveAnimRef.current) {
-            const { start, target } = diveAnimRef.current
-            const elapsed  = t - start
-            const progress = Math.min(elapsed / 520, 1)
-            const diveR    = R * (1 + (3.5 - 1) * d3.easeCubicIn(progress))
+            const { start, target, fromScale } = diveAnimRef.current
+            const elapsed   = t - start
+            const progress  = Math.min(elapsed / 520, 1)
+            // Always zoom 3.2× from wherever the user was — no reset, no stutter
+            const endScale  = fromScale * 3.2
+            const diveR     = fromScale + (endScale - fromScale) * d3.easeCubicIn(progress)
             proj.scale(diveR)
             gSphere.select('path').attr('d', geoPath(sphereShape) ?? '')
             gGrid.select('path').attr('d', geoPath as any)
