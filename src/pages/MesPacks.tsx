@@ -462,28 +462,36 @@ function PackOpeningOverlay({
 
       {/* ── Shake / Burst ── */}
       {(phase === 'shake' || phase === 'burst') && (
-        <div style={{ textAlign: 'center', position: 'relative', overflow: 'visible', width: 280 }}>
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          position: 'relative', overflow: 'visible',
+        }}>
+          {/* Glow halo behind the cards */}
+          <div style={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%,-50%)',
+            width: 240, height: 240, borderRadius: '50%',
+            background: `radial-gradient(circle, ${v.glow} 0%, transparent 70%)`,
+            pointerEvents: 'none',
+          }} />
+
+          {/* Animated card stack — width:fit-content keeps transform-origin on the visual center */}
           <div style={{
             overflow: 'visible',
+            width: 'fit-content',
             animation: phase === 'shake'
               ? 'packShake 0.7s ease-in-out'
               : 'packBurst 0.4s ease-out forwards',
           }}>
             <CardStack type={packType} scale={2.0} />
           </div>
+
           <div style={{
             marginTop: 28, fontSize: 13, fontWeight: 700, letterSpacing: 2.5,
             color: v.badgeColor, textTransform: 'uppercase',
           }}>
             Ouverture…
           </div>
-          <div style={{
-            position: 'absolute', left: '50%', top: '50%',
-            transform: 'translate(-50%,-50%)',
-            width: 220, height: 220, borderRadius: '50%',
-            background: `radial-gradient(circle, ${v.glow} 0%, transparent 70%)`,
-            pointerEvents: 'none', animation: 'fadeIn 0.3s ease',
-          }} />
         </div>
       )}
 
