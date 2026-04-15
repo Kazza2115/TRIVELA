@@ -168,8 +168,11 @@ export default function App() {
           transform: divingIn ? 'scale(2.6)' : 'scale(1)',
           transition: divingIn ? 'transform 0.5s cubic-bezier(0.55,0,1,1)' : 'none',
           transformOrigin: 'center center',
+          // Promote to its own compositor layer → CSS scale runs at native 120Hz
+          willChange: 'transform',
         }}>
-          <Globe onNavigate={navigateTo} centerRequest={centerRequest} isActive={section === 'globe'} />
+          <Globe onNavigate={navigateTo} centerRequest={centerRequest}
+            isActive={section === 'globe'} interactive={!divingIn} />
 
             <p style={{
               position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',

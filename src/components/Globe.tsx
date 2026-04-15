@@ -139,6 +139,7 @@ interface GlobeProps {
   onNavigate: (section: string) => void
   centerRequest?: { id: number; ts: number } | null
   isActive?: boolean
+  interactive?: boolean   // false during dive-in: freezes RAF + blocks popups
 }
 interface PopupState { countryId: number; x: number; y: number }
 interface CenteringState {
@@ -151,11 +152,12 @@ function shortestPath(from: number, to: number): number {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────
-export default function Globe({ onNavigate, centerRequest, isActive }: GlobeProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const svgRef       = useRef<SVGSVGElement>(null)
+export default function Globe({ onNavigate, centerRequest, isActive, interactive = true }: GlobeProps) {
+  const containerRef    = useRef<HTMLDivElement>(null)
+  const svgRef          = useRef<SVGSVGElement>(null)
   const [popup,    setPopup]    = useState<PopupState | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
+  const interactiveRef  = useRef(true)
 
   const projRef           = useRef<d3.GeoProjection | null>(null)
   const pathRef           = useRef<d3.GeoPath | null>(null)
@@ -201,6 +203,12 @@ export default function Globe({ onNavigate, centerRequest, isActive }: GlobeProp
   useEffect(() => {
     if (isActive === false) handleClose()
   }, [isActive, handleClose])
+
+  // Sync interactive prop — when false, freeze RAF loop + close any open popup
+  useEffect(() => {
+    interactiveRef.current = interactive
+    if (!interactive) handleClose()
+  }, [interactive, handleClose])
 
   const triggerCenter = useCallback((countryId: number) => {
     if (featuresRef.current.length === 0) { pendingCenterRef.current = countryId; return }
@@ -371,6 +379,13 @@ setIsLoaded(true)
         let prevT = 0
         let prevR0 = NaN, prevR1 = NaN, prevProjScale = NaN
         const animate = (t: number) => {
+          // When not interactive (e.g. dive-in zoom), freeze SVG so the static
+          // frame is composited to a GPU texture — CSS scale runs at 120fps.
+          if (!interactiveRef.current) {
+            rafRef.current = requestAnimationFrame(animate)
+            return
+          }
+
           const dt = prevT === 0 ? 0 : Math.min((t - prevT) / 1000, 0.05)
           prevT = t
 
