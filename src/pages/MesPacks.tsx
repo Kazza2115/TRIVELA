@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import PageLayout from './PageLayout'
 import { getCollection, getPackConfigs, openPack, saveCollection } from '../services/collection'
 import type { PackType, OwnedCard } from '../services/collection'
@@ -375,6 +375,12 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
   )
 }
 
+// ─── Rarity palette ──────────────────────────────────────────────────────────
+const RARITY_RANK: Record<Rarity, number>  = { bronze: 0, silver: 1, gold: 2, carnage: 3 }
+const RARITY_COLOR: Record<Rarity, string> = {
+  bronze: '#C9A364', silver: '#C8C8D8', gold: '#FFD700', carnage: '#FF1744',
+}
+
 // ─── Pack Opening Overlay ─────────────────────────────────────────────────────
 function PackOpeningOverlay({
   phase, packType, cards, onClose,
@@ -386,15 +392,53 @@ function PackOpeningOverlay({
 }) {
   const v = PACK_VISUALS[packType]
 
+  // ── Reveal state ──────────────────────────────────────────────────────────
+  const sorted = useMemo(
+    () => [...cards].sort((a, b) => RARITY_RANK[a.rarity] - RARITY_RANK[b.rarity]),
+    [cards],
+  )
+  const [revealIdx, setRevealIdx] = useState(0)
+  const [cardAnim,  setCardAnim]  = useState<'in' | 'idle' | 'out'>('in')
+  const touchRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+
+  // 'in' auto-settles to 'idle' after entrance animation
+  useEffect(() => {
+    if (phase !== 'reveal' || cardAnim !== 'in') return
+    const t = setTimeout(() => setCardAnim('idle'), 600)
+    return () => clearTimeout(t)
+  }, [phase, cardAnim])
+
+  const advance = useCallback(() => {
+    if (cardAnim !== 'idle') return
+    if (revealIdx >= sorted.length - 1) { onClose(); return }
+    setCardAnim('out')
+    setTimeout(() => { setRevealIdx(i => i + 1); setCardAnim('in') }, 400)
+  }, [cardAnim, revealIdx, sorted.length, onClose])
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    touchRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const dx = e.changedTouches[0].clientX - touchRef.current.x
+    const dy = Math.abs(e.changedTouches[0].clientY - touchRef.current.y)
+    if (dx < -45 && dy < 90) advance()
+  }
+
+  const currentCard = sorted[revealIdx]
+  const isLast      = revealIdx === sorted.length - 1
+  const bestColor   = RARITY_COLOR[sorted[sorted.length - 1].rarity]
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 300,
-      background: 'rgba(0,0,0,0.94)',
+      // Background always has a faint tint of the best card's color — visible from card 1
+      background: `radial-gradient(ellipse 90% 55% at 50% 105%, ${bestColor}1A 0%, rgba(0,0,0,0.96) 55%)`,
       display: 'flex', flexDirection: 'column',
-      alignItems: 'center', justifyContent: 'center', gap: 24,
+      alignItems: 'center', justifyContent: 'center', gap: 0,
       animation: 'fadeIn 0.25s ease',
     }}>
-      {/* Phase: shake / burst — animated card stack */}
+
+      {/* ── Shake / Burst ── */}
       {(phase === 'shake' || phase === 'burst') && (
         <div style={{ textAlign: 'center', position: 'relative' }}>
           <div style={{
@@ -410,145 +454,212 @@ function PackOpeningOverlay({
           }}>
             Ouverture…
           </div>
-          {/* Glow ring */}
           <div style={{
             position: 'absolute', left: '50%', top: '50%',
             transform: 'translate(-50%,-50%)',
             width: 220, height: 220, borderRadius: '50%',
             background: `radial-gradient(circle, ${v.glow} 0%, transparent 70%)`,
-            pointerEvents: 'none',
-            animation: 'fadeIn 0.3s ease',
+            pointerEvents: 'none', animation: 'fadeIn 0.3s ease',
           }} />
         </div>
       )}
 
-      {/* Phase: reveal */}
+      {/* ── Reveal ── */}
       {phase === 'reveal' && (
         <>
-          <div style={{
-            fontSize: 12, fontWeight: 800, letterSpacing: 3,
-            color: v.badgeColor, textTransform: 'uppercase',
-          }}>
-            {cards.length} nouvelle{cards.length > 1 ? 's' : ''} carte{cards.length > 1 ? 's' : ''} !
+          {/* Rarity indicator row — last dot always pulses (best card visible from card 1) */}
+          <div style={{ display: 'flex', gap: 9, alignItems: 'center', marginBottom: 28 }}>
+            {sorted.map((c, i) => {
+              const col      = RARITY_COLOR[c.rarity]
+              const revealed = i < revealIdx
+              const current  = i === revealIdx
+              const isLastDot = i === sorted.length - 1
+              return (
+                <div key={i} style={{
+                  width:  isLastDot ? 13 : current ? 10 : 7,
+                  height: isLastDot ? 13 : current ? 10 : 7,
+                  borderRadius: '50%',
+                  background: (revealed || current) ? col : 'rgba(255,255,255,0.16)',
+                  boxShadow: current  ? `0 0 8px ${col}, 0 0 18px ${col}` :
+                             revealed  ? `0 0 4px ${col}` : 'none',
+                  animation: isLastDot && !current ? `dotPulse 1.6s ease-in-out infinite` : 'none',
+                  transition: 'all 0.35s',
+                  // Always show best color so it's visible regardless of current card
+                  opacity: (revealed || current || isLastDot) ? 1 : 0.35,
+                }}/>
+              )
+            })}
           </div>
 
+          {/* Counter */}
           <div style={{
-            display: 'flex', gap: 10,
-            overflowX: 'auto', padding: '4px 20px 8px',
-            WebkitOverflowScrolling: 'touch',
-            scrollSnapType: 'x mandatory',
+            fontSize: 10, fontWeight: 700, letterSpacing: 2.5,
+            color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase',
+            marginBottom: 20,
           }}>
-            {cards.map((card, i) => (
-              <RevealedCard key={i} card={card} delay={i * 120} />
-            ))}
+            Carte {revealIdx + 1} / {sorted.length}
           </div>
 
-          <button
-            onClick={onClose}
-            style={{
-              marginTop: 8, padding: '14px 40px',
-              background: v.gradient,
-              border: 'none', borderRadius: 14,
-              color: '#fff', fontSize: 14, fontWeight: 800, letterSpacing: 1,
-              cursor: 'pointer',
-              boxShadow: `0 4px 20px ${v.glow}`,
-            }}
-            onPointerDown={e => (e.currentTarget.style.transform = 'scale(0.96)')}
-            onPointerUp={e   => (e.currentTarget.style.transform = 'scale(1)')}
+          {/* Card — swipeable */}
+          <div
+            onTouchStart={onTouchStart}
+            onTouchEnd={onTouchEnd}
+            onClick={advance}
+            style={{ cursor: cardAnim === 'idle' ? 'pointer' : 'default' }}
           >
-            Continuer
-          </button>
+            <BigRevealCard
+              card={currentCard}
+              anim={cardAnim}
+              isLast={isLast}
+              bestColor={bestColor}
+            />
+          </div>
+
+          {/* Swipe hint / CTA */}
+          <div style={{ marginTop: 28, textAlign: 'center' }}>
+            {!isLast ? (
+              <>
+                <div style={{
+                  fontSize: 11, color: 'rgba(255,255,255,0.38)', letterSpacing: 1.5,
+                  marginBottom: 14,
+                }}>
+                  ← Glisse pour la suivante
+                </div>
+                <button
+                  onClick={onClose}
+                  style={{
+                    padding: '8px 20px', background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.18)', borderRadius: 10,
+                    color: 'rgba(255,255,255,0.42)', fontSize: 11, fontWeight: 600,
+                    cursor: 'pointer', letterSpacing: 0.5,
+                  }}
+                >
+                  Tout afficher
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={onClose}
+                style={{
+                  padding: '14px 44px',
+                  background: v.gradient,
+                  border: 'none', borderRadius: 14,
+                  color: '#fff', fontSize: 14, fontWeight: 800, letterSpacing: 1,
+                  cursor: 'pointer',
+                  boxShadow: `0 4px 20px ${v.glow}`,
+                  animation: 'fadeIn 0.4s ease',
+                }}
+                onPointerDown={e => (e.currentTarget.style.transform = 'scale(0.96)')}
+                onPointerUp={e   => (e.currentTarget.style.transform = 'scale(1)')}
+              >
+                Continuer
+              </button>
+            )}
+          </div>
         </>
       )}
     </div>
   )
 }
 
-// ─── Revealed Card ────────────────────────────────────────────────────────────
-function RevealedCard({
-  card, delay,
+// ─── Big Reveal Card (one-by-one overlay) ────────────────────────────────────
+function BigRevealCard({
+  card, anim, isLast, bestColor,
 }: {
   card: { name: string; position: string; rarity: Rarity; rating: number; trait: string }
-  delay: number
+  anim: 'in' | 'idle' | 'out'
+  isLast: boolean
+  bestColor: string
 }) {
-  const r = card.rarity
+  const r       = card.rarity
+  const rarCol  = RARITY_COLOR[r]
+
+  const animation =
+    anim === 'in'  ? 'bigCardEnter 0.58s cubic-bezier(0.34,1.44,0.64,1) forwards' :
+    anim === 'out' ? 'bigCardExit 0.38s ease-in forwards' :
+    'none'
+
   return (
     <div className={`card-${r}`} style={{
-      width: 112, flexShrink: 0, borderRadius: 16, overflow: 'hidden', padding: 0,
-      boxShadow: r === 'carnage' ? undefined : 'var(--shadow)',
-      animation: `cardReveal 0.5s cubic-bezier(0.34,1.56,0.64,1) ${delay}ms both`,
-      position: 'relative', scrollSnapAlign: 'center',
+      width: 200, borderRadius: 20, overflow: 'hidden', position: 'relative',
+      animation,
+      // Last card: pulsing glow border
+      boxShadow: isLast
+        ? `0 0 0 2px ${rarCol}, 0 0 28px ${rarCol}, 0 0 60px ${bestColor}55`
+        : `0 8px 32px rgba(0,0,0,0.55)`,
     }}>
+      {/* Special top shine strip for last card */}
+      {isLast && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: 3, zIndex: 2,
+          background: `linear-gradient(90deg, transparent, ${rarCol}, transparent)`,
+          animation: 'lastCardGlow 1.2s ease-in-out infinite',
+        }}/>
+      )}
 
-      {/* ── Photo placeholder (will hold player image later) ── */}
-      <div style={{ height: 110, position: 'relative', overflow: 'hidden' }}>
-        {/* Depth overlay */}
+      {/* ── Photo placeholder ── */}
+      <div style={{ height: 196, position: 'relative', overflow: 'hidden' }}>
         <div style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(170deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.50) 100%)',
+          background: 'linear-gradient(170deg, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.55) 100%)',
           pointerEvents: 'none',
         }}/>
 
-        {/* Position silhouette — placeholder until real photo */}
+        {/* Position silhouette — will be replaced by player photo */}
         <div style={{
-          position: 'absolute', bottom: 8, left: '50%',
-          transform: 'translateX(-50%)',
-          opacity: 0.20,
+          position: 'absolute', bottom: 10, left: '50%',
+          transform: 'translateX(-50%)', opacity: 0.18,
         }}>
-          <PosIcon pos={card.position} size={58} />
+          <PosIcon pos={card.position} size={84} />
         </div>
 
-        {/* Rating + position — top-left */}
-        <div style={{ position: 'absolute', top: 8, left: 10 }}>
+        {/* Rating + position */}
+        <div style={{ position: 'absolute', top: 12, left: 14 }}>
           <div style={{
-            fontFamily: "'Bebas Neue', cursive", fontSize: 32,
+            fontFamily: "'Bebas Neue', cursive", fontSize: 44,
             color: '#fff', lineHeight: 1,
-            textShadow: '0 2px 8px rgba(0,0,0,0.65)',
+            textShadow: '0 3px 10px rgba(0,0,0,0.7)',
           }}>{card.rating}</div>
           <div style={{
-            fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.82)',
-            letterSpacing: 0.5, marginTop: -4,
+            fontSize: 11, fontWeight: 800, color: 'rgba(255,255,255,0.80)',
+            letterSpacing: 0.6, marginTop: -5,
           }}>{card.position}</div>
         </div>
 
-        {/* Rarity badge — top-right */}
+        {/* Rarity badge */}
         <div style={{
-          position: 'absolute', top: 8, right: 8,
-          background: 'rgba(0,0,0,0.36)',
-          borderRadius: 5, padding: '2px 6px',
-          fontSize: 7, fontWeight: 800,
-          color: 'rgba(255,255,255,0.90)',
-          letterSpacing: 0.8, textTransform: 'uppercase',
-          backdropFilter: 'blur(4px)',
+          position: 'absolute', top: 12, right: 12,
+          background: 'rgba(0,0,0,0.38)', backdropFilter: 'blur(4px)',
+          borderRadius: 6, padding: '3px 8px',
+          fontSize: 8, fontWeight: 800,
+          color: rarCol, letterSpacing: 1, textTransform: 'uppercase',
+          border: `1px solid ${rarCol}55`,
         }}>{RARITY_LABEL[r]}</div>
 
-        {/* Bottom fade into info section */}
+        {/* Bottom fade */}
         <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0, height: 28,
-          background: 'linear-gradient(transparent, rgba(0,0,0,0.45))',
+          position: 'absolute', bottom: 0, left: 0, right: 0, height: 40,
+          background: 'linear-gradient(transparent, rgba(0,0,0,0.50))',
           pointerEvents: 'none',
         }}/>
       </div>
 
       {/* ── Player info ── */}
       <div style={{
-        background: 'rgba(0,0,0,0.38)',
-        padding: '7px 10px 9px',
-        backdropFilter: 'blur(4px)',
+        background: 'rgba(0,0,0,0.42)', padding: '10px 14px 13px',
+        backdropFilter: 'blur(6px)',
       }}>
         <div style={{
-          fontFamily: "'Bebas Neue', cursive", fontSize: 14,
-          letterSpacing: 1.2, color: '#fff', lineHeight: 1.1,
-          marginBottom: 5,
+          fontFamily: "'Bebas Neue', cursive", fontSize: 20,
+          letterSpacing: 1.5, color: '#fff', lineHeight: 1.1,
+          marginBottom: 6,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{card.name}</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          {/* Nation placeholder */}
+          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.38)', fontWeight: 600 }}>— · —</span>
           <span style={{
-            fontSize: 8, color: 'rgba(255,255,255,0.40)', fontWeight: 600, letterSpacing: 0.3,
-          }}>— · —</span>
-          <span style={{
-            fontSize: 7, color: 'rgba(255,255,255,0.62)', fontWeight: 700, letterSpacing: 0.4,
+            fontSize: 9, fontWeight: 700, letterSpacing: 0.4,
+            color: rarCol, opacity: 0.85,
           }}>{card.trait}</span>
         </div>
       </div>

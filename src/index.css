@@ -136,6 +136,26 @@ html, body {
   100% { transform: scale(1) rotateY(0deg); opacity: 1; }
 }
 
+/* ─── Card one-by-one reveal ─────────────────────────────────── */
+@keyframes bigCardEnter {
+  0%   { transform: translateY(65px) scale(0.84); opacity: 0; }
+  58%  { transform: translateY(-7px) scale(1.04); opacity: 1; }
+  100% { transform: translateY(0)    scale(1);    opacity: 1; }
+}
+@keyframes bigCardExit {
+  0%   { transform: translateX(0)    rotate(0deg)  scale(1);    opacity: 1; }
+  28%  { transform: translateX(9%)   rotate(5deg)  scale(0.96); opacity: 1; }
+  100% { transform: translateX(120%) rotate(24deg) scale(0.78); opacity: 0; }
+}
+@keyframes dotPulse {
+  0%, 100% { transform: scale(1);    opacity: 0.70; }
+  50%       { transform: scale(1.65); opacity: 1;    }
+}
+@keyframes lastCardGlow {
+  0%, 100% { opacity: 0.55; }
+  50%       { opacity: 1;    }
+}
+
 /* ─── Scrollbar ───────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 3px; height: 3px; }
 ::-webkit-scrollbar-track { background: transparent; }
