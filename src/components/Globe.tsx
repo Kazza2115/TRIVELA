@@ -600,8 +600,11 @@ setIsLoaded(true)
               velRef.current     = { x: vx * 0.92, y: vy * 0.92 }
               proj.rotate(rotRef.current)
             } else {
-              velRef.current   = { x: 0, y: 0 }
-              isRotRef.current = true
+              velRef.current = { x: 0, y: 0 }
+              // Don't resume auto-rotation while a continent or country is displayed
+              if (continentCountriesRef.current.length === 0 && selectedRef.current === null) {
+                isRotRef.current = true
+              }
             }
           }
 
@@ -889,7 +892,7 @@ setIsLoaded(true)
         return (
           <div style={{
             position: 'absolute',
-            bottom: 20,
+            bottom: 104,
             left: '50%',
             transform: continentPopupVis
               ? 'translateX(-50%) translateY(0) scale(1)'
