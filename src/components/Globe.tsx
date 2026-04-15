@@ -176,6 +176,7 @@ interface PopupState { countryId: number; x: number; y: number }
 interface CenteringState {
   startRot: [number, number]; targetRot: [number, number]
   startTime: number; countryId?: number; feature?: any; conf?: string
+  fromNav?: boolean
 }
 
 function shortestPath(from: number, to: number): number {
@@ -213,6 +214,7 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
   const onNavigateRef     = useRef(onNavigate)
   const continentCountriesRef  = useRef<number[]>([])
   const onContinentShownRef    = useRef(onContinentShown)
+  const triggerContinentRef    = useRef<(conf: string) => void>(() => {})
 
   const setPopupSync = useCallback((p: PopupState | null) => {
     popupRef.current    = p
@@ -274,6 +276,7 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
       targetRot: [shortestPath(rotRef.current[0], -lon), Math.max(-80, Math.min(80, -lat))],
       startTime: performance.now(),
       conf:      continentRequest.conf,
+      fromNav:   true,
     }
   }, [continentRequest, handleClose])
 
@@ -317,8 +320,27 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
     }
   }, [setPopupSync])
 
-  triggerCenterRef.current = triggerCenter
-  onNavigateRef.current    = onNavigate
+  // Trigger continent centering from a direct globe click (no auto-navigate)
+  const triggerContinentForConf = useCallback((conf: string) => {
+    const center = CONF_CENTER[conf]
+    if (!center) return
+    const [lon, lat] = center
+    if (popupRef.current || continentCountriesRef.current.length > 0) handleClose()
+    isRotRef.current        = false
+    velRef.current          = { x: 0, y: 0 }
+    postZoomAnimRef.current = null
+    centeringRef.current    = {
+      startRot:  [...rotRef.current] as [number, number],
+      targetRot: [shortestPath(rotRef.current[0], -lon), Math.max(-80, Math.min(80, -lat))],
+      startTime: performance.now(),
+      conf,
+      fromNav: false,
+    }
+  }, [handleClose])
+
+  triggerCenterRef.current     = triggerCenter
+  triggerContinentRef.current  = triggerContinentForConf
+  onNavigateRef.current        = onNavigate
   onContinentShownRef.current  = onContinentShown
 
   // When Explorer is clicked: hide the React popup card but keep selectedRef + SVG flag,
@@ -398,13 +420,14 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
     japanGrad.append('stop').attr('offset', '100%').attr('stop-color', '#BC002D')
 
     // ── Layer groups ──────────────────────────────────────────────────
-    const gSphere    = svg.append('g').attr('class', 'g-sphere')
-    const gGrid      = svg.append('g').attr('class', 'g-grid')
-    const gBgCountry = svg.append('g').attr('class', 'g-bg-countries')
-    const gFtCountry = svg.append('g').attr('class', 'g-ft-countries')
-    const gFlags     = svg.append('g').attr('class', 'g-flags')
-    const gBorders   = svg.append('g').attr('class', 'g-borders')
-const gVig       = svg.append('g').attr('class', 'g-vig')   // vignette circle
+    const gSphere     = svg.append('g').attr('class', 'g-sphere')
+    const gGrid       = svg.append('g').attr('class', 'g-grid')
+    const gBgCountry  = svg.append('g').attr('class', 'g-bg-countries')
+    const gQualCountry = svg.append('g').attr('class', 'g-qual-countries')
+    const gFtCountry  = svg.append('g').attr('class', 'g-ft-countries')
+    const gFlags      = svg.append('g').attr('class', 'g-flags')
+    const gBorders    = svg.append('g').attr('class', 'g-borders')
+    const gVig        = svg.append('g').attr('class', 'g-vig')   // vignette circle
 
     // Ocean sphere
     const sphereShape = { type: 'Sphere' } as Parameters<typeof geoPath>[0]
@@ -430,13 +453,16 @@ const gVig       = svg.append('g').attr('class', 'g-vig')   // vignette circle
         const features: any[] = countries.features
         featuresRef.current = features
 
-        // Background countries — grouped by color (180+ paths → ~7)
-        const colorGroups = new Map<string, any[]>()
-        features.filter((d: any) => !FEATURED[parseInt(d.id)]).forEach((feat: any) => {
-          const color = landColor(parseInt(feat.id))
-          if (!colorGroups.has(color)) colorGroups.set(color, [])
-          colorGroups.get(color)!.push(feat)
-        })
+        // Background countries — only non-qualified merged by color (performance)
+        const qualifiedIds = new Set(Object.keys(QUALIFIED).map(Number))
+        const colorGroups  = new Map<string, any[]>()
+        features
+          .filter((d: any) => !FEATURED[parseInt(d.id)] && !qualifiedIds.has(parseInt(d.id)))
+          .forEach((feat: any) => {
+            const color = landColor(parseInt(feat.id))
+            if (!colorGroups.has(color)) colorGroups.set(color, [])
+            colorGroups.get(color)!.push(feat)
+          })
         gBgCountry.selectAll('path')
           .data([...colorGroups.entries()].map(([color, feats]) => ({
             color,
@@ -448,7 +474,27 @@ const gVig       = svg.append('g').attr('class', 'g-vig')   // vignette circle
           .attr('stroke-width', '0.5')
           .attr('d', (d: any) => geoPath(d.geom as any) ?? '')
 
-        // Featured countries — vivid flag colors
+        // Qualified non-FEATURED countries — individually rendered so each is clickable
+        gQualCountry.selectAll('.qual-country')
+          .data(features.filter((d: any) => {
+            const id = parseInt(d.id)
+            return qualifiedIds.has(id) && !FEATURED[id]
+          }))
+          .join('path')
+          .attr('class', (d: any) => `qual-country country-${parseInt(d.id)}`)
+          .attr('d', geoPath as any)
+          .attr('fill',   (d: any) => landColor(parseInt(d.id)))
+          .attr('stroke', C.bgStroke)
+          .attr('stroke-width', '0.5')
+          .style('cursor', 'pointer')
+          .on('click', (_event: MouseEvent, d: any) => {
+            if (diveAnimRef.current) return
+            const id   = parseInt(d.id)
+            const conf = QUALIFIED[id]?.conf
+            if (conf) triggerContinentRef.current(conf)
+          })
+
+        // Featured countries — vivid flag colors, click → continent mode
         gFtCountry.selectAll('.ft-country')
           .data(features.filter((d: any) => FEATURED[parseInt(d.id)]))
           .join('path')
@@ -459,10 +505,10 @@ const gVig       = svg.append('g').attr('class', 'g-vig')   // vignette circle
           .attr('stroke-width', '0.7')
           .style('cursor', 'pointer')
           .on('click', (_event: MouseEvent, d: any) => {
-            if (diveAnimRef.current) return   // ignore clicks during dive
-            const id = parseInt(d.id)
-            if (!FEATURED[id]) return
-            triggerCenterRef.current(id)
+            if (diveAnimRef.current) return
+            const id   = parseInt(d.id)
+            const conf = QUALIFIED[id]?.conf
+            if (conf) triggerContinentRef.current(conf)
           })
 
         // Country borders
@@ -494,6 +540,7 @@ setIsLoaded(true)
             gSphere.select('path').attr('d', geoPath(sphereShape) ?? '')
             gGrid.select('path').attr('d', geoPath as any)
             gBgCountry.selectAll('path').attr('d', (d: any) => geoPath(d.geom as any) ?? '')
+            gQualCountry.selectAll('.qual-country').attr('d', geoPath as any)
             gFtCountry.selectAll('.ft-country').attr('d', geoPath as any)
             gBorders.select('path').attr('d', geoPath as any)
             gVig.select('circle').attr('r', diveR)
@@ -560,7 +607,7 @@ setIsLoaded(true)
             proj.scale(R * zoomRef.current * zf)
 
             if (progress >= 1) {
-              const { countryId, feature: feat, conf } = centeringRef.current
+              const { countryId, feature: feat, conf, fromNav } = centeringRef.current
               centeringRef.current = null
               postZoomAnimRef.current = { start: t, from: 1.14, to: 1.0 }
               if (conf) {
@@ -570,7 +617,8 @@ setIsLoaded(true)
                   .map(([id]) => parseInt(id))
                 continentCountriesRef.current = ids
                 applyContinent(conf, ids, featuresRef.current, geoPath, gFtCountry, gFlags, defs)
-                onContinentShownRef.current?.()
+                // Only auto-navigate when triggered from a nav bar click
+                if (fromNav) onContinentShownRef.current?.()
               } else if (countryId !== undefined && feat) {
                 // Country mode: show popup
                 const centroid = geoPath.centroid(feat as any)
@@ -609,6 +657,7 @@ setIsLoaded(true)
             gSphere.select('path').attr('d', geoPath(sphereShape) ?? '')
             gGrid.select('path').attr('d', geoPath as any)
             gBgCountry.selectAll('path').attr('d', (d: any) => geoPath(d.geom as any) ?? '')
+            gQualCountry.selectAll('.qual-country').attr('d', geoPath as any)
             gFtCountry.selectAll('.ft-country').attr('d', geoPath as any)
             gBorders.select('path').attr('d', geoPath as any)
 
@@ -666,20 +715,11 @@ setIsLoaded(true)
     // ── Click-outside-to-close — click on ocean/non-featured area ──
     svg.on('click', (event: MouseEvent) => {
       const target = d3.select(event.target as Element)
-      // If click is on a featured country, triggerCenter handles it
-      if (target.classed('ft-featured')) return
-      // Otherwise close popup if one is open
-      if (selectedRef.current !== null) {
-        const prev = selectedRef.current
-        popupRef.current = null
-        selectedRef.current = null
-        setPopup(null)
-        gFlags.selectAll('*').remove()
-        defs.select(`#clip-flag-${prev}`).remove()
-        svg.select(`.ft-country.country-${prev}`).classed('selected', false)
-          .attr('fill', FEATURED[prev]?.svgFill ?? FEATURED[prev]?.color ?? '')
-          .attr('stroke', 'rgba(0,0,0,0.15)')
-        isRotRef.current = true
+      // Clicks on any qualified country are handled by their own click listeners
+      if (target.classed('ft-featured') || target.classed('qual-country')) return
+      // Close continent mode or single-country popup
+      if (continentCountriesRef.current.length > 0 || selectedRef.current !== null) {
+        handleClose()
       }
     })
 
