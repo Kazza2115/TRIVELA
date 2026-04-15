@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import PageLayout from './PageLayout'
 import { getCollection, getPackConfigs, openPack, saveCollection } from '../services/collection'
 import type { PackType, OwnedCard } from '../services/collection'
@@ -445,9 +446,9 @@ function PackOpeningOverlay({
   const bestColor   = bestCard ? RARITY_COLOR[bestCard.rarity] : v.badgeColor
   const numGhosts   = Math.min(sorted.length - revealIdx - 1, 3)
 
-  return (
+  return createPortal(
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 300,
+      position: 'fixed', inset: 0, zIndex: 9999,
       background: 'rgba(0,0,0,0.96)',
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', gap: 0,
@@ -624,7 +625,8 @@ function PackOpeningOverlay({
           </div>
         </>
       )}
-    </div>
+    </div>,
+    document.body,
   )
 }
 
