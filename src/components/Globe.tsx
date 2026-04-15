@@ -155,6 +155,8 @@ export default function Globe({ onNavigate, isActive }: GlobeProps) {
   const svgRef          = useRef<SVGSVGElement>(null)
   const [popup,    setPopup]    = useState<PopupState | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
+  // true once the container has valid pixel dimensions — guards D3 init
+  const [ready,    setReady]    = useState(false)
 
   const projRef           = useRef<d3.GeoProjection | null>(null)
   const pathRef           = useRef<d3.GeoPath | null>(null)
@@ -257,7 +259,22 @@ export default function Globe({ onNavigate, isActive }: GlobeProps) {
     diveAnimRef.current = { start: performance.now(), target: sectionId, fromScale }
   }, [])
 
+  // Wait for the container to have real pixel dimensions before initialising D3.
+  // On some mobile browsers (iOS Safari) the flex layout is not finalised at
+  // mount time, so clientWidth/Height read as 0 → globe appears tiny at top-left.
   useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    if (el.clientWidth >= 10 && el.clientHeight >= 10) { setReady(true); return }
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth >= 10 && el.clientHeight >= 10) { ro.disconnect(); setReady(true) }
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (!ready) return
     const el = containerRef.current
     if (!el || !svgRef.current) return
 
@@ -661,7 +678,7 @@ setIsLoaded(true)
       el.removeEventListener('touchmove',  onTouchMove)
       el.removeEventListener('touchend',   onTouchEnd)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ready]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
