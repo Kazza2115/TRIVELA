@@ -139,7 +139,8 @@ interface GlobeProps {
   onNavigate: (section: string) => void
   centerRequest?: { id: number; ts: number } | null
   isActive?: boolean
-  interactive?: boolean   // false during dive-in: freezes RAF + blocks popups
+  interactive?: boolean       // false during dive-in: freezes RAF
+  onCentered?: (countryId: number) => void  // called when centering animation completes (nav-triggered)
 }
 interface PopupState { countryId: number; x: number; y: number }
 interface CenteringState {
@@ -152,7 +153,7 @@ function shortestPath(from: number, to: number): number {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────
-export default function Globe({ onNavigate, centerRequest, isActive, interactive = true }: GlobeProps) {
+export default function Globe({ onNavigate, centerRequest, isActive, interactive = true, onCentered }: GlobeProps) {
   const containerRef    = useRef<HTMLDivElement>(null)
   const svgRef          = useRef<SVGSVGElement>(null)
   const [popup,    setPopup]    = useState<PopupState | null>(null)
@@ -176,6 +177,10 @@ export default function Globe({ onNavigate, centerRequest, isActive, interactive
   const velRef            = useRef({ x: 0, y: 0 })
   const postZoomAnimRef   = useRef<{ start: number; from: number; to: number } | null>(null)
   const popupWrapRef      = useRef<HTMLDivElement | null>(null)
+  // When a centerRequest comes from nav (not a direct tap), suppress the popup card
+  // so only the SVG flag on the country is shown (App.tsx then starts the zoom).
+  const suppressPopupRef  = useRef(false)
+  const onCenteredRef     = useRef(onCentered)
 
   const setPopupSync = useCallback((p: PopupState | null) => {
     popupRef.current    = p
@@ -204,11 +209,11 @@ export default function Globe({ onNavigate, centerRequest, isActive, interactive
     if (isActive === false) handleClose()
   }, [isActive, handleClose])
 
-  // Sync interactive prop — when false, freeze RAF loop + close any open popup
+  // Sync interactive prop — when false, freeze RAF loop so CSS scale runs at 120fps.
+  // Do NOT call handleClose: the SVG flag must stay visible during the zoom.
   useEffect(() => {
     interactiveRef.current = interactive
-    if (!interactive) handleClose()
-  }, [interactive, handleClose])
+  }, [interactive])
 
   const triggerCenter = useCallback((countryId: number) => {
     if (featuresRef.current.length === 0) { pendingCenterRef.current = countryId; return }
@@ -241,9 +246,11 @@ export default function Globe({ onNavigate, centerRequest, isActive, interactive
   }, [setPopupSync])
 
   triggerCenterRef.current = triggerCenter
+  onCenteredRef.current    = onCentered
 
   useEffect(() => {
     if (!centerRequest) return
+    suppressPopupRef.current = true   // nav-triggered: flag only, no popup card
     triggerCenterRef.current(centerRequest.id)
   }, [centerRequest])
 
@@ -360,6 +367,7 @@ const gVig       = svg.append('g').attr('class', 'g-vig')   // vignette circle
           .on('click', (_event: MouseEvent, d: any) => {
             const id = parseInt(d.id)
             if (!FEATURED[id]) return
+            suppressPopupRef.current = false  // direct tap: show popup normally
             triggerCenterRef.current(id)
           })
 
@@ -426,18 +434,26 @@ setIsLoaded(true)
 
             if (progress >= 1) {
               const { countryId, feature: feat } = centeringRef.current
+              const doPopup = !suppressPopupRef.current
+              suppressPopupRef.current = false   // reset for next use
               centeringRef.current = null
               postZoomAnimRef.current = { start: t, from: 1.14, to: 1.0 }
               const centroid = geoPath.centroid(feat as any)
               if (isFinite(centroid[0]) && isFinite(centroid[1])) {
                 applyFlag(countryId, feat, geoPath, gFlags, defs)
-                // Selected: brighten fill + white outline
+                // Brighten fill + white outline regardless
                 gFtCountry.select(`.country-${countryId}`)
                   .classed('selected', true)
                   .attr('fill', brighten(FEATURED[countryId].color))
                   .attr('stroke', 'rgba(255,255,255,0.28)')
                   .attr('stroke-width', '1.5')
-                setPopupSync({ countryId, x: centroid[0], y: centroid[1] })
+                if (doPopup) {
+                  // Direct tap: show the popup card
+                  setPopupSync({ countryId, x: centroid[0], y: centroid[1] })
+                } else {
+                  // Nav-triggered: flag is visible, notify App.tsx to start zoom
+                  onCenteredRef.current?.(countryId)
+                }
               }
             }
           }

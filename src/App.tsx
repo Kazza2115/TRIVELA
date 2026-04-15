@@ -63,7 +63,10 @@ export default function App() {
     if (dy > 52) setBannerShown(false)
   }
 
-  const [activeNav, setActiveNav] = useState<SectionId>('globe')
+  const [activeNav,  setActiveNav]  = useState<SectionId>('globe')
+  const [divingIn,   setDivingIn]   = useState(false)
+  // Stores the section to navigate to after the zoom completes
+  const diveTargetRef = useRef<SectionId | null>(null)
 
   const back         = () => { setSection('globe'); setActiveNav('globe') }
   const openAuth     = () => setShowAuth(true)
@@ -71,8 +74,24 @@ export default function App() {
   const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
   const navigateTo   = (s: string) => { setSection(s as SectionId); setActiveNav(s as SectionId) }
 
-  // Center globe on a country and let the popup appear naturally
-  const centerAndShow = (countryId: number) => {
+  // Called by Globe when the centering animation finishes (nav-triggered only).
+  // At this point the SVG flag is already fading in — start the CSS zoom after a
+  // brief pause so the flag is partially visible before we dive in.
+  const handleCentered = (_countryId: number) => {
+    const target = diveTargetRef.current
+    if (!target) return
+    diveTargetRef.current = null
+    setTimeout(() => setDivingIn(true), 180)          // let flag fade-in begin
+    setTimeout(() => {
+      setDivingIn(false)
+      setSection(target)
+      setActiveNav(target)
+    }, 180 + 520)                                      // 180ms pause + 520ms zoom
+  }
+
+  // Rotate globe to country, show SVG flag, then zoom into it and navigate
+  const centerAndShow = (countryId: number, targetSection: SectionId) => {
+    diveTargetRef.current = targetSection
     setSection('globe')
     setCenterRequest({ id: countryId, ts: Date.now() })
   }
@@ -156,13 +175,18 @@ export default function App() {
       {/* ── Content ── fills edge-to-edge; nav floats on top via position:absolute */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', zIndex: 1 }}>
 
-        {/* Globe */}
+        {/* Globe — CSS scale zooms on dive; willChange promotes to GPU compositor */}
         <div style={{
           width: '100%', height: '100%', position: 'relative', background: 'var(--bg)',
           display: section === 'globe' ? 'block' : 'none',
+          transform: divingIn ? 'scale(2.6)' : 'scale(1)',
+          transition: divingIn ? 'transform 0.52s cubic-bezier(0.55,0,1,1)' : 'none',
+          transformOrigin: 'center center',
+          willChange: divingIn ? 'transform' : 'auto',
         }}>
           <Globe onNavigate={navigateTo} centerRequest={centerRequest}
-            isActive={section === 'globe'} />
+            isActive={section === 'globe'} interactive={!divingIn}
+            onCentered={handleCentered} />
 
             <p style={{
               position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',
@@ -208,7 +232,7 @@ export default function App() {
                   72 matchs · Faites vos pronostics
                 </div>
               </div>
-              <button onClick={() => centerAndShow(840)} style={{
+              <button onClick={() => centerAndShow(840, 'paris')} style={{
                 padding: '10px 18px',
                 background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
                 border: 'none', borderRadius: 12, color: '#0D0800', fontSize: 13, fontWeight: 700,
@@ -278,7 +302,7 @@ export default function App() {
                 setActiveNav(id)
                 if (countryId === null) { setSection('globe'); return }
                 if (!countryCode) { setSection(id); return }
-                centerAndShow(countryId)
+                centerAndShow(countryId, id)
               }}
               style={{
                 position: 'absolute',
