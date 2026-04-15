@@ -28,8 +28,8 @@ const NAV_ITEMS: {
   { id: 'classement', Icon: IconTrophy, label: 'Classement', countryId: 686, countryCode: 'sn', countryName: 'Sénégal',  sectionName: 'Classement'  },
 ]
 
-// Funnel: outer items overflow above the nav band, center sits inside
-const FUNNEL_BOTTOM_PX = [34, 20, 5, 20, 34]
+// Funnel: all items stay within the nav band — outer items touch the top edge
+const FUNNEL_BOTTOM_PX = [20, 12, 3, 12, 20]
 
 export default function App() {
   const [section,     setSection]     = useState<SectionId>('globe')
@@ -264,7 +264,7 @@ export default function App() {
         flexShrink: 0,
         height: 72,
         position: 'relative',
-        overflow: 'visible',
+        overflow: 'hidden',
         background: 'rgba(242,242,247,0.92)',
         borderTop: '1px solid rgba(60,60,67,0.10)',
         backdropFilter: 'saturate(180%) blur(24px)',
