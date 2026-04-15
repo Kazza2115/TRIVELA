@@ -273,7 +273,7 @@ export default function App() {
         WebkitBackdropFilter: 'saturate(180%) blur(24px)',
         zIndex: 20,
       }}>
-        {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode, countryName, sectionName }, idx) => {
+        {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode, sectionName }, idx) => {
           const active    = activeNav === id
           const bottomPx  = FUNNEL_BOTTOM_PX[idx]
           const leftPct   = (idx + 0.5) * 20      // 10%, 30%, 50%, 70%, 90%
