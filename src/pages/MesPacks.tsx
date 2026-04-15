@@ -96,22 +96,22 @@ function CardStack({ type, scale = 1 }: { type: PackType; scale?: number }) {
         {/* Rating */}
         <text x="7" y="20" fontFamily="'Bebas Neue',cursive" fontSize="17"
           fill="rgba(255,255,255,0.92)">--</text>
-        {/* Per-type symbol */}
+        {/* Per-type symbol — filled + outlined for max visibility */}
         {type === 'starter' && (
-          // Shield
           <path d="M9,20 L37,20 L37,36 Q37,52 23,56 Q9,52 9,36 Z"
-            fill="rgba(255,255,255,0.14)" />
+            fill="rgba(255,255,255,0.38)"
+            stroke="rgba(255,255,255,0.70)" strokeWidth="1.5" />
         )}
         {type === 'pro' && (
-          // 5-point star
           <polygon
             points="23,28 25.6,35.4 32.5,35.9 27.3,40.4 28.9,47.1 23,43.5 17.1,47.1 18.7,40.4 13.5,35.9 20.4,35.4"
-            fill="rgba(255,255,255,0.17)" />
+            fill="rgba(255,255,255,0.40)"
+            stroke="rgba(255,255,255,0.72)" strokeWidth="1.5" />
         )}
         {type === 'superstar' && (
-          // Lightning bolt
           <path d="M26,16 L14,38 H22 L20,54 L32,33 H24 Z"
-            fill="rgba(255,255,255,0.20)" />
+            fill="rgba(255,255,255,0.44)"
+            stroke="rgba(255,255,255,0.75)" strokeWidth="1.5" />
         )}
         {/* Bottom name bar */}
         <rect x={3} y={cH - 17} width={cW - 6} height={13} rx={3}
@@ -207,7 +207,13 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
     <PageLayout
       onBack={onBack}
       accentColor="#C89B3C"
-      flag="📦"
+      flag={
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <rect x="1" y="5" width="13" height="17" rx="3" fill="#7A5030"/>
+          <rect x="5" y="1" width="14" height="17" rx="3" fill="#C9A364"/>
+          <rect x="6" y="2" width="12" height="15" rx="2.5" stroke="rgba(255,255,255,0.30)" strokeWidth="1" fill="none"/>
+        </svg>
+      }
       title="MES PACKS"
       subtitle={`${coins.toLocaleString('fr-FR')} pièces disponibles`}
     >
@@ -427,8 +433,10 @@ function PackOpeningOverlay({
           </div>
 
           <div style={{
-            display: 'flex', gap: 10, flexWrap: 'wrap',
-            justifyContent: 'center', maxWidth: 380, padding: '0 16px',
+            display: 'flex', gap: 10,
+            overflowX: 'auto', padding: '4px 20px 8px',
+            WebkitOverflowScrolling: 'touch',
+            scrollSnapType: 'x mandatory',
           }}>
             {cards.map((card, i) => (
               <RevealedCard key={i} card={card} delay={i * 120} />
@@ -466,53 +474,82 @@ function RevealedCard({
   const r = card.rarity
   return (
     <div className={`card-${r}`} style={{
-      width: 100, borderRadius: 14, overflow: 'hidden', padding: 0,
+      width: 112, flexShrink: 0, borderRadius: 16, overflow: 'hidden', padding: 0,
       boxShadow: r === 'carnage' ? undefined : 'var(--shadow)',
       animation: `cardReveal 0.5s cubic-bezier(0.34,1.56,0.64,1) ${delay}ms both`,
-      position: 'relative',
+      position: 'relative', scrollSnapAlign: 'center',
     }}>
-      {/* Top bar: rating + rarity */}
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '6px 8px 3px',
-      }}>
-        <span style={{
-          fontFamily: "'Bebas Neue', cursive", fontSize: 20, color: '#fff',
-          textShadow: '0 1px 3px rgba(0,0,0,0.4)', lineHeight: 1,
-        }}>{card.rating}</span>
-        <span style={{
-          fontSize: 7, fontWeight: 800, letterSpacing: 1, textTransform: 'uppercase',
-          color: 'rgba(255,255,255,0.85)',
-        }}>{RARITY_LABEL[r]}</span>
-      </div>
 
-      {/* Position icon badge */}
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '3px 8px 5px',
-      }}>
+      {/* ── Photo placeholder (will hold player image later) ── */}
+      <div style={{ height: 110, position: 'relative', overflow: 'hidden' }}>
+        {/* Depth overlay */}
         <div style={{
-          width: 40, height: 40, borderRadius: '50%',
-          background: 'rgba(255,255,255,0.15)',
-          border: '2px solid rgba(255,255,255,0.28)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(170deg, rgba(0,0,0,0.10) 0%, rgba(0,0,0,0.50) 100%)',
+          pointerEvents: 'none',
+        }}/>
+
+        {/* Position silhouette — placeholder until real photo */}
+        <div style={{
+          position: 'absolute', bottom: 8, left: '50%',
+          transform: 'translateX(-50%)',
+          opacity: 0.20,
         }}>
-          <PosIcon pos={card.position} size={22} />
+          <PosIcon pos={card.position} size={58} />
         </div>
+
+        {/* Rating + position — top-left */}
+        <div style={{ position: 'absolute', top: 8, left: 10 }}>
+          <div style={{
+            fontFamily: "'Bebas Neue', cursive", fontSize: 32,
+            color: '#fff', lineHeight: 1,
+            textShadow: '0 2px 8px rgba(0,0,0,0.65)',
+          }}>{card.rating}</div>
+          <div style={{
+            fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.82)',
+            letterSpacing: 0.5, marginTop: -4,
+          }}>{card.position}</div>
+        </div>
+
+        {/* Rarity badge — top-right */}
+        <div style={{
+          position: 'absolute', top: 8, right: 8,
+          background: 'rgba(0,0,0,0.36)',
+          borderRadius: 5, padding: '2px 6px',
+          fontSize: 7, fontWeight: 800,
+          color: 'rgba(255,255,255,0.90)',
+          letterSpacing: 0.8, textTransform: 'uppercase',
+          backdropFilter: 'blur(4px)',
+        }}>{RARITY_LABEL[r]}</div>
+
+        {/* Bottom fade into info section */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, height: 28,
+          background: 'linear-gradient(transparent, rgba(0,0,0,0.45))',
+          pointerEvents: 'none',
+        }}/>
       </div>
 
-      {/* Name + info */}
-      <div style={{ background: 'rgba(0,0,0,0.28)', padding: '6px 8px 8px', backdropFilter: 'blur(4px)' }}>
+      {/* ── Player info ── */}
+      <div style={{
+        background: 'rgba(0,0,0,0.38)',
+        padding: '7px 10px 9px',
+        backdropFilter: 'blur(4px)',
+      }}>
         <div style={{
-          fontFamily: "'Bebas Neue', cursive", fontSize: 12, letterSpacing: 1.2,
-          color: '#fff', lineHeight: 1.1, marginBottom: 3,
+          fontFamily: "'Bebas Neue', cursive", fontSize: 14,
+          letterSpacing: 1.2, color: '#fff', lineHeight: 1.1,
+          marginBottom: 5,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{card.name}</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>{card.position}</span>
-          <span style={{ fontSize: 7, color: 'rgba(255,255,255,0.55)', fontWeight: 700, letterSpacing: 0.5 }}>
-            {card.trait}
-          </span>
+          {/* Nation placeholder */}
+          <span style={{
+            fontSize: 8, color: 'rgba(255,255,255,0.40)', fontWeight: 600, letterSpacing: 0.3,
+          }}>— · —</span>
+          <span style={{
+            fontSize: 7, color: 'rgba(255,255,255,0.62)', fontWeight: 700, letterSpacing: 0.4,
+          }}>{card.trait}</span>
         </div>
       </div>
     </div>

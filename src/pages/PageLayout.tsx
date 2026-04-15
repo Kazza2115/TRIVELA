@@ -3,7 +3,7 @@ import { type ReactNode } from 'react'
 interface PageLayoutProps {
   onBack: () => void
   accentColor: string
-  flag: string
+  flag: ReactNode
   title: string
   subtitle?: string
   children: ReactNode
