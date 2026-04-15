@@ -544,19 +544,27 @@ function PackOpeningOverlay({
             onClick={advance}
           >
             {/* Ghost cards — each shows the actual rarity color of that card */}
-            {sorted.slice(revealIdx + 1, revealIdx + 4).map((upcomingCard, i) => (
-              <div key={i} style={{
-                position: 'absolute',
-                top: (i + 1) * 5,
-                left: (i + 1) * 13,
-                zIndex: 9 - i,
-                opacity: 1 - (i + 1) * 0.22,
-                transform: `rotate(${(i + 1) * 3}deg)`,
-                pointerEvents: 'none',
-              }}>
-                <CardBack rarity={upcomingCard.rarity} />
-              </div>
-            ))}
+            {sorted.slice(revealIdx + 1, revealIdx + 4).map((upcomingCard, i) => {
+              const isSpecial = upcomingCard.rarity === 'carnage' || upcomingCard.rarity === 'gold'
+              const ghostGlow = RARITY_COLOR[upcomingCard.rarity]
+              return (
+                <div key={i} style={{
+                  position: 'absolute',
+                  top: (i + 1) * 5,
+                  left: (i + 1) * 13,
+                  zIndex: 9 - i,
+                  opacity: 1 - (i + 1) * 0.22,
+                  transform: `rotate(${(i + 1) * 3}deg)`,
+                  pointerEvents: 'none',
+                  // Glow on special cards — visible peeking behind the front card
+                  filter: isSpecial
+                    ? `drop-shadow(0 0 10px ${ghostGlow}BB) drop-shadow(0 0 20px ${ghostGlow}66)`
+                    : undefined,
+                }}>
+                  <CardBack rarity={upcomingCard.rarity} />
+                </div>
+              )
+            })}
 
             {/* Current card (front) */}
             <div style={{ position: 'relative', zIndex: 10, cursor: cardAnim === 'idle' ? 'pointer' : 'default' }}>

@@ -38,7 +38,8 @@ const PACK_CONFIGS: PackConfig[] = [
     price: 500,
     cardCount: 5,
     description: 'Un pack de base pour bien démarrer ta collection. Idéal pour les débutants !',
-    probabilities: { bronze: 0.75, silver: 0.20, gold: 0.045, carnage: 0.005 },
+    // Carnage ~0.1% par carte → ~0.5% par pack (quasiment impossible)
+    probabilities: { bronze: 0.754, silver: 0.20, gold: 0.045, carnage: 0.001 },
   },
   {
     type: 'pro',
@@ -46,7 +47,8 @@ const PACK_CONFIGS: PackConfig[] = [
     price: 1500,
     cardCount: 5,
     description: 'Un pack avancé avec de meilleures chances d\'obtenir des cartes rares.',
-    probabilities: { bronze: 0.45, silver: 0.38, gold: 0.15, carnage: 0.02 },
+    // Carnage ~1.5% par carte → ~7% par pack
+    probabilities: { bronze: 0.46, silver: 0.375, gold: 0.15, carnage: 0.015 },
   },
   {
     type: 'superstar',
@@ -54,7 +56,8 @@ const PACK_CONFIGS: PackConfig[] = [
     price: 4000,
     cardCount: 5,
     description: 'Le pack ultime ! Les meilleures chances de décrocher des cartes légendaires.',
-    probabilities: { bronze: 0.25, silver: 0.40, gold: 0.30, carnage: 0.05 },
+    // Carnage ~4% par carte → ~18% par pack
+    probabilities: { bronze: 0.255, silver: 0.40, gold: 0.305, carnage: 0.04 },
   },
 ]
 
