@@ -99,6 +99,37 @@ const QUALIFIED: Record<number, { conf: string; confRank: number }> = {
   554: { conf: 'OFC',      confRank: 1 },  // New Zealand
 }
 
+// ISO-2 flag codes for all 48 qualifying countries (for flagcdn.com)
+const FLAG_CODE: Record<number, string> = {
+  // CONMEBOL
+  32: 'ar', 76: 'br', 170: 'co', 858: 'uy', 218: 'ec', 600: 'py', 862: 've',
+  // UEFA
+  250: 'fr', 724: 'es', 826: 'gb-eng', 56: 'be', 620: 'pt', 528: 'nl',
+  380: 'it', 276: 'de', 191: 'hr', 756: 'ch', 208: 'dk', 804: 'ua',
+  40: 'at', 792: 'tr', 688: 'rs', 578: 'no', 752: 'se', 203: 'cz', 70: 'ba',
+  // CONCACAF
+  840: 'us', 484: 'mx', 124: 'ca', 188: 'cr', 591: 'pa', 388: 'jm',
+  340: 'hn', 332: 'ht', 531: 'cw',
+  // AFC
+  392: 'jp', 410: 'kr', 36: 'au', 364: 'ir', 682: 'sa', 634: 'qa',
+  400: 'jo', 368: 'iq', 860: 'uz',
+  // CAF
+  504: 'ma', 686: 'sn', 384: 'ci', 818: 'eg', 566: 'ng', 710: 'za',
+  788: 'tn', 12: 'dz', 120: 'cm', 288: 'gh', 180: 'cd', 132: 'cv',
+  // OFC
+  554: 'nz',
+}
+
+// Geographic center of each confederation [lon, lat]
+const CONF_CENTER: Record<string, [number, number]> = {
+  CONMEBOL: [-58, -15],
+  UEFA:     [ 15,  50],
+  CONCACAF: [-90,  18],
+  CAF:      [ 20,   5],
+  AFC:      [ 80,  30],
+  OFC:      [170, -25],
+}
+
 // Total teams per confederation (for normalising the rank factor)
 const CONF_TOTAL: Record<string, number> = {
   CONMEBOL: 7, UEFA: 19, CONCACAF: 9, AFC: 9, CAF: 12, OFC: 1,
@@ -138,11 +169,13 @@ const C = {
 interface GlobeProps {
   onNavigate: (section: string) => void
   isActive?: boolean
+  continentRequest?: { conf: string; ts: number } | null
+  onContinentShown?: () => void
 }
 interface PopupState { countryId: number; x: number; y: number }
 interface CenteringState {
   startRot: [number, number]; targetRot: [number, number]
-  startTime: number; countryId: number; feature: any
+  startTime: number; countryId?: number; feature?: any; conf?: string
 }
 
 function shortestPath(from: number, to: number): number {
@@ -150,7 +183,7 @@ function shortestPath(from: number, to: number): number {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────
-export default function Globe({ onNavigate, isActive }: GlobeProps) {
+export default function Globe({ onNavigate, isActive, continentRequest, onContinentShown }: GlobeProps) {
   const containerRef    = useRef<HTMLDivElement>(null)
   const svgRef          = useRef<SVGSVGElement>(null)
   const [popup,    setPopup]    = useState<PopupState | null>(null)
@@ -178,6 +211,8 @@ export default function Globe({ onNavigate, isActive }: GlobeProps) {
   // Dive animation — set when Explorer is clicked; drives D3 projection zoom
   const diveAnimRef       = useRef<{ start: number; target: string; fromScale: number } | null>(null)
   const onNavigateRef     = useRef(onNavigate)
+  const continentCountriesRef  = useRef<number[]>([])
+  const onContinentShownRef    = useRef(onContinentShown)
 
   const setPopupSync = useCallback((p: PopupState | null) => {
     popupRef.current    = p
@@ -187,7 +222,9 @@ export default function Globe({ onNavigate, isActive }: GlobeProps) {
 
   const handleClose = useCallback(() => {
     const prev = selectedRef.current
+    const continentPrev = continentCountriesRef.current.slice()
     setPopupSync(null)
+    continentCountriesRef.current = []
     if (svgRef.current) {
       const svg = d3.select(svgRef.current)
       svg.select('.g-flags').selectAll('*').remove()
@@ -197,6 +234,14 @@ export default function Globe({ onNavigate, isActive }: GlobeProps) {
           .attr('fill', FEATURED[prev]?.svgFill ?? FEATURED[prev]?.color ?? '')
           .attr('stroke', 'rgba(0,0,0,0.15)')
       }
+      continentPrev.forEach(id => {
+        svg.select(`defs #clip-flag-${id}`).remove()
+        if (FEATURED[id]) {
+          svg.select(`.ft-country.country-${id}`).classed('selected', false)
+            .attr('fill', FEATURED[id].svgFill ?? FEATURED[id].color)
+            .attr('stroke', 'rgba(0,0,0,0.15)')
+        }
+      })
     }
     isRotRef.current = true
   }, [setPopupSync])
@@ -214,14 +259,34 @@ export default function Globe({ onNavigate, isActive }: GlobeProps) {
     }
   }, [isActive, handleClose])
 
+  useEffect(() => {
+    if (!continentRequest) return
+    const center = CONF_CENTER[continentRequest.conf]
+    if (!center) return
+    const [lon, lat] = center
+    // Clear any existing display
+    if (popupRef.current || continentCountriesRef.current.length > 0) handleClose()
+    isRotRef.current        = false
+    velRef.current          = { x: 0, y: 0 }
+    postZoomAnimRef.current = null
+    centeringRef.current    = {
+      startRot:  [...rotRef.current] as [number, number],
+      targetRot: [shortestPath(rotRef.current[0], -lon), Math.max(-80, Math.min(80, -lat))],
+      startTime: performance.now(),
+      conf:      continentRequest.conf,
+    }
+  }, [continentRequest, handleClose])
+
   const triggerCenter = useCallback((countryId: number) => {
     if (featuresRef.current.length === 0) { pendingCenterRef.current = countryId; return }
     const feat = featuresRef.current.find((f: any) => parseInt(f.id) === countryId)
     if (!feat) return
     const [lon, lat] = d3.geoCentroid(feat)
-    if (popupRef.current) {
+    if (popupRef.current || continentCountriesRef.current.length > 0) {
       const prev = selectedRef.current
+      const continentPrev = continentCountriesRef.current.slice()
       setPopupSync(null)
+      continentCountriesRef.current = []
       if (svgRef.current) {
         const svg = d3.select(svgRef.current)
         svg.select('.g-flags').selectAll('*').remove()
@@ -231,6 +296,14 @@ export default function Globe({ onNavigate, isActive }: GlobeProps) {
             .attr('fill', FEATURED[prev]?.svgFill ?? FEATURED[prev]?.color ?? '')
             .attr('stroke', 'rgba(0,0,0,0.15)')
         }
+        continentPrev.forEach(id => {
+          svg.select(`defs #clip-flag-${id}`).remove()
+          if (FEATURED[id]) {
+            svg.select(`.ft-country.country-${id}`).classed('selected', false)
+              .attr('fill', FEATURED[id].svgFill ?? FEATURED[id].color)
+              .attr('stroke', 'rgba(0,0,0,0.15)')
+          }
+        })
       }
     }
     isRotRef.current        = false
@@ -246,6 +319,7 @@ export default function Globe({ onNavigate, isActive }: GlobeProps) {
 
   triggerCenterRef.current = triggerCenter
   onNavigateRef.current    = onNavigate
+  onContinentShownRef.current  = onContinentShown
 
   // When Explorer is clicked: hide the React popup card but keep selectedRef + SVG flag,
   // then run the D3 projection zoom. navigate is called after the animation.
@@ -486,18 +560,29 @@ setIsLoaded(true)
             proj.scale(R * zoomRef.current * zf)
 
             if (progress >= 1) {
-              const { countryId, feature: feat } = centeringRef.current
+              const { countryId, feature: feat, conf } = centeringRef.current
               centeringRef.current = null
               postZoomAnimRef.current = { start: t, from: 1.14, to: 1.0 }
-              const centroid = geoPath.centroid(feat as any)
-              if (isFinite(centroid[0]) && isFinite(centroid[1])) {
-                applyFlag(countryId, feat, geoPath, gFlags, defs)
-                gFtCountry.select(`.country-${countryId}`)
-                  .classed('selected', true)
-                  .attr('fill', brighten(FEATURED[countryId].color))
-                  .attr('stroke', 'rgba(255,255,255,0.28)')
-                  .attr('stroke-width', '1.5')
-                setPopupSync({ countryId, x: centroid[0], y: centroid[1] })
+              if (conf) {
+                // Continent mode: show all qualifying flags for this confederation
+                const ids = Object.entries(QUALIFIED)
+                  .filter(([, q]) => q.conf === conf)
+                  .map(([id]) => parseInt(id))
+                continentCountriesRef.current = ids
+                applyContinent(conf, ids, featuresRef.current, geoPath, gFtCountry, gFlags, defs)
+                onContinentShownRef.current?.()
+              } else if (countryId !== undefined && feat) {
+                // Country mode: show popup
+                const centroid = geoPath.centroid(feat as any)
+                if (isFinite(centroid[0]) && isFinite(centroid[1])) {
+                  applyFlag(countryId, feat, geoPath, gFlags, defs)
+                  gFtCountry.select(`.country-${countryId}`)
+                    .classed('selected', true)
+                    .attr('fill', brighten(FEATURED[countryId].color))
+                    .attr('stroke', 'rgba(255,255,255,0.28)')
+                    .attr('stroke-width', '1.5')
+                  setPopupSync({ countryId, x: centroid[0], y: centroid[1] })
+                }
               }
             }
           }
@@ -534,8 +619,23 @@ setIsLoaded(true)
             defs.select('#vig-grad')
               .attr('cx', W / 2).attr('cy', H / 2).attr('r', curR)
 
-            // Flag overlay + popup anchor (single feature lookup)
-            if (selectedRef.current !== null) {
+            // Flag overlay + popup anchor
+            // Continent mode: update all confederation flags
+            if (continentCountriesRef.current.length > 0) {
+              continentCountriesRef.current.forEach(id => {
+                const selFeat = featuresRef.current.find((f: any) => parseInt(f.id) === id)
+                if (!selFeat) return
+                const pathStr = geoPath(selFeat as any)
+                if (!pathStr) return
+                const [[fx0, fy0], [fx1, fy1]] = geoPath.bounds(selFeat as any)
+                gFlags.select(`image[clip-path="url(#clip-flag-${id})"]`)
+                  .attr('x', fx0).attr('y', fy0)
+                  .attr('width',  Math.max(fx1 - fx0, 1))
+                  .attr('height', Math.max(fy1 - fy0, 1))
+                defs.select(`#clip-flag-${id} path`).attr('d', pathStr)
+              })
+            } else if (selectedRef.current !== null) {
+              // Single-country mode
               const selFeat = featuresRef.current.find(
                 (f: any) => parseInt(f.id) === selectedRef.current
               )
@@ -724,6 +824,54 @@ setIsLoaded(true)
       )}
     </div>
   )
+}
+
+// ─── Continent flag overlay — show all qualifying country flags at once ───────
+function applyContinent(
+  _conf: string,
+  countryIds: number[],
+  features: any[],
+  geoPath: d3.GeoPath,
+  gFtCountry: d3.Selection<SVGGElement, unknown, null, undefined>,
+  gFlags:     d3.Selection<SVGGElement, unknown, null, undefined>,
+  defs:       d3.Selection<SVGDefsElement, unknown, null, undefined>,
+) {
+  gFlags.selectAll('*').remove()
+  countryIds.forEach(id => defs.select(`#clip-flag-${id}`).remove())
+
+  countryIds.forEach((id, i) => {
+    const code = FLAG_CODE[id]
+    if (!code) return
+    const feat = features.find((f: any) => parseInt(f.id) === id)
+    if (!feat) return
+    const pathStr = geoPath(feat as any)
+    if (!pathStr) return
+    const [[x0, y0], [x1, y1]] = geoPath.bounds(feat as any)
+    if (x1 - x0 < 1 || y1 - y0 < 1) return
+
+    defs.append('clipPath').attr('id', `clip-flag-${id}`)
+      .append('path').attr('d', pathStr)
+
+    gFlags.append('image')
+      .attr('href', `https://flagcdn.com/w640/${code}.png`)
+      .attr('x', x0).attr('y', y0)
+      .attr('width',  Math.max(x1 - x0, 1))
+      .attr('height', Math.max(y1 - y0, 1))
+      .attr('preserveAspectRatio', 'xMidYMid slice')
+      .attr('clip-path', `url(#clip-flag-${id})`)
+      .attr('opacity', 0)
+      .transition().delay(i * 50).duration(500).ease(d3.easeCubicOut)
+      .attr('opacity', 0.92)
+
+    // Brighten FEATURED countries
+    if (FEATURED[id]) {
+      gFtCountry.select(`.country-${id}`)
+        .classed('selected', true)
+        .attr('fill', brighten(FEATURED[id].color))
+        .attr('stroke', 'rgba(255,255,255,0.28)')
+        .attr('stroke-width', '1.5')
+    }
+  })
 }
 
 // ─── Flag overlay ─────────────────────────────────────────────────────────
