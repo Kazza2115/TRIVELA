@@ -18,13 +18,13 @@ export type SectionId = 'globe' | 'paris' | 'classement' | 'album' | 'packs'
 
 const NAV_ITEMS: {
   id: SectionId; Icon: React.FC<{ size?: number; color?: string }>
-  label: string; conf?: string
+  label: string
 }[] = [
-  { id: 'paris',      Icon: IconBolt,   label: 'Paris',      conf: 'CONCACAF'  },
-  { id: 'album',      Icon: IconAlbum,  label: 'Album',      conf: 'UEFA'      },
-  { id: 'globe',      Icon: IconGlobe,  label: 'Globe'                         },
-  { id: 'packs',      Icon: IconPacks,  label: 'Packs',      conf: 'CONMEBOL'  },
-  { id: 'classement', Icon: IconTrophy, label: 'Classement', conf: 'CAF'       },
+  { id: 'paris',      Icon: IconBolt,   label: 'Paris'      },
+  { id: 'album',      Icon: IconAlbum,  label: 'Album'      },
+  { id: 'globe',      Icon: IconGlobe,  label: 'Globe'      },
+  { id: 'packs',      Icon: IconPacks,  label: 'Packs'      },
+  { id: 'classement', Icon: IconTrophy, label: 'Classement' },
 ]
 
 // Funnel: all items stay within the nav band — outer items touch the top edge
@@ -62,8 +62,6 @@ export default function App() {
   }
 
   const [activeNav, setActiveNav] = useState<SectionId>('globe')
-  const [continentRequest, setContinentRequest] = useState<{ conf: string; ts: number } | null>(null)
-  const pendingNavRef = useRef<SectionId | null>(null)
 
   const back         = () => { setSection('globe'); setActiveNav('globe') }
   const openAuth     = () => setShowAuth(true)
@@ -71,18 +69,6 @@ export default function App() {
   const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
   // Globe calls this after its dive animation finishes
   const navigateTo   = (s: string) => { setSection(s as SectionId); setActiveNav(s as SectionId) }
-
-  // Called by Globe once all continent flags are shown.
-  // Wait 1200ms so the flags are clearly visible, then navigate.
-  const handleContinentShown = () => {
-    const target = pendingNavRef.current
-    if (!target) return
-    setTimeout(() => {
-      pendingNavRef.current = null
-      setSection(target)
-      setActiveNav(target)
-    }, 1200)
-  }
 
   const gold   = '#C89B3C'
   const dimCol = '#AEAEB2'
@@ -168,9 +154,7 @@ export default function App() {
           width: '100%', height: '100%', position: 'relative', background: 'var(--bg)',
           display: section === 'globe' ? 'block' : 'none',
         }}>
-          <Globe onNavigate={navigateTo} isActive={section === 'globe'}
-            continentRequest={continentRequest}
-            onContinentShown={handleContinentShown} />
+          <Globe onNavigate={navigateTo} isActive={section === 'globe'} />
 
             <p style={{
               position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',
@@ -274,7 +258,7 @@ export default function App() {
         WebkitBackdropFilter: 'saturate(180%) blur(24px)',
         zIndex: 20,
       }}>
-        {NAV_ITEMS.map(({ id, Icon, label, conf }, idx) => {
+        {NAV_ITEMS.map(({ id, Icon, label }, idx) => {
           const active    = activeNav === id
           const bottomPx  = FUNNEL_BOTTOM_PX[idx]
           const leftPct   = (idx + 0.5) * 20      // 10%, 30%, 50%, 70%, 90%
@@ -282,13 +266,7 @@ export default function App() {
 
           return (
             <button key={id}
-              onClick={() => {
-                setActiveNav(id)
-                if (!conf) { setSection('globe'); return }
-                pendingNavRef.current = id
-                setSection('globe')
-                setContinentRequest({ conf, ts: Date.now() })
-              }}
+              onClick={() => { setActiveNav(id); setSection(id) }}
               style={{
                 position: 'absolute',
                 bottom: bottomPx,
