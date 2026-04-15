@@ -661,14 +661,25 @@ function BigRevealCard({
 
   // Outer wrapper handles animation — NO overflow:hidden so corners are never clipped
   // Inner div handles the visual card with overflow:hidden for content clipping
+  // NOTE: glow is on a *separate* absolute div, not on .card-${r}, because CSS
+  // animations (carnagePulse) have higher cascade priority than inline styles and
+  // would override a boxShadow set directly on the card element.
   return (
-    <div style={{ animation, overflow: 'visible' }}>
+    <div style={{ animation, overflow: 'visible', position: 'relative' }}>
+
+      {/* Pulsing halo — sits behind the card, unaffected by carnagePulse */}
+      {isLast && (
+        <div style={{
+          position: 'absolute', inset: -8, borderRadius: 28, zIndex: 0,
+          boxShadow: `0 0 0 2px ${rarCol}, 0 0 28px ${rarCol}CC, 0 0 72px ${bestColor}66`,
+          animation: 'lastCardGlow 1.4s ease-in-out infinite',
+          pointerEvents: 'none',
+        }}/>
+      )}
+
     <div className={`card-${r}`} style={{
-      width: 200, borderRadius: 20, overflow: 'hidden', position: 'relative',
-      // Last card: pulsing glow border
-      boxShadow: isLast
-        ? `0 0 0 2px ${rarCol}, 0 0 28px ${rarCol}, 0 0 60px ${bestColor}55`
-        : `0 8px 32px rgba(0,0,0,0.55)`,
+      width: 200, borderRadius: 20, overflow: 'hidden', position: 'relative', zIndex: 1,
+      boxShadow: isLast ? 'none' : '0 8px 32px rgba(0,0,0,0.55)',
     }}>
       {/* Special top shine strip for last card */}
       {isLast && (
