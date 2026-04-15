@@ -63,10 +63,8 @@ export default function App() {
     if (dy > 52) setBannerShown(false)
   }
 
-  // ── Country flag flash on nav tap ──────────────────────────────────────────
-  const [flagFlash, setFlagFlash] = useState<{
-    code: string; countryName: string; sectionName: string
-  } | null>(null)
+  // ── Dive-in transition ────────────────────────────────────────────────────
+  const [divingIn, setDivingIn] = useState(false)
 
   const [activeNav, setActiveNav] = useState<SectionId>('globe')
 
@@ -75,6 +73,14 @@ export default function App() {
   const handleAuth   = (user: UserProfile) => { setCurrentUser(user); setShowAuth(false) }
   const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
   const navigateTo   = (s: string) => setSection(s as SectionId)
+
+  // Helper: rotate globe to country then zoom in and navigate
+  const diveToSection = (countryId: number, targetSection: SectionId) => {
+    setSection('globe')
+    setCenterRequest({ id: countryId, ts: Date.now() })
+    setTimeout(() => setDivingIn(true), 520)
+    setTimeout(() => { setDivingIn(false); setSection(targetSection) }, 1020)
+  }
 
   const gold   = '#C89B3C'
   const dimCol = '#AEAEB2'
@@ -155,10 +161,13 @@ export default function App() {
       {/* ── Content ── fills edge-to-edge; nav floats on top via position:absolute */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', zIndex: 1 }}>
 
-        {/* Globe — always mounted so it never reloads; hidden when in another section */}
+        {/* Globe — always mounted; dive-in zoom plays before section switch */}
         <div style={{
           width: '100%', height: '100%', position: 'relative', background: 'var(--bg)',
           display: section === 'globe' ? 'block' : 'none',
+          transform: divingIn ? 'scale(2.6)' : 'scale(1)',
+          transition: divingIn ? 'transform 0.5s cubic-bezier(0.55,0,1,1)' : 'none',
+          transformOrigin: 'center center',
         }}>
           <Globe onNavigate={navigateTo} centerRequest={centerRequest} isActive={section === 'globe'} />
 
@@ -206,14 +215,7 @@ export default function App() {
                   72 matchs · Faites vos pronostics
                 </div>
               </div>
-              <button onClick={() => {
-                setCenterRequest({ id: 840, ts: Date.now() })
-                setTimeout(() => {
-                  setFlagFlash({ code: 'us', countryName: 'USA', sectionName: 'Paris' })
-                  setSection('paris')
-                  setTimeout(() => setFlagFlash(null), 1000)
-                }, 900)
-              }} style={{
+              <button onClick={() => diveToSection(840, 'paris')} style={{
                 padding: '10px 18px',
                 background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
                 border: 'none', borderRadius: 12, color: '#0D0800', fontSize: 13, fontWeight: 700,
@@ -283,14 +285,7 @@ export default function App() {
                 setActiveNav(id)
                 if (countryId === null) { setSection('globe'); return }
                 if (!countryCode || !sectionName) { setSection(id); return }
-
-                setSection('globe')
-                setCenterRequest({ id: countryId, ts: Date.now() })
-                setTimeout(() => {
-                  setFlagFlash({ code: countryCode, countryName: countryName ?? '', sectionName })
-                  setSection(id)
-                  setTimeout(() => setFlagFlash(null), 1000)
-                }, 900)
+                diveToSection(countryId, id)
               }}
               style={{
                 position: 'absolute',
@@ -331,54 +326,6 @@ export default function App() {
           )
         })}
       </nav>
-
-      {/* ── Section flash overlay ─────────────────────────────────
-           Shows the section name + country flag when tapping a nav item.
-           Each child has its own staggered entrance animation.          ── */}
-      {flagFlash && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 200,
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center', gap: 20,
-          background: 'rgba(8,16,32,0.97)',
-          animation: 'flagEnter 1000ms ease-in-out forwards',
-          pointerEvents: 'none',
-        }}>
-          {/* Section name — hero element, slides up with bounce */}
-          <div style={{
-            fontFamily: "'Bebas Neue', cursive",
-            fontSize: 52, letterSpacing: 6,
-            color: '#E8D080', lineHeight: 1,
-            textAlign: 'center',
-            animation: 'fadeSlideUp 0.42s cubic-bezier(0.34,1.2,0.64,1) 0.05s both',
-          }}>
-            {flagFlash.sectionName}
-          </div>
-
-          {/* Country flag — scales in slightly after the title */}
-          <img
-            src={`https://flagcdn.com/w640/${flagFlash.code}.png`}
-            alt={flagFlash.countryName}
-            style={{
-              width: 200, height: 'auto',
-              borderRadius: 12,
-              boxShadow: '0 16px 56px rgba(0,0,0,0.60)',
-              border: '2px solid rgba(255,255,255,0.14)',
-              animation: 'scaleIn 0.38s cubic-bezier(0.34,1.2,0.64,1) 0.16s both',
-            }}
-          />
-
-          {/* Country name — small caption, fades in last */}
-          <div style={{
-            fontSize: 11, fontWeight: 700, letterSpacing: 3,
-            color: 'rgba(255,255,255,0.38)',
-            textTransform: 'uppercase',
-            animation: 'fadeIn 0.32s ease 0.28s both',
-          }}>
-            {flagFlash.countryName}
-          </div>
-        </div>
-      )}
 
       {/* ── Auth modal ────────────────────────────────────────── */}
       {showAuth && (
