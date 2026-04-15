@@ -444,12 +444,21 @@ function PackOpeningOverlay({
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 300,
-      // Background always has a faint tint of the best card's color — visible from card 1
-      background: `radial-gradient(ellipse 90% 55% at 50% 105%, ${bestColor}1A 0%, rgba(0,0,0,0.96) 55%)`,
+      background: 'rgba(0,0,0,0.96)',
       display: 'flex', flexDirection: 'column',
       alignItems: 'center', justifyContent: 'center', gap: 0,
       animation: 'fadeIn 0.25s ease',
     }}>
+
+      {/* Mysterious bottom glow — color of best card, barely visible, pulses */}
+      {phase === 'reveal' && bestCard && bestCard.rarity !== 'bronze' && (
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, height: '45%',
+          background: `radial-gradient(ellipse 80% 60% at 50% 100%, ${bestColor}22 0%, transparent 65%)`,
+          pointerEvents: 'none',
+          animation: 'lastCardGlow 2.4s ease-in-out infinite',
+        }}/>
+      )}
 
       {/* ── Shake / Burst ── */}
       {(phase === 'shake' || phase === 'burst') && (
@@ -481,28 +490,6 @@ function PackOpeningOverlay({
       {/* ── Reveal ── */}
       {phase === 'reveal' && (
         <>
-          {/* Best card incoming badge — always visible from card 1 */}
-          {bestCard && bestCard.rarity !== 'bronze' && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8,
-              background: `${bestColor}1A`, border: `1px solid ${bestColor}50`,
-              borderRadius: 30, padding: '5px 14px', marginBottom: 22,
-            }}>
-              <div style={{
-                width: 8, height: 8, borderRadius: '50%',
-                background: bestColor,
-                boxShadow: `0 0 8px ${bestColor}, 0 0 16px ${bestColor}`,
-                animation: 'dotPulse 1.4s ease-in-out infinite',
-              }}/>
-              <span style={{
-                fontSize: 9, fontWeight: 900, letterSpacing: 2.5,
-                color: bestColor, textTransform: 'uppercase',
-              }}>
-                {RARITY_LABEL[bestCard.rarity]} en approche
-              </span>
-            </div>
-          )}
-
           {/* Rarity indicator row — last dot always pulses (best card visible from card 1) */}
           <div style={{ display: 'flex', gap: 9, alignItems: 'center', marginBottom: 28 }}>
             {sorted.map((c, i) => {
