@@ -29,7 +29,7 @@ const NAV_ITEMS: {
 ]
 
 // Funnel: all items stay within the nav band — outer items touch the top edge
-const FUNNEL_BOTTOM_PX = [20, 12, 3, 12, 20]
+const FUNNEL_BOTTOM_PX = [14, 8, 2, 8, 14]
 
 export default function App() {
   const [section,     setSection]     = useState<SectionId>('globe')
