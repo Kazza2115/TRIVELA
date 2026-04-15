@@ -137,11 +137,7 @@ const C = {
 
 interface GlobeProps {
   onNavigate: (section: string) => void
-  centerRequest?: { id: number; ts: number } | null
   isActive?: boolean
-  interactive?: boolean              // false during dive: blocks user input + starts D3 zoom
-  onCentered?: (countryId: number) => void   // called when centering done (nav-triggered)
-  onDiveComplete?: () => void        // called when D3 zoom animation finishes
 }
 interface PopupState { countryId: number; x: number; y: number }
 interface CenteringState {
@@ -154,12 +150,11 @@ function shortestPath(from: number, to: number): number {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────
-export default function Globe({ onNavigate, centerRequest, isActive, interactive = true, onCentered, onDiveComplete }: GlobeProps) {
+export default function Globe({ onNavigate, isActive }: GlobeProps) {
   const containerRef    = useRef<HTMLDivElement>(null)
   const svgRef          = useRef<SVGSVGElement>(null)
   const [popup,    setPopup]    = useState<PopupState | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
-  const interactiveRef  = useRef(true)
 
   const projRef           = useRef<d3.GeoProjection | null>(null)
   const pathRef           = useRef<d3.GeoPath | null>(null)
@@ -178,13 +173,9 @@ export default function Globe({ onNavigate, centerRequest, isActive, interactive
   const velRef            = useRef({ x: 0, y: 0 })
   const postZoomAnimRef   = useRef<{ start: number; from: number; to: number } | null>(null)
   const popupWrapRef      = useRef<HTMLDivElement | null>(null)
-  // When a centerRequest comes from nav (not a direct tap), suppress the popup card
-  // so only the SVG flag on the country is shown (App.tsx then starts the zoom).
-  const suppressPopupRef   = useRef(false)
-  const onCenteredRef      = useRef(onCentered)
-  const onDiveCompleteRef  = useRef(onDiveComplete)
-  // { start } set when interactive becomes false — drives the D3 projection zoom
-  const diveAnimRef        = useRef<{ start: number } | null>(null)
+  // Dive animation — set when Explorer is clicked; drives D3 projection zoom
+  const diveAnimRef       = useRef<{ start: number; target: string } | null>(null)
+  const onNavigateRef     = useRef(onNavigate)
 
   const setPopupSync = useCallback((p: PopupState | null) => {
     popupRef.current    = p
@@ -215,27 +206,11 @@ export default function Globe({ onNavigate, centerRequest, isActive, interactive
       if (projRef.current && baseRRef.current > 0) {
         projRef.current.scale(baseRRef.current)
       }
-      zoomRef.current       = 1
+      zoomRef.current         = 1
       postZoomAnimRef.current = null
-      diveAnimRef.current   = null
+      diveAnimRef.current     = null
     }
   }, [isActive, handleClose])
-
-  // Sync interactive prop.
-  // When false: stop post-centering animation, lock projection at base scale, start D3 dive.
-  // Do NOT call handleClose — the SVG flag must stay visible while we zoom in.
-  useEffect(() => {
-    interactiveRef.current = interactive
-    if (!interactive) {
-      postZoomAnimRef.current = null
-      if (projRef.current && baseRRef.current > 0) {
-        projRef.current.scale(baseRRef.current * zoomRef.current)
-      }
-      diveAnimRef.current = { start: performance.now() }
-    } else {
-      diveAnimRef.current = null
-    }
-  }, [interactive])
 
   const triggerCenter = useCallback((countryId: number) => {
     if (featuresRef.current.length === 0) { pendingCenterRef.current = countryId; return }
@@ -267,15 +242,20 @@ export default function Globe({ onNavigate, centerRequest, isActive, interactive
     }
   }, [setPopupSync])
 
-  triggerCenterRef.current   = triggerCenter
-  onCenteredRef.current      = onCentered
-  onDiveCompleteRef.current  = onDiveComplete
+  triggerCenterRef.current = triggerCenter
+  onNavigateRef.current    = onNavigate
 
-  useEffect(() => {
-    if (!centerRequest) return
-    suppressPopupRef.current = true   // nav-triggered: flag only, no popup card
-    triggerCenterRef.current(centerRequest.id)
-  }, [centerRequest])
+  // When Explorer is clicked: hide the React popup card but keep selectedRef + SVG flag,
+  // then run the D3 projection zoom. navigate is called after the animation.
+  const diveFromPopup = useCallback((sectionId: string) => {
+    popupRef.current = null
+    setPopup(null)
+    postZoomAnimRef.current = null
+    if (projRef.current && baseRRef.current > 0) {
+      projRef.current.scale(baseRRef.current * zoomRef.current)
+    }
+    diveAnimRef.current = { start: performance.now(), target: sectionId }
+  }, [])
 
   useEffect(() => {
     const el = containerRef.current
@@ -388,9 +368,9 @@ const gVig       = svg.append('g').attr('class', 'g-vig')   // vignette circle
           .attr('stroke-width', '0.7')
           .style('cursor', 'pointer')
           .on('click', (_event: MouseEvent, d: any) => {
+            if (diveAnimRef.current) return   // ignore clicks during dive
             const id = parseInt(d.id)
             if (!FEATURED[id]) return
-            suppressPopupRef.current = false  // direct tap: show popup normally
             triggerCenterRef.current(id)
           })
 
@@ -410,41 +390,39 @@ setIsLoaded(true)
         let prevT = 0
         let prevR0 = NaN, prevR1 = NaN, prevProjScale = NaN
         const animate = (t: number) => {
-          // When not interactive: run the D3 projection zoom (dive-in).
-          // The SVG is redrawn at native resolution every frame → no blur, no scaling artifacts.
-          if (!interactiveRef.current) {
-            if (diveAnimRef.current) {
-              const elapsed  = t - diveAnimRef.current.start
-              const progress = Math.min(elapsed / 520, 1)
-              const diveR    = R * (1 + (3.5 - 1) * d3.easeCubicIn(progress))
-              proj.scale(diveR)
-              // Full redraw at new scale
-              gSphere.select('path').attr('d', geoPath(sphereShape) ?? '')
-              gGrid.select('path').attr('d', geoPath as any)
-              gBgCountry.selectAll('path').attr('d', (d: any) => geoPath(d.geom as any) ?? '')
-              gFtCountry.selectAll('.ft-country').attr('d', geoPath as any)
-              gBorders.select('path').attr('d', geoPath as any)
-              gVig.select('circle').attr('r', diveR)
-              defs.select('#sphere-grad')
-                .attr('cx', W / 2 - 0.3 * diveR).attr('cy', H / 2 - 0.4 * diveR).attr('r', 1.3 * diveR)
-              defs.select('#vig-grad').attr('cx', W / 2).attr('cy', H / 2).attr('r', diveR)
-              if (selectedRef.current !== null) {
-                const selFeat = featuresRef.current.find((f: any) => parseInt(f.id) === selectedRef.current)
-                if (selFeat) {
-                  const pathStr = geoPath(selFeat as any)
-                  if (pathStr) {
-                    const [[fx0, fy0], [fx1, fy1]] = geoPath.bounds(selFeat as any)
-                    gFlags.select('image').attr('x', fx0).attr('y', fy0)
-                      .attr('width',  Math.max(fx1 - fx0, 1))
-                      .attr('height', Math.max(fy1 - fy0, 1))
-                    defs.select(`#clip-flag-${selectedRef.current} path`).attr('d', pathStr)
-                  }
+          // Dive animation: D3 projection zoom triggered by clicking Explorer in the popup.
+          // Redraws at native resolution every frame — no CSS scale, no blur artifacts.
+          if (diveAnimRef.current) {
+            const { start, target } = diveAnimRef.current
+            const elapsed  = t - start
+            const progress = Math.min(elapsed / 520, 1)
+            const diveR    = R * (1 + (3.5 - 1) * d3.easeCubicIn(progress))
+            proj.scale(diveR)
+            gSphere.select('path').attr('d', geoPath(sphereShape) ?? '')
+            gGrid.select('path').attr('d', geoPath as any)
+            gBgCountry.selectAll('path').attr('d', (d: any) => geoPath(d.geom as any) ?? '')
+            gFtCountry.selectAll('.ft-country').attr('d', geoPath as any)
+            gBorders.select('path').attr('d', geoPath as any)
+            gVig.select('circle').attr('r', diveR)
+            defs.select('#sphere-grad')
+              .attr('cx', W / 2 - 0.3 * diveR).attr('cy', H / 2 - 0.4 * diveR).attr('r', 1.3 * diveR)
+            defs.select('#vig-grad').attr('cx', W / 2).attr('cy', H / 2).attr('r', diveR)
+            if (selectedRef.current !== null) {
+              const selFeat = featuresRef.current.find((f: any) => parseInt(f.id) === selectedRef.current)
+              if (selFeat) {
+                const pathStr = geoPath(selFeat as any)
+                if (pathStr) {
+                  const [[fx0, fy0], [fx1, fy1]] = geoPath.bounds(selFeat as any)
+                  gFlags.select('image').attr('x', fx0).attr('y', fy0)
+                    .attr('width',  Math.max(fx1 - fx0, 1))
+                    .attr('height', Math.max(fy1 - fy0, 1))
+                  defs.select(`#clip-flag-${selectedRef.current} path`).attr('d', pathStr)
                 }
               }
-              if (progress >= 1) {
-                diveAnimRef.current = null
-                onDiveCompleteRef.current?.()
-              }
+            }
+            if (progress >= 1) {
+              diveAnimRef.current = null
+              onNavigateRef.current(target)
             }
             rafRef.current = requestAnimationFrame(animate)
             return
@@ -490,26 +468,17 @@ setIsLoaded(true)
 
             if (progress >= 1) {
               const { countryId, feature: feat } = centeringRef.current
-              const doPopup = !suppressPopupRef.current
-              suppressPopupRef.current = false   // reset for next use
               centeringRef.current = null
               postZoomAnimRef.current = { start: t, from: 1.14, to: 1.0 }
               const centroid = geoPath.centroid(feat as any)
               if (isFinite(centroid[0]) && isFinite(centroid[1])) {
                 applyFlag(countryId, feat, geoPath, gFlags, defs)
-                // Brighten fill + white outline regardless
                 gFtCountry.select(`.country-${countryId}`)
                   .classed('selected', true)
                   .attr('fill', brighten(FEATURED[countryId].color))
                   .attr('stroke', 'rgba(255,255,255,0.28)')
                   .attr('stroke-width', '1.5')
-                if (doPopup) {
-                  // Direct tap: show the popup card
-                  setPopupSync({ countryId, x: centroid[0], y: centroid[1] })
-                } else {
-                  // Nav-triggered: flag is visible, notify App.tsx to start zoom
-                  onCenteredRef.current?.(countryId)
-                }
+                setPopupSync({ countryId, x: centroid[0], y: centroid[1] })
               }
             }
           }
@@ -729,7 +698,7 @@ setIsLoaded(true)
         >
           <CountryPopup
             countryId={popup.countryId}
-            onNavigate={onNavigate}
+            onNavigate={diveFromPopup}
             onClose={handleClose}
           />
         </div>

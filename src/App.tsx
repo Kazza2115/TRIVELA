@@ -33,7 +33,6 @@ const FUNNEL_BOTTOM_PX = [14, 8, 2, 8, 14]
 
 export default function App() {
   const [section,     setSection]     = useState<SectionId>('globe')
-  const [centerRequest, setCenterRequest] = useState<{ id: number; ts: number } | null>(null)
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => getSession())
   const [showAuth,    setShowAuth]    = useState(false)
   const [showProfile, setShowProfile] = useState(false)
@@ -63,40 +62,14 @@ export default function App() {
     if (dy > 52) setBannerShown(false)
   }
 
-  const [activeNav,  setActiveNav]  = useState<SectionId>('globe')
-  const [divingIn,   setDivingIn]   = useState(false)
-  // Stores the section to navigate to after the zoom completes
-  const diveTargetRef = useRef<SectionId | null>(null)
+  const [activeNav, setActiveNav] = useState<SectionId>('globe')
 
   const back         = () => { setSection('globe'); setActiveNav('globe') }
   const openAuth     = () => setShowAuth(true)
   const handleAuth   = (user: UserProfile) => { setCurrentUser(user); setShowAuth(false) }
   const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
+  // Globe calls this after its dive animation finishes
   const navigateTo   = (s: string) => { setSection(s as SectionId); setActiveNav(s as SectionId) }
-
-  // Called by Globe when centering finishes (nav-triggered).
-  // Wait 180ms so the SVG flag fade-in is visible, then trigger the D3 zoom.
-  const handleCentered = (_countryId: number) => {
-    if (!diveTargetRef.current) return
-    setTimeout(() => setDivingIn(true), 180)
-  }
-
-  // Called by Globe when its D3 projection zoom animation finishes.
-  const handleDiveComplete = () => {
-    const target = diveTargetRef.current
-    if (!target) return
-    diveTargetRef.current = null
-    setDivingIn(false)
-    setSection(target)
-    setActiveNav(target)
-  }
-
-  // Rotate globe to country, show SVG flag, then zoom into it and navigate
-  const centerAndShow = (countryId: number, targetSection: SectionId) => {
-    diveTargetRef.current = targetSection
-    setSection('globe')
-    setCenterRequest({ id: countryId, ts: Date.now() })
-  }
 
   const gold   = '#C89B3C'
   const dimCol = '#AEAEB2'
@@ -182,9 +155,7 @@ export default function App() {
           width: '100%', height: '100%', position: 'relative', background: 'var(--bg)',
           display: section === 'globe' ? 'block' : 'none',
         }}>
-          <Globe onNavigate={navigateTo} centerRequest={centerRequest}
-            isActive={section === 'globe'} interactive={!divingIn}
-            onCentered={handleCentered} onDiveComplete={handleDiveComplete} />
+          <Globe onNavigate={navigateTo} isActive={section === 'globe'} />
 
             <p style={{
               position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',
@@ -230,7 +201,7 @@ export default function App() {
                   72 matchs · Faites vos pronostics
                 </div>
               </div>
-              <button onClick={() => centerAndShow(840, 'paris')} style={{
+              <button onClick={() => navigateTo('paris')} style={{
                 padding: '10px 18px',
                 background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
                 border: 'none', borderRadius: 12, color: '#0D0800', fontSize: 13, fontWeight: 700,
@@ -288,7 +259,7 @@ export default function App() {
         WebkitBackdropFilter: 'saturate(180%) blur(24px)',
         zIndex: 20,
       }}>
-        {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode }, idx) => {
+        {NAV_ITEMS.map(({ id, Icon, label }, idx) => {
           const active    = activeNav === id
           const bottomPx  = FUNNEL_BOTTOM_PX[idx]
           const leftPct   = (idx + 0.5) * 20      // 10%, 30%, 50%, 70%, 90%
@@ -298,9 +269,7 @@ export default function App() {
             <button key={id}
               onClick={() => {
                 setActiveNav(id)
-                if (countryId === null) { setSection('globe'); return }
-                if (!countryCode) { setSection(id); return }
-                centerAndShow(countryId, id)
+                setSection(id)
               }}
               style={{
                 position: 'absolute',
