@@ -425,8 +425,9 @@ function PackOpeningOverlay({
   }
 
   const currentCard = sorted[revealIdx]
-  const isLast      = revealIdx === sorted.length - 1
-  const bestColor   = RARITY_COLOR[sorted[sorted.length - 1].rarity]
+  const isLast      = sorted.length > 0 && revealIdx === sorted.length - 1
+  const bestCard    = sorted[sorted.length - 1]
+  const bestColor   = bestCard ? RARITY_COLOR[bestCard.rarity] : v.badgeColor
 
   return (
     <div style={{
