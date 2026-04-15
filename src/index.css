@@ -30,7 +30,7 @@
 
   /* ── Layout ───────────────────────────────────────────────────── */
   --header-h: 56px;
-  --nav-h:    68px;
+  --nav-h:    100px;
   --radius:   14px;
   --sat: env(safe-area-inset-top,    0px);
   --sab: env(safe-area-inset-bottom, 0px);

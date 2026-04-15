@@ -21,12 +21,15 @@ const NAV_ITEMS: {
   label: string; countryId: number | null
   countryCode?: string; countryName?: string; sectionName?: string
 }[] = [
-  { id: 'globe',      Icon: IconGlobe,  label: 'Globe',      countryId: null },
   { id: 'album',      Icon: IconAlbum,  label: 'Album',      countryId: 724, countryCode: 'es', countryName: 'Espagne',  sectionName: 'Mon Album'   },
   { id: 'packs',      Icon: IconPacks,  label: 'Packs',      countryId: 76,  countryCode: 'br', countryName: 'Brésil',   sectionName: 'Mes Packs'   },
+  { id: 'globe',      Icon: IconGlobe,  label: 'Globe',      countryId: null },
   { id: 'paris',      Icon: IconBolt,   label: 'Paris',      countryId: 840, countryCode: 'us', countryName: 'USA',      sectionName: 'Paris'       },
   { id: 'classement', Icon: IconTrophy, label: 'Classement', countryId: 686, countryCode: 'sn', countryName: 'Sénégal',  sectionName: 'Classement'  },
 ]
+
+// Funnel heights: distance from nav bottom — outer items sit highest on screen
+const FUNNEL_BOTTOM_PX = [52, 28, 6, 28, 52]
 
 export default function App() {
   const [section,     setSection]     = useState<SectionId>('globe')
@@ -250,25 +253,31 @@ export default function App() {
         )}
       </div>
 
-      {/* ── Bottom nav ────────────────────────────────────────── */}
+      {/* ── Bottom nav — funnel shape ─────────────────────────── */}
+      {/* Items are absolutely positioned; outer items sit highest,
+          center Globe sits lowest — creating an entonnoir (V-arc). */}
       <nav style={{
-        flexShrink: 0, height: 'var(--nav-h)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-around',
+        flexShrink: 0,
+        height: 100,
+        position: 'relative',
         background: 'rgba(242,242,247,0.92)',
         borderTop: '1px solid rgba(60,60,67,0.14)',
         backdropFilter: 'saturate(180%) blur(24px)',
         WebkitBackdropFilter: 'saturate(180%) blur(24px)',
         zIndex: 20,
       }}>
-        {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode, countryName, sectionName }) => {
-          const active = section === id
+        {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode, countryName, sectionName }, idx) => {
+          const active     = section === id
+          const bottomPx   = FUNNEL_BOTTOM_PX[idx]
+          const leftPct    = (idx + 0.5) * 20  // 10%, 30%, 50%, 70%, 90%
+          const isGlobe    = id === 'globe'
+
           return (
             <button key={id}
               onClick={() => {
                 if (countryId === null) { setSection('globe'); return }
                 if (!countryCode || !sectionName) { setSection(id); return }
 
-                // Always: show globe, rotate to country, then flash + navigate
                 setSection('globe')
                 setCenterRequest({ id: countryId, ts: Date.now() })
                 setTimeout(() => {
@@ -278,15 +287,20 @@ export default function App() {
                 }, 900)
               }}
               style={{
-                flex: 1, display: 'flex', flexDirection: 'column',
+                position: 'absolute',
+                bottom: bottomPx,
+                left: `${leftPct}%`,
+                transform: 'translateX(-50%)',
+                display: 'flex', flexDirection: 'column',
                 alignItems: 'center', justifyContent: 'center', gap: 3,
                 background: 'none', border: 'none', cursor: 'pointer',
-                padding: '6px 4px', borderRadius: 12, transition: 'opacity 0.15s',
+                padding: '6px 10px', borderRadius: 12,
+                transition: 'opacity 0.15s',
               }}
               onPointerDown={e => (e.currentTarget.style.opacity = '0.45')}
               onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
             >
-              <Icon size={22} color={active ? gold : dimCol} />
+              <Icon size={isGlobe ? 26 : 22} color={active ? gold : dimCol} />
               <span style={{
                 fontSize: 9, fontWeight: 600, letterSpacing: 0.4,
                 color: active ? gold : dimCol, textTransform: 'uppercase',
