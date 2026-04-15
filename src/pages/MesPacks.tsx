@@ -399,7 +399,8 @@ function PackOpeningOverlay({
   )
   const [revealIdx, setRevealIdx] = useState(0)
   const [cardAnim,  setCardAnim]  = useState<'in' | 'idle' | 'out'>('in')
-  const touchRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const touchRef    = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const cardWrapRef = useRef<HTMLDivElement>(null)
 
   // 'in' auto-settles to 'idle' after entrance animation
   useEffect(() => {
@@ -407,6 +408,16 @@ function PackOpeningOverlay({
     const t = setTimeout(() => setCardAnim('idle'), 600)
     return () => clearTimeout(t)
   }, [phase, cardAnim])
+
+  // Prevent the page from scrolling/swiping while touching the card area
+  useEffect(() => {
+    if (phase !== 'reveal') return
+    const el = cardWrapRef.current
+    if (!el) return
+    const prevent = (e: TouchEvent) => e.preventDefault()
+    el.addEventListener('touchmove', prevent, { passive: false })
+    return () => el.removeEventListener('touchmove', prevent)
+  }, [phase])
 
   const advance = useCallback(() => {
     if (cardAnim !== 'idle') return
@@ -441,8 +452,9 @@ function PackOpeningOverlay({
 
       {/* ── Shake / Burst ── */}
       {(phase === 'shake' || phase === 'burst') && (
-        <div style={{ textAlign: 'center', position: 'relative' }}>
+        <div style={{ textAlign: 'center', position: 'relative', overflow: 'visible', width: 280 }}>
           <div style={{
+            overflow: 'visible',
             animation: phase === 'shake'
               ? 'packShake 0.7s ease-in-out'
               : 'packBurst 0.4s ease-out forwards',
@@ -502,13 +514,14 @@ function PackOpeningOverlay({
           </div>
 
           {/* Card stack — current card with ghost cards peeking behind */}
-          <div style={{ position: 'relative', width: 200 }}
+          <div ref={cardWrapRef}
+            style={{ position: 'relative', width: 200, overflow: 'visible' }}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
             onClick={advance}
           >
-            {/* Ghost cards (unrevealed, stacked behind) */}
-            {sorted.slice(revealIdx + 1, revealIdx + 4).map((_, i) => (
+            {/* Ghost cards — each shows the actual rarity color of that card */}
+            {sorted.slice(revealIdx + 1, revealIdx + 4).map((upcomingCard, i) => (
               <div key={i} style={{
                 position: 'absolute',
                 top: (i + 1) * 5,
@@ -518,7 +531,7 @@ function PackOpeningOverlay({
                 transform: `rotate(${(i + 1) * 3}deg)`,
                 pointerEvents: 'none',
               }}>
-                <CardBack type={packType} />
+                <CardBack rarity={upcomingCard.rarity} />
               </div>
             ))}
 
@@ -581,12 +594,10 @@ function PackOpeningOverlay({
 }
 
 // ─── Card Back (face-down ghost card in the stack) ───────────────────────────
-function CardBack({ type }: { type: PackType }) {
-  const v = PACK_VISUALS[type]
+function CardBack({ rarity }: { rarity: Rarity }) {
   return (
-    <div style={{
+    <div className={`card-${rarity}`} style={{
       width: 200, height: 260, borderRadius: 20, overflow: 'hidden',
-      background: v.gradient,
       boxShadow: '0 4px 20px rgba(0,0,0,0.45)',
     }}>
       <div style={{
@@ -628,7 +639,7 @@ function BigRevealCard({
   // Outer wrapper handles animation — NO overflow:hidden so corners are never clipped
   // Inner div handles the visual card with overflow:hidden for content clipping
   return (
-    <div style={{ animation, display: 'inline-block', verticalAlign: 'top' }}>
+    <div style={{ animation, overflow: 'visible' }}>
     <div className={`card-${r}`} style={{
       width: 200, borderRadius: 20, overflow: 'hidden', position: 'relative',
       // Last card: pulsing glow border
