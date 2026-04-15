@@ -49,19 +49,18 @@ const QUALIFIED: Record<number, { conf: string; confRank: number }> = {
   56:  { conf: 'UEFA',     confRank:  4 },  // Belgium
   620: { conf: 'UEFA',     confRank:  5 },  // Portugal
   528: { conf: 'UEFA',     confRank:  6 },  // Netherlands
-  380: { conf: 'UEFA',     confRank:  7 },  // Italy
-  276: { conf: 'UEFA',     confRank:  8 },  // Germany
-  191: { conf: 'UEFA',     confRank:  9 },  // Croatia
-  756: { conf: 'UEFA',     confRank: 10 },  // Switzerland
-  208: { conf: 'UEFA',     confRank: 11 },  // Denmark
-  804: { conf: 'UEFA',     confRank: 12 },  // Ukraine
-  40:  { conf: 'UEFA',     confRank: 13 },  // Austria
-  792: { conf: 'UEFA',     confRank: 14 },  // Turkey
-  688: { conf: 'UEFA',     confRank: 15 },  // Serbia
-  578: { conf: 'UEFA',     confRank: 16 },  // Norway
-  752: { conf: 'UEFA',     confRank: 17 },  // Sweden
-  203: { conf: 'UEFA',     confRank: 18 },  // Czech Republic
-  70:  { conf: 'UEFA',     confRank: 19 },  // Bosnia-Herzegovina
+  276: { conf: 'UEFA',     confRank:  7 },  // Germany
+  191: { conf: 'UEFA',     confRank:  8 },  // Croatia
+  756: { conf: 'UEFA',     confRank:  9 },  // Switzerland
+  208: { conf: 'UEFA',     confRank: 10 },  // Denmark
+  804: { conf: 'UEFA',     confRank: 11 },  // Ukraine
+  40:  { conf: 'UEFA',     confRank: 12 },  // Austria
+  792: { conf: 'UEFA',     confRank: 13 },  // Turkey
+  688: { conf: 'UEFA',     confRank: 14 },  // Serbia
+  578: { conf: 'UEFA',     confRank: 15 },  // Norway
+  752: { conf: 'UEFA',     confRank: 16 },  // Sweden
+  203: { conf: 'UEFA',     confRank: 17 },  // Czech Republic
+  70:  { conf: 'UEFA',     confRank: 18 },  // Bosnia-Herzegovina
   //  CONCACAF — 9 teams
   840: { conf: 'CONCACAF', confRank: 1 },  // USA          ← featured
   484: { conf: 'CONCACAF', confRank: 2 },  // Mexico
@@ -105,7 +104,7 @@ const FLAG_CODE: Record<number, string> = {
   32: 'ar', 76: 'br', 170: 'co', 858: 'uy', 218: 'ec', 600: 'py', 862: 've',
   // UEFA
   250: 'fr', 724: 'es', 826: 'gb-eng', 56: 'be', 620: 'pt', 528: 'nl',
-  380: 'it', 276: 'de', 191: 'hr', 756: 'ch', 208: 'dk', 804: 'ua',
+  276: 'de', 191: 'hr', 756: 'ch', 208: 'dk', 804: 'ua',
   40: 'at', 792: 'tr', 688: 'rs', 578: 'no', 752: 'se', 203: 'cz', 70: 'ba',
   // CONCACAF
   840: 'us', 484: 'mx', 124: 'ca', 188: 'cr', 591: 'pa', 388: 'jm',
@@ -130,9 +129,17 @@ const CONF_CENTER: Record<string, [number, number]> = {
   OFC:      [170, -25],
 }
 
+// Which app section each confederation links to (only confs with a section)
+const CONF_SECTION: Record<string, { sectionId: string; sectionName: string; icon: string }> = {
+  CONMEBOL: { sectionId: 'packs',      sectionName: 'Mes Packs',   icon: '📦' },
+  UEFA:     { sectionId: 'album',      sectionName: 'Mon Album',   icon: '📖' },
+  CONCACAF: { sectionId: 'paris',      sectionName: 'Paris 2026',  icon: '⚡' },
+  CAF:      { sectionId: 'classement', sectionName: 'Classement',  icon: '🏆' },
+}
+
 // Total teams per confederation (for normalising the rank factor)
 const CONF_TOTAL: Record<string, number> = {
-  CONMEBOL: 7, UEFA: 19, CONCACAF: 9, AFC: 9, CAF: 12, OFC: 1,
+  CONMEBOL: 7, UEFA: 18, CONCACAF: 9, AFC: 9, CAF: 12, OFC: 1,
 }
 
 function landColor(numericId: number): string {
@@ -187,8 +194,10 @@ function shortestPath(from: number, to: number): number {
 export default function Globe({ onNavigate, isActive, continentRequest, onContinentShown }: GlobeProps) {
   const containerRef    = useRef<HTMLDivElement>(null)
   const svgRef          = useRef<SVGSVGElement>(null)
-  const [popup,    setPopup]    = useState<PopupState | null>(null)
-  const [isLoaded, setIsLoaded] = useState(false)
+  const [popup,              setPopup]              = useState<PopupState | null>(null)
+  const [isLoaded,           setIsLoaded]           = useState(false)
+  const [continentPopup,     setContinentPopup]     = useState<{ conf: string } | null>(null)
+  const [continentPopupVis,  setContinentPopupVis]  = useState(false)
   // true once the container has valid pixel dimensions — guards D3 init
   const [ready,    setReady]    = useState(false)
 
@@ -227,6 +236,7 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
     const continentPrev = continentCountriesRef.current.slice()
     setPopupSync(null)
     continentCountriesRef.current = []
+    setContinentPopup(null)
     if (svgRef.current) {
       const svg = d3.select(svgRef.current)
       svg.select('.g-flags').selectAll('*').remove()
@@ -260,6 +270,13 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
       diveAnimRef.current     = null
     }
   }, [isActive, handleClose])
+
+  // Drive the slide-up transition: mount invisible → tiny delay → visible
+  useEffect(() => {
+    if (!continentPopup) { setContinentPopupVis(false); return }
+    const t = setTimeout(() => setContinentPopupVis(true), 80)
+    return () => clearTimeout(t)
+  }, [continentPopup])
 
   useEffect(() => {
     if (!continentRequest) return
@@ -617,6 +634,7 @@ setIsLoaded(true)
                   .map(([id]) => parseInt(id))
                 continentCountriesRef.current = ids
                 applyContinent(conf, ids, featuresRef.current, geoPath, gFtCountry, gFlags, defs)
+                setContinentPopup({ conf })
                 // Only auto-navigate when triggered from a nav bar click
                 if (fromNav) onContinentShownRef.current?.()
               } else if (countryId !== undefined && feat) {
@@ -862,6 +880,81 @@ setIsLoaded(true)
           />
         </div>
       )}
+
+      {/* Continent popup — compact card, slides up from bottom */}
+      {continentPopup && CONF_SECTION[continentPopup.conf] && (() => {
+        const sec  = CONF_SECTION[continentPopup.conf]
+        const [r, g, b] = CONF_COLOR[continentPopup.conf] ?? [200, 155, 60]
+        const confHex   = `rgb(${r},${g},${b})`
+        return (
+          <div style={{
+            position: 'absolute',
+            bottom: 20,
+            left: '50%',
+            transform: continentPopupVis
+              ? 'translateX(-50%) translateY(0) scale(1)'
+              : 'translateX(-50%) translateY(24px) scale(0.94)',
+            opacity: continentPopupVis ? 1 : 0,
+            transition: 'opacity 0.38s cubic-bezier(0.34,1.15,0.64,1), transform 0.38s cubic-bezier(0.34,1.15,0.64,1)',
+            zIndex: 60,
+            pointerEvents: continentPopupVis ? 'auto' : 'none',
+          }}>
+            <div style={{
+              position: 'relative',
+              background: 'rgba(8,18,38,0.90)',
+              border: `1.5px solid rgba(${r},${g},${b},0.40)`,
+              borderRadius: 20,
+              overflow: 'hidden',
+              boxShadow: '0 12px 40px rgba(0,0,0,0.50), 0 2px 8px rgba(0,0,0,0.25)',
+              backdropFilter: 'blur(24px)',
+              display: 'flex', alignItems: 'center', gap: 14,
+              padding: '14px 16px 14px 18px',
+              whiteSpace: 'nowrap',
+            }}>
+              {/* Color accent strip at top */}
+              <div style={{
+                position: 'absolute', top: 0, left: 0, right: 0, height: 4,
+                background: `linear-gradient(90deg, ${confHex}, rgba(${r},${g},${b},0.45))`,
+              }} />
+
+              {/* Icon + labels */}
+              <span style={{ fontSize: 24, lineHeight: 1 }}>{sec.icon}</span>
+              <div>
+                <div style={{
+                  fontSize: 9, fontWeight: 700, letterSpacing: 1.8,
+                  color: `rgba(${r},${g},${b},0.85)`, textTransform: 'uppercase', marginBottom: 2,
+                }}>
+                  {continentPopup.conf}
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>
+                  {sec.sectionName}
+                </div>
+              </div>
+
+              {/* CTA button */}
+              <button
+                onClick={() => {
+                  setContinentPopup(null)
+                  onNavigateRef.current(sec.sectionId)
+                }}
+                onPointerDown={e => (e.currentTarget.style.opacity = '0.75')}
+                onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
+                style={{
+                  padding: '10px 18px',
+                  background: `linear-gradient(135deg, ${confHex}, rgba(${r},${g},${b},0.72))`,
+                  border: 'none', borderRadius: 12,
+                  color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  boxShadow: `0 4px 14px rgba(${r},${g},${b},0.35)`,
+                  transition: 'opacity 0.12s',
+                  flexShrink: 0,
+                }}
+              >
+                Explorer →
+              </button>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
