@@ -20,7 +20,6 @@ const RARITY_LABEL: Record<Rarity, string> = {
 
 // ─── Pack visual config ───────────────────────────────────────────────────────
 const PACK_VISUALS: Record<PackType, {
-  emoji: string
   gradient: string
   glow: string
   badgeColor: string
@@ -28,7 +27,6 @@ const PACK_VISUALS: Record<PackType, {
   borderColor: string
 }> = {
   starter: {
-    emoji: '📦',
     gradient: 'linear-gradient(145deg, #c9a364 0%, #a17d44 50%, #8c6a34 100%)',
     glow: 'rgba(201,163,100,0.35)',
     badgeColor: '#b08d4c',
@@ -36,7 +34,6 @@ const PACK_VISUALS: Record<PackType, {
     borderColor: '#b08d4c',
   },
   pro: {
-    emoji: '✨',
     gradient: 'linear-gradient(145deg, #ffd700 0%, #daa520 35%, #b8860b 70%, #daa520 100%)',
     glow: 'rgba(255,215,0,0.35)',
     badgeColor: '#daa520',
@@ -44,7 +41,6 @@ const PACK_VISUALS: Record<PackType, {
     borderColor: '#e8c32a',
   },
   superstar: {
-    emoji: '💥',
     gradient: 'linear-gradient(145deg, #ff1744 0%, #d50000 30%, #ff1744 50%, #ff6f00 70%, #ff1744 100%)',
     glow: 'rgba(255,23,68,0.50)',
     badgeColor: '#ff1744',
@@ -53,9 +49,107 @@ const PACK_VISUALS: Record<PackType, {
   },
 }
 
-// ─── Helper ───────────────────────────────────────────────────────────────────
-function posIcon(pos: string) {
-  return pos === 'GK' ? '🧤' : pos === 'DEF' ? '🛡️' : pos === 'MID' ? '🎯' : '⚡'
+// ─── Card Stack — fan of 3 player cards (replaces box emoji) ─────────────────
+function CardStack({ type, scale = 1 }: { type: PackType; scale?: number }) {
+  const palettes: Record<PackType, [string, string, string, string]> = {
+    //                 back-left  back-right  front      shine
+    starter:   ['#4A2C14', '#8C6034', '#C9A364', 'rgba(255,220,150,0.25)'],
+    pro:       ['#5A420E', '#9C7A20', '#E8C040', 'rgba(255,245,150,0.30)'],
+    superstar: ['#520010', '#960020', '#FF2040', 'rgba(255,120,80,0.32)'],
+  }
+  const [c0, c1, c2, shine] = palettes[type]
+  const W = 88, H = 76, cW = 46, cH = 64, cR = 7
+  const cx = cW / 2  // 23
+  const cy = cH / 2  // 32
+
+  return (
+    <svg
+      width={W * scale} height={H * scale}
+      viewBox={`0 0 ${W} ${H}`}
+      fill="none"
+      style={{ flexShrink: 0, display: 'block' }}
+    >
+      {/* ── Back-left card ── */}
+      <g transform={`translate(2,10) rotate(-13,${cx},${cy})`}>
+        <rect width={cW} height={cH} rx={cR} fill={c0} />
+        <rect x={3} y={3} width={cW - 6} height={cH - 6} rx={cR - 2}
+          stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+      </g>
+
+      {/* ── Back-right card ── */}
+      <g transform={`translate(40,8) rotate(9,${cx},${cy})`}>
+        <rect width={cW} height={cH} rx={cR} fill={c1} />
+        <rect x={3} y={3} width={cW - 6} height={cH - 6} rx={cR - 2}
+          stroke="rgba(255,255,255,0.11)" strokeWidth="1" />
+        <text x="7" y="19" fontFamily="'Bebas Neue',cursive" fontSize="15"
+          fill="rgba(255,255,255,0.45)">--</text>
+      </g>
+
+      {/* ── Front card ── */}
+      <g transform="translate(21,4)">
+        <rect width={cW} height={cH} rx={cR} fill={c2} />
+        {/* Top shine */}
+        <rect width={cW} height={cH * 0.44} rx={cR} fill={shine} />
+        {/* Inner border */}
+        <rect x={3} y={3} width={cW - 6} height={cH - 6} rx={cR - 2}
+          stroke="rgba(255,255,255,0.28)" strokeWidth="1" />
+        {/* Rating */}
+        <text x="7" y="20" fontFamily="'Bebas Neue',cursive" fontSize="17"
+          fill="rgba(255,255,255,0.92)">--</text>
+        {/* Per-type symbol */}
+        {type === 'starter' && (
+          // Shield
+          <path d="M9,20 L37,20 L37,36 Q37,52 23,56 Q9,52 9,36 Z"
+            fill="rgba(255,255,255,0.14)" />
+        )}
+        {type === 'pro' && (
+          // 5-point star
+          <polygon
+            points="23,28 25.6,35.4 32.5,35.9 27.3,40.4 28.9,47.1 23,43.5 17.1,47.1 18.7,40.4 13.5,35.9 20.4,35.4"
+            fill="rgba(255,255,255,0.17)" />
+        )}
+        {type === 'superstar' && (
+          // Lightning bolt
+          <path d="M26,16 L14,38 H22 L20,54 L32,33 H24 Z"
+            fill="rgba(255,255,255,0.20)" />
+        )}
+        {/* Bottom name bar */}
+        <rect x={3} y={cH - 17} width={cW - 6} height={13} rx={3}
+          fill="rgba(0,0,0,0.22)" />
+      </g>
+    </svg>
+  )
+}
+
+// ─── Position icon — geometric SVG (no emoji) ─────────────────────────────────
+function PosIcon({ pos, size = 22 }: { pos: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 22 22" fill="none">
+      {pos === 'GK' && (
+        // Goal post
+        <>
+          <rect x="1" y="5" width="20" height="2.5" rx="1.2" fill="rgba(255,255,255,0.82)" />
+          <rect x="1" y="5" width="2.5" height="13" rx="1.2" fill="rgba(255,255,255,0.82)" />
+          <rect x="18.5" y="5" width="2.5" height="13" rx="1.2" fill="rgba(255,255,255,0.82)" />
+        </>
+      )}
+      {pos === 'DEF' && (
+        // Shield
+        <path d="M11 2 L19 5.5 L19 12 Q19 18.5 11 21 Q3 18.5 3 12 L3 5.5 Z"
+          fill="rgba(255,255,255,0.78)" />
+      )}
+      {pos === 'MID' && (
+        // Hexagon
+        <polygon points="11,2 18.5,6.25 18.5,15.75 11,20 3.5,15.75 3.5,6.25"
+          fill="rgba(255,255,255,0.78)" />
+      )}
+      {(pos === 'ATT' || (pos !== 'GK' && pos !== 'DEF' && pos !== 'MID')) && (
+        // Lightning bolt
+        <path d="M13 2 L5 12 H10 L9 20 L17 10 H12 Z"
+          fill="rgba(255,255,255,0.88)" />
+      )}
+    </svg>
+  )
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -65,7 +159,6 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
   const [openingType, setOpeningType] = useState<PackType | null>(null)
   const [revealCards, setRevealCards] = useState<typeof DEMO_CARDS>([])
 
-  // Refresh coin count when re-entering
   useEffect(() => { setCoins(getCollection().coins) }, [])
 
   const configs = getPackConfigs()
@@ -77,11 +170,9 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
     setOpeningType(type)
     setPhase('shake')
 
-    // shake → burst → reveal
     setTimeout(() => setPhase('burst'),  700)
     setTimeout(() => {
       const rawCards = openPack(type)
-      // Build display cards
       let displayCards: typeof DEMO_CARDS
       if (rawCards.length > 0) {
         displayCards = rawCards.map((c: OwnedCard) => {
@@ -91,7 +182,6 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
             : { name: '???', position: 'ATT', rarity: 'bronze' as Rarity, rating: 70, trait: 'Mystère' }
         })
       } else {
-        // Player database empty — show demo preview cards for the selected pack rarity
         displayCards = DEMO_CARDS
       }
       setRevealCards(displayCards)
@@ -106,7 +196,6 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
     setRevealCards([])
   }
 
-  // Add free coins (dev helper button — shown only when coins < 500)
   const addCoins = () => {
     const s = getCollection()
     s.coins += 5000
@@ -150,12 +239,12 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
         </div>
       )}
 
-      {/* Pack grid */}
+      {/* Pack list */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {configs.map(config => {
-          const v       = PACK_VISUALS[config.type]
+          const v         = PACK_VISUALS[config.type]
           const canAfford = coins >= config.price
-          const proba   = config.probabilities
+          const proba     = config.probabilities
 
           return (
             <div key={config.type} style={{
@@ -165,19 +254,21 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
               opacity: canAfford ? 1 : 0.6,
               transition: 'all 0.2s',
             }}>
-              {/* Top: gradient pack art */}
+              {/* Top: gradient band with card-stack art */}
               <div style={{
                 background: v.gradient,
-                padding: '20px 20px 16px',
+                padding: '18px 18px 14px',
                 display: 'flex', alignItems: 'center', gap: 16,
               }}>
-                <div style={{ fontSize: 52, lineHeight: 1, flexShrink: 0 }}>{v.emoji}</div>
-                <div style={{ flex: 1 }}>
+                {/* Card stack replaces the old emoji */}
+                <CardStack type={config.type} />
+
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
                     display: 'inline-block',
                     padding: '2px 8px', borderRadius: 6,
-                    background: 'rgba(0,0,0,0.2)', marginBottom: 4,
-                    fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: 'rgba(255,255,255,0.9)',
+                    background: 'rgba(0,0,0,0.22)', marginBottom: 5,
+                    fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: 'rgba(255,255,255,0.92)',
                   }}>
                     {v.badgeText}
                   </div>
@@ -188,10 +279,11 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
                   }}>
                     {config.name}
                   </div>
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 4 }}>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.72)', marginTop: 4 }}>
                     {config.description}
                   </div>
                 </div>
+
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
                   <div style={{
                     fontFamily: "'Bebas Neue', cursive", fontSize: 28,
@@ -212,7 +304,6 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
                 padding: '12px 16px',
                 display: 'flex', alignItems: 'center', gap: 10,
               }}>
-                {/* Rarity pills */}
                 <div style={{ display: 'flex', gap: 5, flex: 1, flexWrap: 'wrap' }}>
                   {(['carnage', 'gold', 'silver', 'bronze'] as Rarity[]).map(r => (
                     <div key={r} style={{
@@ -230,7 +321,6 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
                   ))}
                 </div>
 
-                {/* Open button */}
                 <button
                   onClick={() => canAfford && handleOpen(config.type)}
                   disabled={!canAfford}
@@ -262,7 +352,7 @@ export default function MesPacks({ onBack }: { onBack: () => void }) {
         borderRadius: 14, textAlign: 'center',
       }}>
         <div style={{ fontSize: 11, color: 'var(--text-3)' }}>
-          💡 Fais des pronostics corrects pour gagner des pièces
+          Fais des pronostics corrects pour gagner des pièces
         </div>
       </div>
 
@@ -298,19 +388,18 @@ function PackOpeningOverlay({
       alignItems: 'center', justifyContent: 'center', gap: 24,
       animation: 'fadeIn 0.25s ease',
     }}>
-      {/* Phase: shake / burst */}
+      {/* Phase: shake / burst — animated card stack */}
       {(phase === 'shake' || phase === 'burst') && (
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center', position: 'relative' }}>
           <div style={{
-            fontSize: 100, lineHeight: 1,
             animation: phase === 'shake'
               ? 'packShake 0.7s ease-in-out'
               : 'packBurst 0.4s ease-out forwards',
           }}>
-            {v.emoji}
+            <CardStack type={packType} scale={2.0} />
           </div>
           <div style={{
-            marginTop: 20, fontSize: 14, fontWeight: 700, letterSpacing: 2,
+            marginTop: 28, fontSize: 13, fontWeight: 700, letterSpacing: 2.5,
             color: v.badgeColor, textTransform: 'uppercase',
           }}>
             Ouverture…
@@ -319,7 +408,7 @@ function PackOpeningOverlay({
           <div style={{
             position: 'absolute', left: '50%', top: '50%',
             transform: 'translate(-50%,-50%)',
-            width: 200, height: 200, borderRadius: '50%',
+            width: 220, height: 220, borderRadius: '50%',
             background: `radial-gradient(circle, ${v.glow} 0%, transparent 70%)`,
             pointerEvents: 'none',
             animation: 'fadeIn 0.3s ease',
@@ -337,7 +426,6 @@ function PackOpeningOverlay({
             {cards.length} nouvelle{cards.length > 1 ? 's' : ''} carte{cards.length > 1 ? 's' : ''} !
           </div>
 
-          {/* Cards */}
           <div style={{
             display: 'flex', gap: 10, flexWrap: 'wrap',
             justifyContent: 'center', maxWidth: 380, padding: '0 16px',
@@ -383,7 +471,7 @@ function RevealedCard({
       animation: `cardReveal 0.5s cubic-bezier(0.34,1.56,0.64,1) ${delay}ms both`,
       position: 'relative',
     }}>
-      {/* Top bar */}
+      {/* Top bar: rating + rarity */}
       <div style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         padding: '6px 8px 3px',
@@ -398,19 +486,18 @@ function RevealedCard({
         }}>{RARITY_LABEL[r]}</span>
       </div>
 
-      {/* Icon */}
+      {/* Position icon badge */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '3px 8px 5px',
       }}>
         <div style={{
           width: 40, height: 40, borderRadius: '50%',
-          background: 'rgba(255,255,255,0.18)',
-          border: '2px solid rgba(255,255,255,0.3)',
+          background: 'rgba(255,255,255,0.15)',
+          border: '2px solid rgba(255,255,255,0.28)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 18,
         }}>
-          {posIcon(card.position)}
+          <PosIcon pos={card.position} size={22} />
         </div>
       </div>
 
