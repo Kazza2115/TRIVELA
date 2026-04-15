@@ -255,22 +255,20 @@ export default function App() {
 
       {/* ── Bottom nav — funnel shape ─────────────────────────── */}
       {/* Items are absolutely positioned; outer items sit highest,
-          center Globe sits lowest — creating an entonnoir (V-arc). */}
+          center Globe sits lowest — creating an entonnoir (V-arc).
+          Each item has its own individual card — no continuous bar. */}
       <nav style={{
         flexShrink: 0,
         height: 100,
         position: 'relative',
-        background: 'rgba(242,242,247,0.92)',
-        borderTop: '1px solid rgba(60,60,67,0.14)',
-        backdropFilter: 'saturate(180%) blur(24px)',
-        WebkitBackdropFilter: 'saturate(180%) blur(24px)',
         zIndex: 20,
+        // No shared background — items each carry their own card
       }}>
         {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode, countryName, sectionName }, idx) => {
-          const active     = section === id
-          const bottomPx   = FUNNEL_BOTTOM_PX[idx]
-          const leftPct    = (idx + 0.5) * 20  // 10%, 30%, 50%, 70%, 90%
-          const isGlobe    = id === 'globe'
+          const active  = section === id
+          const bottomPx = FUNNEL_BOTTOM_PX[idx]
+          const leftPct  = (idx + 0.5) * 20  // 10%, 30%, 50%, 70%, 90%
+          const isGlobe  = id === 'globe'
 
           return (
             <button key={id}
@@ -291,11 +289,25 @@ export default function App() {
                 bottom: bottomPx,
                 left: `${leftPct}%`,
                 transform: 'translateX(-50%)',
+                width: 62,
                 display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center', gap: 3,
-                background: 'none', border: 'none', cursor: 'pointer',
-                padding: '6px 10px', borderRadius: 12,
-                transition: 'opacity 0.15s',
+                alignItems: 'center', justifyContent: 'center', gap: 4,
+                // Individual card per item
+                background: active
+                  ? 'rgba(200,155,60,0.10)'
+                  : 'rgba(242,242,247,0.94)',
+                border: active
+                  ? `1px solid ${gold}55`
+                  : '1px solid rgba(60,60,67,0.13)',
+                borderRadius: 14,
+                backdropFilter: 'saturate(180%) blur(20px)',
+                WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+                boxShadow: active
+                  ? `0 2px 10px ${gold}22`
+                  : '0 1px 6px rgba(0,0,0,0.07)',
+                cursor: 'pointer',
+                padding: '8px 4px 7px',
+                transition: 'opacity 0.15s, background 0.2s, border-color 0.2s, box-shadow 0.2s',
               }}
               onPointerDown={e => (e.currentTarget.style.opacity = '0.45')}
               onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
@@ -306,7 +318,6 @@ export default function App() {
                 color: active ? gold : dimCol, textTransform: 'uppercase',
                 transition: 'color 0.2s',
               }}>{label}</span>
-              {active && <div style={{ width: 16, height: 2, borderRadius: 1, background: gold }} />}
             </button>
           )
         })}
