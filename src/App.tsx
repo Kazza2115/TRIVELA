@@ -268,15 +268,16 @@ export default function App() {
         zIndex: 20,
       }}>
         {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode, countryName, sectionName }, idx) => {
-          const active  = activeNav === id
-          const bottomPx = FUNNEL_BOTTOM_PX[idx]
-          const leftPct  = (idx + 0.5) * 20  // 10%, 30%, 50%, 70%, 90%
-          const isGlobe  = id === 'globe'
+          const active    = activeNav === id
+          const onGlobe   = section === 'globe'   // glass card only when globe bg is dark
+          const bottomPx  = FUNNEL_BOTTOM_PX[idx]
+          const leftPct   = (idx + 0.5) * 20      // 10%, 30%, 50%, 70%, 90%
+          const isGlobe   = id === 'globe'
 
           return (
             <button key={id}
               onClick={() => {
-                setActiveNav(id)   // update indicator immediately, before any animation
+                setActiveNav(id)
                 if (countryId === null) { setSection('globe'); return }
                 if (!countryCode || !sectionName) { setSection(id); return }
 
@@ -293,22 +294,22 @@ export default function App() {
                 bottom: bottomPx,
                 left: `${leftPct}%`,
                 transform: 'translateX(-50%)',
-                width: 62,
+                width: 64,
                 display: 'flex', flexDirection: 'column',
                 alignItems: 'center', justifyContent: 'center', gap: 4,
-                // Individual card per item
+                // On globe (dark bg): glass card. On other pages: invisible card, just icon+label
                 background: active
                   ? 'rgba(200,155,60,0.10)'
-                  : 'rgba(242,242,247,0.94)',
+                  : onGlobe ? 'rgba(242,242,247,0.94)' : 'transparent',
                 border: active
                   ? `1px solid ${gold}55`
-                  : '1px solid rgba(60,60,67,0.13)',
+                  : onGlobe ? '1px solid rgba(60,60,67,0.13)' : 'none',
                 borderRadius: 14,
-                backdropFilter: 'saturate(180%) blur(20px)',
-                WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+                backdropFilter: onGlobe || active ? 'saturate(180%) blur(20px)' : 'none',
+                WebkitBackdropFilter: onGlobe || active ? 'saturate(180%) blur(20px)' : 'none',
                 boxShadow: active
                   ? `0 2px 10px ${gold}22`
-                  : '0 1px 6px rgba(0,0,0,0.07)',
+                  : onGlobe ? '0 1px 6px rgba(0,0,0,0.07)' : 'none',
                 cursor: 'pointer',
                 padding: '8px 4px 7px',
                 transition: 'opacity 0.15s, background 0.2s, border-color 0.2s, box-shadow 0.2s',
@@ -318,9 +319,11 @@ export default function App() {
             >
               <Icon size={isGlobe ? 26 : 22} color={active ? gold : dimCol} />
               <span style={{
-                fontSize: 9, fontWeight: 600, letterSpacing: 0.4,
+                fontSize: 8, fontWeight: 600, letterSpacing: 0.3,
                 color: active ? gold : dimCol, textTransform: 'uppercase',
                 transition: 'color 0.2s',
+                maxWidth: 60, overflow: 'hidden',
+                textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>{label}</span>
             </button>
           )
