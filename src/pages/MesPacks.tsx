@@ -439,6 +439,7 @@ function PackOpeningOverlay({
   const isLast      = sorted.length > 0 && revealIdx === sorted.length - 1
   const bestCard    = sorted[sorted.length - 1]
   const bestColor   = bestCard ? RARITY_COLOR[bestCard.rarity] : v.badgeColor
+  const numGhosts   = Math.min(sorted.length - revealIdx - 1, 3)
 
   return (
     <div style={{
@@ -480,6 +481,28 @@ function PackOpeningOverlay({
       {/* ── Reveal ── */}
       {phase === 'reveal' && (
         <>
+          {/* Best card incoming badge — always visible from card 1 */}
+          {bestCard && bestCard.rarity !== 'bronze' && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: `${bestColor}1A`, border: `1px solid ${bestColor}50`,
+              borderRadius: 30, padding: '5px 14px', marginBottom: 22,
+            }}>
+              <div style={{
+                width: 8, height: 8, borderRadius: '50%',
+                background: bestColor,
+                boxShadow: `0 0 8px ${bestColor}, 0 0 16px ${bestColor}`,
+                animation: 'dotPulse 1.4s ease-in-out infinite',
+              }}/>
+              <span style={{
+                fontSize: 9, fontWeight: 900, letterSpacing: 2.5,
+                color: bestColor, textTransform: 'uppercase',
+              }}>
+                {RARITY_LABEL[bestCard.rarity]} en approche
+              </span>
+            </div>
+          )}
+
           {/* Rarity indicator row — last dot always pulses (best card visible from card 1) */}
           <div style={{ display: 'flex', gap: 9, alignItems: 'center', marginBottom: 28 }}>
             {sorted.map((c, i) => {
@@ -514,8 +537,13 @@ function PackOpeningOverlay({
           </div>
 
           {/* Card stack — current card with ghost cards peeking behind */}
+          {/* Shift left by half the ghost overhang so the stack stays centered */}
           <div ref={cardWrapRef}
-            style={{ position: 'relative', width: 200, overflow: 'visible' }}
+            style={{
+              position: 'relative', width: 200, overflow: 'visible',
+              transform: `translateX(-${numGhosts * 6.5}px)`,
+              transition: 'transform 0.3s ease',
+            }}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
             onClick={advance}
