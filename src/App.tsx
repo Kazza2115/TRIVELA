@@ -68,7 +68,9 @@ export default function App() {
     code: string; countryName: string; sectionName: string
   } | null>(null)
 
-  const back         = () => setSection('globe')
+  const [activeNav, setActiveNav] = useState<SectionId>('globe')
+
+  const back         = () => { setSection('globe'); setActiveNav('globe') }
   const openAuth     = () => setShowAuth(true)
   const handleAuth   = (user: UserProfile) => { setCurrentUser(user); setShowAuth(false) }
   const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
@@ -90,6 +92,7 @@ export default function App() {
       background: 'var(--bg)',
       display: 'flex', flexDirection: 'column',
       overflow: 'hidden',
+      position: 'relative',                   // needed for absolute nav
       paddingTop: 'var(--sat)', paddingBottom: 'var(--sab)',
       paddingLeft: 'var(--sal)', paddingRight: 'var(--sar)',
     }}>
@@ -149,8 +152,8 @@ export default function App() {
         )}
       </header>
 
-      {/* ── Content ───────────────────────────────────────────── */}
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', zIndex: 1 }}>
+      {/* ── Content ── paddingBottom reserves space above the floating nav */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden', zIndex: 1, paddingBottom: 100 }}>
 
         {/* Globe — always mounted so it never reloads; hidden when in another section */}
         <div style={{
@@ -254,18 +257,18 @@ export default function App() {
       </div>
 
       {/* ── Bottom nav — funnel shape ─────────────────────────── */}
-      {/* Items are absolutely positioned; outer items sit highest,
-          center Globe sits lowest — creating an entonnoir (V-arc).
-          Each item has its own individual card — no continuous bar. */}
+      {/* Nav floats over the content (position absolute) so no grey band shows
+          behind the cards. activeNav tracks what the user tapped immediately,
+          so Globe doesn't flash gold during the 900ms globe-spin transition. */}
       <nav style={{
-        flexShrink: 0,
+        position: 'absolute',
+        bottom: 'var(--sab)',
+        left: 0, right: 0,
         height: 100,
-        position: 'relative',
         zIndex: 20,
-        // No shared background — items each carry their own card
       }}>
         {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode, countryName, sectionName }, idx) => {
-          const active  = section === id
+          const active  = activeNav === id
           const bottomPx = FUNNEL_BOTTOM_PX[idx]
           const leftPct  = (idx + 0.5) * 20  // 10%, 30%, 50%, 70%, 90%
           const isGlobe  = id === 'globe'
@@ -273,6 +276,7 @@ export default function App() {
           return (
             <button key={id}
               onClick={() => {
+                setActiveNav(id)   // update indicator immediately, before any animation
                 if (countryId === null) { setSection('globe'); return }
                 if (!countryCode || !sectionName) { setSection(id); return }
 
