@@ -63,23 +63,18 @@ export default function App() {
     if (dy > 52) setBannerShown(false)
   }
 
-  // ── Dive-in transition ────────────────────────────────────────────────────
-  const [divingIn, setDivingIn] = useState(false)
-
   const [activeNav, setActiveNav] = useState<SectionId>('globe')
 
   const back         = () => { setSection('globe'); setActiveNav('globe') }
   const openAuth     = () => setShowAuth(true)
   const handleAuth   = (user: UserProfile) => { setCurrentUser(user); setShowAuth(false) }
   const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
-  const navigateTo   = (s: string) => setSection(s as SectionId)
+  const navigateTo   = (s: string) => { setSection(s as SectionId); setActiveNav(s as SectionId) }
 
-  // Helper: rotate globe to country then zoom in and navigate
-  const diveToSection = (countryId: number, targetSection: SectionId) => {
+  // Center globe on a country and let the popup appear naturally
+  const centerAndShow = (countryId: number) => {
     setSection('globe')
     setCenterRequest({ id: countryId, ts: Date.now() })
-    setTimeout(() => setDivingIn(true), 520)
-    setTimeout(() => { setDivingIn(false); setSection(targetSection) }, 1020)
   }
 
   const gold   = '#C89B3C'
@@ -161,18 +156,13 @@ export default function App() {
       {/* ── Content ── fills edge-to-edge; nav floats on top via position:absolute */}
       <div style={{ flex: 1, position: 'relative', overflow: 'hidden', zIndex: 1 }}>
 
-        {/* Globe — always mounted; dive-in zoom plays before section switch */}
+        {/* Globe */}
         <div style={{
           width: '100%', height: '100%', position: 'relative', background: 'var(--bg)',
           display: section === 'globe' ? 'block' : 'none',
-          transform: divingIn ? 'scale(2.6)' : 'scale(1)',
-          transition: divingIn ? 'transform 0.5s cubic-bezier(0.55,0,1,1)' : 'none',
-          transformOrigin: 'center center',
-          // Promote to its own compositor layer → CSS scale runs at native 120Hz
-          willChange: 'transform',
         }}>
           <Globe onNavigate={navigateTo} centerRequest={centerRequest}
-            isActive={section === 'globe'} interactive={!divingIn} />
+            isActive={section === 'globe'} />
 
             <p style={{
               position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',
@@ -218,7 +208,7 @@ export default function App() {
                   72 matchs · Faites vos pronostics
                 </div>
               </div>
-              <button onClick={() => diveToSection(840, 'paris')} style={{
+              <button onClick={() => centerAndShow(840)} style={{
                 padding: '10px 18px',
                 background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
                 border: 'none', borderRadius: 12, color: '#0D0800', fontSize: 13, fontWeight: 700,
@@ -276,7 +266,7 @@ export default function App() {
         WebkitBackdropFilter: 'saturate(180%) blur(24px)',
         zIndex: 20,
       }}>
-        {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode, sectionName }, idx) => {
+        {NAV_ITEMS.map(({ id, Icon, label, countryId, countryCode }, idx) => {
           const active    = activeNav === id
           const bottomPx  = FUNNEL_BOTTOM_PX[idx]
           const leftPct   = (idx + 0.5) * 20      // 10%, 30%, 50%, 70%, 90%
@@ -287,8 +277,8 @@ export default function App() {
               onClick={() => {
                 setActiveNav(id)
                 if (countryId === null) { setSection('globe'); return }
-                if (!countryCode || !sectionName) { setSection(id); return }
-                diveToSection(countryId, id)
+                if (!countryCode) { setSection(id); return }
+                centerAndShow(countryId)
               }}
               style={{
                 position: 'absolute',
