@@ -109,6 +109,9 @@ const FLAG_CODE: Record<number, string> = {
   554: 'nz',
 }
 
+// Italy — didn't qualify; gets a special "struggling to light up" flicker
+const ITALY_ID = 380
+
 // Geographic center of each confederation [lon, lat]
 const CONF_CENTER: Record<string, [number, number]> = {
   CONMEBOL: [-58, -15],
@@ -414,9 +417,10 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
     japanGrad.append('stop').attr('offset', '100%').attr('stop-color', '#BC002D')
 
     // ── Layer groups ──────────────────────────────────────────────────
-    const gSphere     = svg.append('g').attr('class', 'g-sphere')
-    const gGrid       = svg.append('g').attr('class', 'g-grid')
-    const gBgCountry  = svg.append('g').attr('class', 'g-bg-countries')
+    const gSphere      = svg.append('g').attr('class', 'g-sphere')
+    const gGrid        = svg.append('g').attr('class', 'g-grid')
+    const gBgCountry   = svg.append('g').attr('class', 'g-bg-countries')
+    const gStruggle    = svg.append('g').attr('class', 'g-struggle')      // Italy flicker
     const gQualCountry = svg.append('g').attr('class', 'g-qual-countries')
     const gFtCountry  = svg.append('g').attr('class', 'g-ft-countries')
     const gFlags      = svg.append('g').attr('class', 'g-flags')
@@ -448,10 +452,14 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
         featuresRef.current = features
 
         // Background countries — only non-qualified merged by color (performance)
+        // Italy (380) is excluded here and rendered separately with its flicker animation.
         const qualifiedIds = new Set(Object.keys(QUALIFIED).map(Number))
         const colorGroups  = new Map<string, any[]>()
         features
-          .filter((d: any) => !FEATURED[parseInt(d.id)] && !qualifiedIds.has(parseInt(d.id)))
+          .filter((d: any) => {
+            const id = parseInt(d.id)
+            return !FEATURED[id] && !qualifiedIds.has(id) && id !== ITALY_ID
+          })
           .forEach((feat: any) => {
             const color = landColor(parseInt(feat.id))
             if (!colorGroups.has(color)) colorGroups.set(color, [])
@@ -467,6 +475,19 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
           .attr('stroke', C.bgStroke)
           .attr('stroke-width', '0.5')
           .attr('d', (d: any) => geoPath(d.geom as any) ?? '')
+
+        // Italy — non-qualified but rendered individually for the flicker animation.
+        // getLargestPolygon keeps only the mainland (drops Sardinia/Sicily from bbox calc).
+        const italyFeat = features.find((f: any) => parseInt(f.id) === ITALY_ID)
+        if (italyFeat) {
+          gStruggle.append('path')
+            .datum(getLargestPolygon(italyFeat))
+            .attr('class', 'italy-struggle')
+            .attr('d', geoPath as any)
+            .attr('fill', 'rgba(118,98,104,0.88)')
+            .attr('stroke', C.bgStroke)
+            .attr('stroke-width', '0.5')
+        }
 
         // Qualified non-FEATURED countries — individually rendered so each is clickable.
         // Use getLargestPolygon so countries like France don't bleed their overseas
@@ -543,6 +564,7 @@ setIsLoaded(true)
             gSphere.select('path').attr('d', geoPath(sphereShape) ?? '')
             gGrid.select('path').attr('d', geoPath as any)
             gBgCountry.selectAll('path').attr('d', (d: any) => geoPath(d.geom as any) ?? '')
+            gStruggle.select('.italy-struggle').attr('d', geoPath as any)
             gQualCountry.selectAll('.qual-country').attr('d', geoPath as any)
             gFtCountry.selectAll('.ft-country').attr('d', geoPath as any)
             gBorders.select('path').attr('d', geoPath as any)
@@ -664,6 +686,7 @@ setIsLoaded(true)
             gSphere.select('path').attr('d', geoPath(sphereShape) ?? '')
             gGrid.select('path').attr('d', geoPath as any)
             gBgCountry.selectAll('path').attr('d', (d: any) => geoPath(d.geom as any) ?? '')
+            gStruggle.select('.italy-struggle').attr('d', geoPath as any)
             gQualCountry.selectAll('.qual-country').attr('d', geoPath as any)
             gFtCountry.selectAll('.ft-country').attr('d', geoPath as any)
             gBorders.select('path').attr('d', geoPath as any)
