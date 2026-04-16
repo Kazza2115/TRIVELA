@@ -481,12 +481,17 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
           .attr('stroke-width', '0.5')
           .attr('d', (d: any) => geoPath(d.geom as any) ?? '')
 
-        // Qualified non-FEATURED countries — individually rendered so each is clickable
+        // Qualified non-FEATURED countries — individually rendered so each is clickable.
+        // Use getLargestPolygon so countries like France don't bleed their overseas
+        // territories (French Guiana, Martinique…) into other continents.
         gQualCountry.selectAll('.qual-country')
-          .data(features.filter((d: any) => {
-            const id = parseInt(d.id)
-            return qualifiedIds.has(id) && !FEATURED[id]
-          }))
+          .data(features
+            .filter((d: any) => {
+              const id = parseInt(d.id)
+              return qualifiedIds.has(id) && !FEATURED[id]
+            })
+            .map((feat: any) => getLargestPolygon(feat))
+          )
           .join('path')
           .attr('class', (d: any) => `qual-country country-${parseInt(d.id)}`)
           .attr('d', geoPath as any)
@@ -501,9 +506,13 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
             if (conf) triggerContinentRef.current(conf)
           })
 
-        // Featured countries — vivid flag colors, click → continent mode
+        // Featured countries — vivid flag colors, click → continent mode.
+        // getLargestPolygon keeps only the mainland (avoids USA showing Alaska/Hawaii).
         gFtCountry.selectAll('.ft-country')
-          .data(features.filter((d: any) => FEATURED[parseInt(d.id)]))
+          .data(features
+            .filter((d: any) => FEATURED[parseInt(d.id)])
+            .map((feat: any) => getLargestPolygon(feat))
+          )
           .join('path')
           .attr('class', (d: any) => `ft-country ft-featured country-${parseInt(d.id)}`)
           .attr('d', geoPath as any)
