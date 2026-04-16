@@ -107,6 +107,8 @@ const FLAG_CODE: Record<number, string> = {
   788: 'tn', 12: 'dz', 288: 'gh', 180: 'cd', 132: 'cv',
   // OFC (1)
   554: 'nz',
+  // Non-qualified — ghost flag for UEFA continent flicker
+  380: 'it',  // Italy
 }
 
 // Italy — didn't qualify; gets a special "struggling to light up" flicker
@@ -643,6 +645,8 @@ setIsLoaded(true)
                 const ids = Object.entries(QUALIFIED)
                   .filter(([, q]) => q.conf === conf)
                   .map(([id]) => parseInt(id))
+                // UEFA: also inject Italy so the RAF loop tracks its ghost flag position
+                if (conf === 'UEFA') ids.push(ITALY_ID)
                 continentCountriesRef.current = ids
                 applyContinent(conf, ids, featuresRef.current, geoPath, gFlags, defs)
                 setContinentPopup({ conf })
@@ -1017,7 +1021,7 @@ function applyContinent(
     defs.append('clipPath').attr('id', `clip-flag-${id}`)
       .append('path').attr('d', pathStr)
 
-    gFlags.append('image')
+    const img = gFlags.append('image')
       .attr('href', `https://flagcdn.com/w640/${code}.png`)
       .attr('x', x0).attr('y', y0)
       .attr('width',  Math.max(x1 - x0, 1))
@@ -1025,8 +1029,24 @@ function applyContinent(
       .attr('preserveAspectRatio', 'xMidYMid slice')
       .attr('clip-path', `url(#clip-flag-${id})`)
       .attr('opacity', 0)
-      .transition().delay(i * 50).duration(500).ease(d3.easeCubicOut)
-      .attr('opacity', 0.92)
+
+    if (id === ITALY_ID) {
+      // Italy didn't qualify — its flag tries to appear last then flickers out
+      const italyDelay = i * 50 + 500   // well after all qualifiers are visible
+      img
+        .transition().delay(italyDelay).duration(600).ease(d3.easeCubicOut)
+        .attr('opacity', 0.85)                                   // monte
+        .transition().duration(160).attr('opacity', 0.08)        // coupe
+        .transition().duration(230).attr('opacity', 0.72)        // scintille
+        .transition().duration(130).attr('opacity', 0.04)        // presque mort
+        .transition().duration(350).attr('opacity', 0.58)        // dernier souffle
+        .transition().duration(520).ease(d3.easeCubicIn)
+        .attr('opacity', 0.00)                                   // éteint
+    } else {
+      img
+        .transition().delay(i * 50).duration(500).ease(d3.easeCubicOut)
+        .attr('opacity', 0.92)
+    }
   })
 }
 
