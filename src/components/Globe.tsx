@@ -230,20 +230,8 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
     if (svgRef.current) {
       const svg = d3.select(svgRef.current)
       svg.select('.g-flags').selectAll('*').remove()
-      if (prev !== null) {
-        svg.select(`defs #clip-flag-${prev}`).remove()
-        svg.select(`.ft-country.country-${prev}`).classed('selected', false)
-          .attr('fill', FEATURED[prev]?.svgFill ?? FEATURED[prev]?.color ?? '')
-          .attr('stroke', 'rgba(0,0,0,0.15)')
-      }
-      continentPrev.forEach(id => {
-        svg.select(`defs #clip-flag-${id}`).remove()
-        if (FEATURED[id]) {
-          svg.select(`.ft-country.country-${id}`).classed('selected', false)
-            .attr('fill', FEATURED[id].svgFill ?? FEATURED[id].color)
-            .attr('stroke', 'rgba(0,0,0,0.15)')
-        }
-      })
+      if (prev !== null) svg.select(`defs #clip-flag-${prev}`).remove()
+      continentPrev.forEach(id => svg.select(`defs #clip-flag-${id}`).remove())
     }
     isRotRef.current = true
   }, [setPopupSync])
@@ -516,9 +504,9 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
           .join('path')
           .attr('class', (d: any) => `ft-country ft-featured country-${parseInt(d.id)}`)
           .attr('d', geoPath as any)
-          .attr('fill',   (d: any) => FEATURED[parseInt(d.id)].svgFill ?? FEATURED[parseInt(d.id)].color)
-          .attr('stroke', 'rgba(0,0,0,0.30)')
-          .attr('stroke-width', '0.7')
+          .attr('fill',   (d: any) => landColor(parseInt(d.id)))
+          .attr('stroke', C.bgStroke)
+          .attr('stroke-width', '0.5')
           .style('cursor', 'pointer')
           .on('click', (_event: MouseEvent, d: any) => {
             if (diveAnimRef.current) return
@@ -635,7 +623,7 @@ setIsLoaded(true)
                   .filter(([, q]) => q.conf === conf)
                   .map(([id]) => parseInt(id))
                 continentCountriesRef.current = ids
-                applyContinent(conf, ids, featuresRef.current, geoPath, gFtCountry, gFlags, defs)
+                applyContinent(conf, ids, featuresRef.current, geoPath, gFlags, defs)
                 setContinentPopup({ conf })
                 // Only auto-navigate when triggered from a nav bar click
                 if (fromNav) onContinentShownRef.current?.()
@@ -987,9 +975,8 @@ function applyContinent(
   countryIds: number[],
   features: any[],
   geoPath: d3.GeoPath,
-  gFtCountry: d3.Selection<SVGGElement, unknown, null, undefined>,
-  gFlags:     d3.Selection<SVGGElement, unknown, null, undefined>,
-  defs:       d3.Selection<SVGDefsElement, unknown, null, undefined>,
+  gFlags: d3.Selection<SVGGElement, unknown, null, undefined>,
+  defs:   d3.Selection<SVGDefsElement, unknown, null, undefined>,
 ) {
   gFlags.selectAll('*').remove()
   countryIds.forEach(id => defs.select(`#clip-flag-${id}`).remove())
@@ -1018,15 +1005,6 @@ function applyContinent(
       .attr('opacity', 0)
       .transition().delay(i * 50).duration(500).ease(d3.easeCubicOut)
       .attr('opacity', 0.92)
-
-    // Brighten FEATURED countries
-    if (FEATURED[id]) {
-      gFtCountry.select(`.country-${id}`)
-        .classed('selected', true)
-        .attr('fill', brighten(FEATURED[id].color))
-        .attr('stroke', 'rgba(255,255,255,0.28)')
-        .attr('stroke-width', '1.5')
-    }
   })
 }
 
