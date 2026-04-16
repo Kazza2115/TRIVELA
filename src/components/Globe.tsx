@@ -30,63 +30,63 @@ const CONF_COLOR: Record<string, [number, number, number]> = {
   OFC:      [6,   182, 212],  // cyan            #06B6D4
 }
 
-// ─── Qualified teams: ISO numeric ID → { conf, confRank } ───────────────────
-// confRank = rank within the confederation (1 = best in that conf).
+// ─── Qualified teams: ISO numeric ID → { conf, fifaRank } ───────────────────
+// fifaRank = FIFA World Ranking (global, lower = better).
 // England + Scotland both → ISO 826 (United Kingdom in world-atlas topojson).
-const QUALIFIED: Record<number, { conf: string; confRank: number }> = {
+const QUALIFIED: Record<number, { conf: string; fifaRank: number }> = {
   //  CONMEBOL — 6 teams
-  32:  { conf: 'CONMEBOL', confRank: 1 },  // Argentina
-  76:  { conf: 'CONMEBOL', confRank: 2 },  // Brazil       ← featured
-  170: { conf: 'CONMEBOL', confRank: 3 },  // Colombia
-  858: { conf: 'CONMEBOL', confRank: 4 },  // Uruguay
-  218: { conf: 'CONMEBOL', confRank: 5 },  // Ecuador
-  600: { conf: 'CONMEBOL', confRank: 6 },  // Paraguay
+  32:  { conf: 'CONMEBOL', fifaRank:   1 },  // Argentina
+  76:  { conf: 'CONMEBOL', fifaRank:   5 },  // Brazil       ← featured
+  170: { conf: 'CONMEBOL', fifaRank:   9 },  // Colombia
+  858: { conf: 'CONMEBOL', fifaRank:  20 },  // Uruguay
+  218: { conf: 'CONMEBOL', fifaRank:  46 },  // Ecuador
+  600: { conf: 'CONMEBOL', fifaRank:  62 },  // Paraguay
   //  UEFA — 15 teams (England + Scotland share ISO 826)
-  250: { conf: 'UEFA',     confRank:  1 },  // France
-  724: { conf: 'UEFA',     confRank:  2 },  // Spain        ← featured
-  826: { conf: 'UEFA',     confRank:  3 },  // England / Scotland
-  56:  { conf: 'UEFA',     confRank:  4 },  // Belgium
-  620: { conf: 'UEFA',     confRank:  5 },  // Portugal
-  528: { conf: 'UEFA',     confRank:  6 },  // Netherlands
-  276: { conf: 'UEFA',     confRank:  7 },  // Germany
-  191: { conf: 'UEFA',     confRank:  8 },  // Croatia
-  756: { conf: 'UEFA',     confRank:  9 },  // Switzerland
-  40:  { conf: 'UEFA',     confRank: 10 },  // Austria
-  792: { conf: 'UEFA',     confRank: 11 },  // Turkey
-  578: { conf: 'UEFA',     confRank: 12 },  // Norway
-  752: { conf: 'UEFA',     confRank: 13 },  // Sweden
-  203: { conf: 'UEFA',     confRank: 14 },  // Czech Republic
-  70:  { conf: 'UEFA',     confRank: 15 },  // Bosnia-Herzegovina
+  250: { conf: 'UEFA',     fifaRank:   2 },  // France
+  724: { conf: 'UEFA',     fifaRank:   3 },  // Spain        ← featured
+  826: { conf: 'UEFA',     fifaRank:   4 },  // England / Scotland
+  56:  { conf: 'UEFA',     fifaRank:   7 },  // Belgium
+  620: { conf: 'UEFA',     fifaRank:   6 },  // Portugal
+  528: { conf: 'UEFA',     fifaRank:   8 },  // Netherlands
+  276: { conf: 'UEFA',     fifaRank:  12 },  // Germany
+  191: { conf: 'UEFA',     fifaRank:  11 },  // Croatia
+  756: { conf: 'UEFA',     fifaRank:  17 },  // Switzerland
+  40:  { conf: 'UEFA',     fifaRank:  25 },  // Austria
+  792: { conf: 'UEFA',     fifaRank:  30 },  // Turkey
+  578: { conf: 'UEFA',     fifaRank:  38 },  // Norway
+  752: { conf: 'UEFA',     fifaRank:  33 },  // Sweden
+  203: { conf: 'UEFA',     fifaRank:  37 },  // Czech Republic
+  70:  { conf: 'UEFA',     fifaRank:  68 },  // Bosnia-Herzegovina
   //  CONCACAF — 6 teams (incl. 3 hosts)
-  840: { conf: 'CONCACAF', confRank: 1 },  // USA          ← featured + host
-  484: { conf: 'CONCACAF', confRank: 2 },  // Mexico       host
-  124: { conf: 'CONCACAF', confRank: 3 },  // Canada       host
-  591: { conf: 'CONCACAF', confRank: 4 },  // Panama
-  332: { conf: 'CONCACAF', confRank: 5 },  // Haiti
-  531: { conf: 'CONCACAF', confRank: 6 },  // Curaçao
+  840: { conf: 'CONCACAF', fifaRank:  14 },  // USA          ← featured + host
+  484: { conf: 'CONCACAF', fifaRank:  18 },  // Mexico       host
+  124: { conf: 'CONCACAF', fifaRank:  43 },  // Canada       host
+  591: { conf: 'CONCACAF', fifaRank:  64 },  // Panama
+  332: { conf: 'CONCACAF', fifaRank:  99 },  // Haiti
+  531: { conf: 'CONCACAF', fifaRank: 128 },  // Curaçao
   //  AFC — 9 teams
-  392: { conf: 'AFC',      confRank: 1 },  // Japan        ← featured
-  410: { conf: 'AFC',      confRank: 2 },  // South Korea
-  36:  { conf: 'AFC',      confRank: 3 },  // Australia
-  364: { conf: 'AFC',      confRank: 4 },  // Iran
-  682: { conf: 'AFC',      confRank: 5 },  // Saudi Arabia
-  634: { conf: 'AFC',      confRank: 6 },  // Qatar
-  400: { conf: 'AFC',      confRank: 7 },  // Jordan
-  368: { conf: 'AFC',      confRank: 8 },  // Iraq
-  860: { conf: 'AFC',      confRank: 9 },  // Uzbekistan
+  392: { conf: 'AFC',      fifaRank:  15 },  // Japan        ← featured
+  410: { conf: 'AFC',      fifaRank:  22 },  // South Korea
+  36:  { conf: 'AFC',      fifaRank:  23 },  // Australia
+  364: { conf: 'AFC',      fifaRank:  21 },  // Iran
+  682: { conf: 'AFC',      fifaRank:  57 },  // Saudi Arabia
+  634: { conf: 'AFC',      fifaRank:  67 },  // Qatar
+  400: { conf: 'AFC',      fifaRank:  89 },  // Jordan
+  368: { conf: 'AFC',      fifaRank:  75 },  // Iraq
+  860: { conf: 'AFC',      fifaRank:  76 },  // Uzbekistan
   //  CAF — 10 teams
-  504: { conf: 'CAF',      confRank:  1 },  // Morocco
-  686: { conf: 'CAF',      confRank:  2 },  // Senegal      ← featured
-  384: { conf: 'CAF',      confRank:  3 },  // Ivory Coast
-  818: { conf: 'CAF',      confRank:  4 },  // Egypt
-  710: { conf: 'CAF',      confRank:  5 },  // South Africa
-  788: { conf: 'CAF',      confRank:  6 },  // Tunisia
-  12:  { conf: 'CAF',      confRank:  7 },  // Algeria
-  288: { conf: 'CAF',      confRank:  8 },  // Ghana
-  180: { conf: 'CAF',      confRank:  9 },  // DR Congo
-  132: { conf: 'CAF',      confRank: 10 },  // Cape Verde
+  504: { conf: 'CAF',      fifaRank:  13 },  // Morocco
+  686: { conf: 'CAF',      fifaRank:  19 },  // Senegal      ← featured
+  384: { conf: 'CAF',      fifaRank:  60 },  // Ivory Coast
+  818: { conf: 'CAF',      fifaRank:  40 },  // Egypt
+  710: { conf: 'CAF',      fifaRank:  56 },  // South Africa
+  788: { conf: 'CAF',      fifaRank:  43 },  // Tunisia
+  12:  { conf: 'CAF',      fifaRank:  48 },  // Algeria
+  288: { conf: 'CAF',      fifaRank:  65 },  // Ghana
+  180: { conf: 'CAF',      fifaRank:  61 },  // DR Congo
+  132: { conf: 'CAF',      fifaRank:  54 },  // Cape Verde
   //  OFC — 1 team
-  554: { conf: 'OFC',      confRank: 1 },  // New Zealand
+  554: { conf: 'OFC',      fifaRank:  96 },  // New Zealand
 }
 
 // ISO-2 flag codes for all qualifying countries (for flagcdn.com)
@@ -127,19 +127,18 @@ const CONF_SECTION: Record<string, { sectionId: string; sectionName: string; ico
   CAF:      { sectionId: 'classement', sectionName: 'Classement',  icon: '🏆' },
 }
 
-// Total teams per confederation (for normalising the rank factor)
-const CONF_TOTAL: Record<string, number> = {
-  CONMEBOL: 6, UEFA: 15, CONCACAF: 6, AFC: 9, CAF: 10, OFC: 1,
-}
+// FIFA rank range across all qualified countries (for global normalisation)
+const _fifaRanks   = Object.values(QUALIFIED).map(q => q.fifaRank)
+const FIFA_RANK_MIN = Math.min(..._fifaRanks)   // 1  (Argentina)
+const FIFA_RANK_MAX = Math.max(..._fifaRanks)   // 128 (Curaçao)
 
 function landColor(numericId: number): string {
   const q = QUALIFIED[numericId]
   if (!q) return 'rgba(128,133,142,0.90)'  // non-qualified: medium slate
-  const total  = CONF_TOTAL[q.conf]
-  // factor 1.0 = #1 in confederation (most vivid), 0.0 = last
-  const factor = total > 1 ? 1 - (q.confRank - 1) / (total - 1) : 1
-  // Mix 30% (weakest) → 70% (strongest) — blended into dark grey base for richer colors
-  const mix    = 0.30 + factor * 0.40
+  // factor 1.0 = best FIFA rank (most vivid), 0.0 = worst rank (most dim)
+  const factor = (FIFA_RANK_MAX - q.fifaRank) / (FIFA_RANK_MAX - FIFA_RANK_MIN)
+  // Mix range 20% (rank 128) → 85% (rank 1) — wide spread for clear visual gradient
+  const mix    = 0.20 + factor * 0.65
   const [r, g, b] = CONF_COLOR[q.conf]
   const wr = Math.round(90  * (1 - mix) + r * mix)
   const wg = Math.round(95  * (1 - mix) + g * mix)
