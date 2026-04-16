@@ -21,22 +21,39 @@ const KO_LABELS: Record<string, string> = {
   sf: 'Demi-finales', '3rd': '3e place', final: 'Finale',
 }
 
-// ─── Bet lockout — 1h30 before kickoff ────────────────────────────────────
+// ─── Time helpers — stored times are UTC, display in Europe/Zurich ───────────
 const FR_MONTHS: Record<string, number> = {
   'Jan': 0, 'Fév': 1, 'Mar': 2, 'Avr': 3, 'Mai': 4, 'Juin': 5,
   'Juil': 6, 'Aoû': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Déc': 11,
 }
-function isMatchLocked(match: Match): boolean {
-  // Parse "12 Juin" + "21:00"
-  const parts = match.date.split(' ')
+
+function parseUTC(dateStr: string, timeStr: string): number | null {
+  const parts = dateStr.split(' ')
   const day   = parseInt(parts[0], 10)
   const mon   = FR_MONTHS[parts[1]?.slice(0, 4).replace('û', 'û')]
     ?? FR_MONTHS[parts[1]?.slice(0, 3)]
     ?? -1
-  if (isNaN(day) || mon === -1) return false
-  const [hh, mm] = match.time.split(':').map(Number)
-  const kickoff  = new Date(2026, mon, day, hh, mm, 0).getTime()
-  return Date.now() >= kickoff - 90 * 60 * 1000
+  if (isNaN(day) || mon === -1) return null
+  const [hh, mm] = timeStr.split(':').map(Number)
+  return Date.UTC(2026, mon, day, hh, mm, 0)
+}
+
+/** Convert a stored UTC time string to Geneva local time (HH:MM, 24h). */
+function toGenevaTime(dateStr: string, timeStr: string): string {
+  const utc = parseUTC(dateStr, timeStr)
+  if (utc === null) return timeStr
+  return new Date(utc).toLocaleTimeString('en-GB', {
+    hour: '2-digit', minute: '2-digit',
+    timeZone: 'Europe/Zurich',
+    hour12: false,
+  })
+}
+
+/** Bet lockout — 1h30 before kickoff (kickoff stored as UTC). */
+function isMatchLocked(match: Match): boolean {
+  const utc = parseUTC(match.date, match.time)
+  if (utc === null) return false
+  return Date.now() >= utc - 90 * 60 * 1000
 }
 
 // ─── Static lookups ────────────────────────────────────────────────────────
@@ -417,8 +434,10 @@ function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm
             border: `1px solid ${locked ? 'rgba(110,110,115,0.25)' : 'rgba(200,155,60,0.25)'}`,
             borderRadius: 5, padding: '1px 5px',
             color: locked ? 'var(--text-3)' : '#A07828', fontWeight: 700,
+            display: 'flex', alignItems: 'baseline', gap: 3,
           }}>
-            {match.time}
+            {toGenevaTime(match.date, match.time)}
+            <span style={{ fontSize: 8, fontWeight: 600, opacity: 0.65 }}>GVA</span>
           </span>
         </span>
       </div>
