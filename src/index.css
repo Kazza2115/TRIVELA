@@ -53,23 +53,6 @@ html, body {
 }
 #root { width: 100%; height: 100%; }
 
-/* ─── Globe: featured country pulsation ──────────────────────────── */
-@keyframes ft-pulse {
-  0%, 100% { opacity: 1;    filter: brightness(1);    }
-  50%      { opacity: 0.65; filter: brightness(1.32); }
-}
-.ft-featured {
-  animation: ft-pulse 2.4s ease-in-out infinite;
-  transform-box: fill-box;
-  transform-origin: center;
-  cursor: pointer;
-}
-/* Selected: stop pulse, stay fully lit */
-.ft-featured.selected {
-  animation: none;
-  opacity: 1;
-  filter: none;
-}
 
 /* ─── Animations ──────────────────────────────────────────────── */
 @keyframes fadeSlideUp {
