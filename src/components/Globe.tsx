@@ -22,12 +22,12 @@ export const FEATURED: Record<number, {
 
 // ─── Confederation palette — matches each featured country's flag color ──────
 const CONF_COLOR: Record<string, [number, number, number]> = {
-  CONMEBOL: [0,   155, 58 ],  // Brazil green  #009B3A
-  UEFA:     [198, 11,  30 ],  // Spain red     #C60B1E
-  CONCACAF: [60,  59,  110],  // USA navy      #3C3B6E
-  AFC:      [188, 0,   45 ],  // Japan crimson #BC002D
-  CAF:      [252, 221, 9  ],  // Senegal gold  #FCDD09
-  OFC:      [6,   182, 212],  // cyan (no featured country)
+  CONMEBOL: [0,   155, 58 ],  // Brazil green   #009B3A
+  UEFA:     [198, 11,  30 ],  // Spain red       #C60B1E
+  CONCACAF: [60,  59,  110],  // USA navy        #3C3B6E
+  AFC:      [240, 125, 15 ],  // saffron orange  #F07D0F
+  CAF:      [252, 221, 9  ],  // Senegal gold    #FCDD09
+  OFC:      [6,   182, 212],  // cyan            #06B6D4
 }
 
 // ─── Qualified teams: ISO numeric ID → { conf, confRank } ───────────────────
