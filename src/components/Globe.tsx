@@ -355,17 +355,41 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
   }, [])
 
   // Wait for the container to have real pixel dimensions before initialising D3.
-  // On some mobile browsers (iOS Safari) the flex layout is not finalised at
-  // mount time, so clientWidth/Height read as 0 → globe appears tiny at top-left.
+  // Root cause of the "tiny globe" bug: on iOS Safari (and occasionally Chrome)
+  // the flex layout hasn't resolved yet when the first useEffect fires.
+  // clientWidth/clientHeight can return a non-zero but wrong small value (e.g. 15 px
+  // height), passing the old ">= 10" guard and initialising D3 with R ≈ 4 px.
+  //
+  // Fix:
+  //  1. getBoundingClientRect() — more reliable than clientWidth/clientHeight
+  //  2. threshold of 100 px — rules out transient partial-layout snapshots
+  //  3. double requestAnimationFrame — defers until the browser has completed
+  //     at least 2 paint frames, by which time flex layout is always settled
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-    if (el.clientWidth >= 10 && el.clientHeight >= 10) { setReady(true); return }
-    const ro = new ResizeObserver(() => {
-      if (el.clientWidth >= 10 && el.clientHeight >= 10) { ro.disconnect(); setReady(true) }
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
+
+    let rafId: number
+    let ro: ResizeObserver | null = null
+
+    const check = () => {
+      const { width, height } = el.getBoundingClientRect()
+      return width >= 100 && height >= 100
+    }
+
+    const tryInit = () => {
+      if (check()) { setReady(true); return }
+      // Still not ready — wait for the first resize that gives real dimensions
+      ro = new ResizeObserver(() => {
+        if (check()) { ro!.disconnect(); ro = null; setReady(true) }
+      })
+      ro.observe(el)
+    }
+
+    // Two RAF frames: first waits for paint, second for layout to fully settle
+    rafId = requestAnimationFrame(() => { rafId = requestAnimationFrame(tryInit) })
+
+    return () => { cancelAnimationFrame(rafId); ro?.disconnect() }
   }, [])
 
   useEffect(() => {
