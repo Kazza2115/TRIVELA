@@ -695,9 +695,10 @@ setIsLoaded(true)
               continentCountriesRef.current.forEach(id => {
                 const selFeat = featuresRef.current.find((f: any) => parseInt(f.id) === id)
                 if (!selFeat) return
-                const pathStr = geoPath(selFeat as any)
+                const mainFeat = getLargestPolygon(selFeat)
+                const pathStr = geoPath(mainFeat as any)
                 if (!pathStr) return
-                const [[fx0, fy0], [fx1, fy1]] = geoPath.bounds(selFeat as any)
+                const [[fx0, fy0], [fx1, fy1]] = geoPath.bounds(mainFeat as any)
                 gFlags.select(`image[clip-path="url(#clip-flag-${id})"]`)
                   .attr('x', fx0).attr('y', fy0)
                   .attr('width',  Math.max(fx1 - fx0, 1))
@@ -963,6 +964,25 @@ setIsLoaded(true)
 }
 
 // ─── Continent flag overlay — show all qualifying country flags at once ───────
+
+/**
+ * For countries like France (includes French Guiana), USA (includes Alaska),
+ * Norway (includes Svalbard), etc., world-atlas returns a MultiPolygon.
+ * We extract the largest polygon (by outer-ring point count) so the flag
+ * is clipped to and positioned over the mainland rather than a bounding box
+ * that spans the whole globe.
+ */
+function getLargestPolygon(feat: any): any {
+  if (feat?.geometry?.type !== 'MultiPolygon') return feat
+  const rings: number[][][][] = feat.geometry.coordinates
+  let maxLen = 0, maxIdx = 0
+  rings.forEach((poly, i) => {
+    const len = poly[0]?.length ?? 0
+    if (len > maxLen) { maxLen = len; maxIdx = i }
+  })
+  return { ...feat, geometry: { type: 'Polygon', coordinates: rings[maxIdx] } }
+}
+
 function applyContinent(
   _conf: string,
   countryIds: number[],
@@ -980,9 +1000,10 @@ function applyContinent(
     if (!code) return
     const feat = features.find((f: any) => parseInt(f.id) === id)
     if (!feat) return
-    const pathStr = geoPath(feat as any)
+    const mainFeat = getLargestPolygon(feat)   // use mainland only (fixes France, USA, …)
+    const pathStr = geoPath(mainFeat as any)
     if (!pathStr) return
-    const [[x0, y0], [x1, y1]] = geoPath.bounds(feat as any)
+    const [[x0, y0], [x1, y1]] = geoPath.bounds(mainFeat as any)
     if (x1 - x0 < 1 || y1 - y0 < 1) return
 
     defs.append('clipPath').attr('id', `clip-flag-${id}`)
