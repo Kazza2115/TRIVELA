@@ -124,12 +124,14 @@ const CONF_CENTER: Record<string, [number, number]> = {
   OFC:      [170, -25],
 }
 
-// Which app section each confederation links to (only confs with a section)
+// Which app section each confederation links to
 const CONF_SECTION: Record<string, { sectionId: string; sectionName: string; icon: string }> = {
   CONMEBOL: { sectionId: 'packs',      sectionName: 'Mes Packs',   icon: '📦' },
   UEFA:     { sectionId: 'album',      sectionName: 'Mon Album',   icon: '📖' },
   CONCACAF: { sectionId: 'paris',      sectionName: 'Paris 2026',  icon: '⚡' },
   CAF:      { sectionId: 'classement', sectionName: 'Classement',  icon: '🏆' },
+  AFC:      { sectionId: 'paris',      sectionName: 'Paris 2026',  icon: '⚡' },
+  OFC:      { sectionId: 'paris',      sectionName: 'Paris 2026',  icon: '⚡' },
 }
 
 // FIFA rank range across all qualified countries (for global normalisation)
@@ -234,7 +236,17 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
     if (svgRef.current) {
       const svg = d3.select(svgRef.current)
       svg.select('.g-flags').selectAll('*').remove()
-      if (prev !== null) svg.select(`defs #clip-flag-${prev}`).remove()
+      if (prev !== null) {
+        svg.select(`defs #clip-flag-${prev}`).remove()
+        // Restore featured country to its normal confederation fill
+        if (FEATURED[prev]) {
+          svg.select(`.ft-country.country-${prev}`)
+            .classed('selected', false)
+            .attr('fill', landColor(prev))
+            .attr('stroke', C.bgStroke)
+            .attr('stroke-width', '0.5')
+        }
+      }
       continentPrev.forEach(id => svg.select(`defs #clip-flag-${id}`).remove())
     }
     isRotRef.current = true
@@ -672,7 +684,7 @@ setIsLoaded(true)
                 // UEFA: also inject Italy so the RAF loop tracks its ghost flag position
                 if (conf === 'UEFA') ids.push(ITALY_ID)
                 continentCountriesRef.current = ids
-                applyContinent(conf, ids, featuresRef.current, geoPath, gFlags, defs)
+                applyContinent(ids, featuresRef.current, geoPath, gFlags, defs)
                 setContinentPopup({ conf })
                 // Only auto-navigate when triggered from a nav bar click
                 if (fromNav) onContinentShownRef.current?.()
@@ -736,6 +748,7 @@ setIsLoaded(true)
                 const pathStr = geoPath(mainFeat as any)
                 if (!pathStr) return
                 const [[fx0, fy0], [fx1, fy1]] = geoPath.bounds(mainFeat as any)
+                if (!isFinite(fx0) || !isFinite(fy0)) return   // country on back hemisphere
                 gFlags.select(`image[clip-path="url(#clip-flag-${id})"]`)
                   .attr('x', fx0).attr('y', fy0)
                   .attr('width',  Math.max(fx1 - fx0, 1))
@@ -831,6 +844,7 @@ setIsLoaded(true)
         velRef.current   = { x: 0, y: 0 }
       } else if (e.touches.length === 2) {
         singleTouchOn = false
+        velRef.current = { x: 0, y: 0 }   // kill drag inertia before pinch
         lastPinchDist = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY,
@@ -1021,7 +1035,6 @@ function getLargestPolygon(feat: any): any {
 }
 
 function applyContinent(
-  _conf: string,
   countryIds: number[],
   features: any[],
   geoPath: d3.GeoPath,
@@ -1040,7 +1053,7 @@ function applyContinent(
     const pathStr = geoPath(mainFeat as any)
     if (!pathStr) return
     const [[x0, y0], [x1, y1]] = geoPath.bounds(mainFeat as any)
-    if (x1 - x0 < 1 || y1 - y0 < 1) return
+    if (!isFinite(x0) || !isFinite(y0) || x1 - x0 < 1 || y1 - y0 < 1) return
 
     defs.append('clipPath').attr('id', `clip-flag-${id}`)
       .append('path').attr('d', pathStr)

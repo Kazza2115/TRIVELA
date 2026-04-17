@@ -9,15 +9,15 @@ type Tab = 'groupes' | 'eliminatoires'
 type Predictions = Record<string, { home: number; away: number }>
 
 const KO_ROUNDS = [
-  { key: 'r32',   label: '8èmes'  },
-  { key: 'r16',   label: 'Quarts' },
-  { key: 'qf',    label: 'Demies' },
-  { key: 'sf',    label: 'Semis'  },
-  { key: 'final', label: 'Finale' },
+  { key: 'r32',   label: 'Tour 32' },
+  { key: 'r16',   label: '8èmes'   },
+  { key: 'qf',    label: 'Quarts'  },
+  { key: 'sf',    label: 'Demies'  },
+  { key: 'final', label: 'Finale'  },
 ] as const
 
 const KO_LABELS: Record<string, string> = {
-  r32: 'Huitièmes', r16: 'Quarts', qf: 'Demi-finales',
+  r32: 'Tour des 32', r16: 'Huitièmes de finale', qf: 'Quarts de finale',
   sf: 'Demi-finales', '3rd': '3e place', final: 'Finale',
 }
 
@@ -30,7 +30,7 @@ const FR_MONTHS: Record<string, number> = {
 function parseUTC(dateStr: string, timeStr: string): number | null {
   const parts = dateStr.split(' ')
   const day   = parseInt(parts[0], 10)
-  const mon   = FR_MONTHS[parts[1]?.slice(0, 4).replace('û', 'û')]
+  const mon   = FR_MONTHS[parts[1]?.slice(0, 4)]
     ?? FR_MONTHS[parts[1]?.slice(0, 3)]
     ?? -1
   if (isNaN(day) || mon === -1) return null
