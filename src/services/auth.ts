@@ -142,22 +142,33 @@ type AuthCallback = (user: UserProfile | null) => void
 /** Subscribe to auth state changes. Returns an unsubscribe function. */
 export function subscribeToAuth(cb: AuthCallback): () => void {
   if (supabaseConfigured && supabase) {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!session) { cb(null); return }
-      const { data: profile } = await supabase!
-        .from('profiles').select('*').eq('id', session.user.id).single()
-      if (!profile) { cb(null); return }
-      cb({
-        id: session.user.id,
-        email: session.user.email ?? '',
-        pseudo: profile.pseudo,
-        countryCode: profile.country_code,
-        countryName: profile.country_name,
-        score: profile.score,
-        createdAt: new Date(profile.created_at as string).getTime(),
+    try {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        try {
+          if (!session) { cb(null); return }
+          const { data: profile } = await supabase!
+            .from('profiles').select('*').eq('id', session.user.id).single()
+          if (!profile) { cb(null); return }
+          cb({
+            id: session.user.id,
+            email: session.user.email ?? '',
+            pseudo: profile.pseudo,
+            countryCode: profile.country_code,
+            countryName: profile.country_name,
+            score: profile.score,
+            createdAt: new Date(profile.created_at as string).getTime(),
+          })
+        } catch (e) {
+          console.error('[Auth] onAuthStateChange callback error:', e)
+          cb(null)
+        }
       })
-    })
-    return () => subscription.unsubscribe()
+      return () => subscription.unsubscribe()
+    } catch (e) {
+      console.error('[Auth] subscribeToAuth error:', e)
+      cb(null)
+      return () => {}
+    }
   }
 
   // localStorage: read synchronously once
