@@ -16,7 +16,7 @@ export default function Classement({ onBack, currentUser, onOpenAuth }: Classeme
   const [players, setPlayers] = useState<UserProfile[]>([])
 
   useEffect(() => {
-    setPlayers(getLeaderboard())
+    getLeaderboard().then(setPlayers)
   }, [currentUser])
 
   const top3   = players.slice(0, 3)

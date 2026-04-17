@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Globe        from './components/Globe'
 import Paris        from './pages/Paris'
 import Classement   from './pages/Classement'
@@ -7,7 +7,7 @@ import MesPacks     from './pages/MesPacks'
 import AuthModal    from './components/AuthModal'
 import ProfileModal from './components/ProfileModal'
 import TrivelaLogo  from './components/TrivelaLogo'
-import { getSession } from './services/auth'
+import { subscribeToAuth } from './services/auth'
 import type { UserProfile } from './services/auth'
 import {
   IconGlobe, IconTrophy, IconPacks, IconAlbum, IconBolt,
@@ -32,9 +32,11 @@ const FUNNEL_BOTTOM_PX = [14, 8, 2, 8, 14]
 
 export default function App() {
   const [section,     setSection]     = useState<SectionId>('globe')
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => getSession())
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
   const [showAuth,    setShowAuth]    = useState(false)
   const [showProfile, setShowProfile] = useState(false)
+
+  useEffect(() => subscribeToAuth(setCurrentUser), [])
 
   // ── Parier banner — smooth swipe-to-dismiss ────────────────────────────────
   // bannerShown drives the CSS transition (always rendered, never unmounted).
@@ -237,7 +239,7 @@ export default function App() {
 
         {section === 'album'      && <MonAlbum  onBack={back} />}
         {section === 'packs'      && <MesPacks  onBack={back} />}
-        {section === 'paris'      && <Paris      onBack={back} currentUser={currentUser} />}
+        {section === 'paris'      && <Paris      onBack={back} currentUser={currentUser} onOpenAuth={openAuth} />}
         {section === 'classement' && (
           <Classement onBack={back} currentUser={currentUser} onOpenAuth={openAuth} />
         )}

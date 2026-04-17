@@ -67,7 +67,11 @@ Object.entries(GROUPS).forEach(([g, teams]) => {
 })
 
 // ─── Component ─────────────────────────────────────────────────────────────
-export default function Paris({ onBack, currentUser }: { onBack: () => void; currentUser: UserProfile | null }) {
+export default function Paris({ onBack, currentUser, onOpenAuth }: {
+  onBack: () => void
+  currentUser: UserProfile | null
+  onOpenAuth: () => void
+}) {
   const [tab,         setTab]         = useState<Tab>('groupes')
   const [activeGroup, setActiveGroup] = useState('A')
   const [koRound,     setKoRound]     = useState<string>('r32')
@@ -100,24 +104,23 @@ export default function Paris({ onBack, currentUser }: { onBack: () => void; cur
     setConfirmed(prev => { const s = new Set(prev); s.delete(id); return s })
   }
 
-  const confirm = (id: string) => {
+  const confirm = async (id: string) => {
+    if (!currentUser) { onOpenAuth(); return }
     setConfirmed(prev => new Set(prev).add(id))
-    if (currentUser) {
-      const match = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES].find(m => m.id === id)
-      if (match) {
-        const pred = predictions[id] ?? { home: 0, away: 0 }
-        saveBet({
-          userId: currentUser.id,
-          matchId: id,
-          home: match.home.name,
-          away: match.away.name,
-          homeScore: pred.home,
-          awayScore: pred.away,
-          stage: match.round === 'group'
-            ? `Groupe ${match.group} · J${match.matchday}`
-            : KO_LABELS[match.round as string] ?? String(match.round),
-        })
-      }
+    const match = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES].find(m => m.id === id)
+    if (match) {
+      const pred = predictions[id] ?? { home: 0, away: 0 }
+      await saveBet({
+        userId: currentUser.id,
+        matchId: id,
+        home: match.home.name,
+        away: match.away.name,
+        homeScore: pred.home,
+        awayScore: pred.away,
+        stage: match.round === 'group'
+          ? `Groupe ${match.group} · J${match.matchday}`
+          : KO_LABELS[match.round as string] ?? String(match.round),
+      })
     }
   }
 
@@ -127,6 +130,39 @@ export default function Paris({ onBack, currentUser }: { onBack: () => void; cur
   return (
     <PageLayout onBack={onBack} accentColor="#C89B3C" flag="🎯" title="PARIS"
       subtitle="Coupe du Monde 2026 · Pronostics">
+
+      {/* ── Auth gate banner ──────────────────────────────────── */}
+      {!currentUser && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          padding: '12px 16px', marginBottom: 16,
+          background: 'rgba(200,155,60,0.07)',
+          border: '1px solid rgba(200,155,60,0.3)',
+          borderRadius: 14,
+        }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#A07828', marginBottom: 2 }}>
+              Connexion requise
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.4 }}>
+              Connectez-vous pour enregistrer vos pronostics.
+            </div>
+          </div>
+          <button onClick={onOpenAuth} style={{
+            flexShrink: 0, padding: '8px 16px',
+            background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
+            border: 'none', borderRadius: 10,
+            color: '#0D0800', fontSize: 12, fontWeight: 700,
+            cursor: 'pointer', boxShadow: '0 2px 8px rgba(200,155,60,0.35)',
+            transition: 'transform 0.12s',
+          }}
+            onPointerDown={e => (e.currentTarget.style.transform = 'scale(0.95)')}
+            onPointerUp={e   => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            Se connecter
+          </button>
+        </div>
+      )}
 
       {/* ── Main tabs ─────────────────────────────────────────── */}
       <div style={{

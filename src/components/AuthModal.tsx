@@ -26,10 +26,9 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
     if (!email.trim() || !password.trim()) { setError('Remplis tous les champs.'); return }
     if (mode === 'register' && !pseudo.trim()) { setError('Choisis un pseudo.'); return }
     setLoading(true)
-    await new Promise(r => setTimeout(r, 320)) // slight delay for UX feel
     const result = mode === 'register'
-      ? register(email.trim(), password, pseudo.trim(), country.code, country.name)
-      : login(email.trim(), password)
+      ? await register(email.trim(), password, pseudo.trim(), country.code, country.name)
+      : await login(email.trim(), password)
     setLoading(false)
     if (result.error) { setError(result.error); return }
     onSuccess(result.user!)

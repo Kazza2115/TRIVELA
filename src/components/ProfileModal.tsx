@@ -12,12 +12,11 @@ export default function ProfileModal({ currentUser, onClose, onLogout }: Profile
   const [bets, setBets] = useState<BetRecord[]>([])
 
   useEffect(() => {
-    setBets(getBets(currentUser.id))
+    getBets(currentUser.id).then(setBets)
   }, [currentUser.id])
 
   const handleLogout = () => {
-    logout()
-    onLogout()
+    logout().then(onLogout)
   }
 
   return (
