@@ -25,7 +25,71 @@ export interface BetRecord {
   createdAt: number
 }
 
-// ─── localStorage fallback (dev / no Supabase env vars) ──────────────────────
+// ─── Supabase constants ───────────────────────────────────────────────────────
+
+const SUPA_URL  = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
+const SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpdmN3dHp6aHJzZGZ6eGlyamt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0MjM2MTMsImV4cCI6MjA5MTk5OTYxM30.BUfzNXfEobrz4CSeyBSj3I8To4F1eR-7AktC_kZfsO8'
+const JWT_KEY   = 'trivela-jwt'
+
+// ─── JWT store — bypasses Supabase JS client lock issues ─────────────────────
+
+let _jwt: string | null = null
+
+// Restore JWT on module load (page reload)
+try {
+  const raw = localStorage.getItem(JWT_KEY)
+  if (raw) {
+    const exp: number = JSON.parse(atob(raw.split('.')[1])).exp ?? 0
+    if (exp * 1000 > Date.now()) _jwt = raw
+    else localStorage.removeItem(JWT_KEY)
+  }
+} catch {}
+
+function setJwt(token: string | null) {
+  _jwt = token
+  try {
+    if (token) localStorage.setItem(JWT_KEY, token)
+    else localStorage.removeItem(JWT_KEY)
+  } catch {}
+}
+
+// Authenticated REST helper — uses stored JWT, falls back to anon key
+async function authFetch(method: string, path: string, body?: object): Promise<Response> {
+  const headers: Record<string, string> = {
+    'apikey':        SUPA_ANON,
+    'Authorization': `Bearer ${_jwt ?? SUPA_ANON}`,
+    'Content-Type':  'application/json',
+  }
+  if (method === 'POST' || method === 'PATCH') {
+    headers['Prefer'] = 'resolution=merge-duplicates,return=minimal'
+  }
+  return fetch(`${SUPA_URL}/rest/v1/${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  })
+}
+
+// Fetch a Supabase user's profile row via REST
+async function fetchProfile(userId: string): Promise<UserProfile | null> {
+  const res = await authFetch('GET', `profiles?id=eq.${userId}&select=*`)
+  if (!res.ok) return null
+  const rows = await res.json()
+  const p = rows[0]
+  if (!p) return null
+  return {
+    id:          p.id,
+    email:       '',
+    pseudo:      p.pseudo,
+    countryCode: p.country_code,
+    countryName: p.country_name,
+    score:       p.score,
+    createdAt:   new Date(p.created_at as string).getTime(),
+    favorites:   (p.favorites as string[]) ?? [],
+  }
+}
+
+// ─── localStorage fallback (dev / no Supabase) ───────────────────────────────
 
 interface StoredUser extends UserProfile { _pwKey: string }
 const LS_USERS   = 'trivela-users'
@@ -52,25 +116,34 @@ export async function register(
   if (pseudo.length < 2 || pseudo.length > 20)
     return { error: 'Le pseudo doit faire entre 2 et 20 caractères.' }
 
-  if (supabaseConfigured && supabase) {
-    const { data: existing } = await supabase
-      .from('profiles').select('id').ilike('pseudo', pseudo).maybeSingle()
-    if (existing) return { error: 'Ce pseudo est déjà pris.' }
+  if (supabaseConfigured) {
+    // Check pseudo uniqueness
+    const check = await fetch(
+      `${SUPA_URL}/rest/v1/profiles?pseudo=ilike.${encodeURIComponent(pseudo)}&select=id&limit=1`,
+      { headers: { 'apikey': SUPA_ANON, 'Authorization': `Bearer ${SUPA_ANON}` } }
+    )
+    const existing = await check.json()
+    if (existing?.length > 0) return { error: 'Ce pseudo est déjà pris.' }
 
-    const { data, error } = await supabase.auth.signUp({
-      email, password,
-      options: { data: { pseudo, country_code: countryCode, country_name: countryName } },
+    const res = await fetch(`${SUPA_URL}/auth/v1/signup`, {
+      method: 'POST',
+      headers: { 'apikey': SUPA_ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email, password,
+        data: { pseudo, country_code: countryCode, country_name: countryName },
+      }),
     })
-    if (error) return { error: error.message }
-    if (!data.user) return { error: 'Erreur lors de la création du compte.' }
+    const body = await res.json()
+    if (!res.ok || body.error) return { error: body.error_description || body.msg || body.message || 'Erreur inscription.' }
+    if (!body.user) return { error: 'Erreur lors de la création du compte.' }
 
-    // Profile is created automatically by the database trigger on_auth_user_created.
-    // Wait briefly for the trigger to complete before returning.
-    await new Promise(r => setTimeout(r, 600))
+    if (body.access_token) setJwt(body.access_token)
+
+    await new Promise(r => setTimeout(r, 800))
 
     return {
       user: {
-        id: data.user.id, email,
+        id: body.user.id, email,
         pseudo, countryCode, countryName,
         score: 0, createdAt: Date.now(),
         favorites: [],
@@ -95,51 +168,35 @@ export async function register(
   return { user: profile }
 }
 
-const SUPABASE_URL  = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpdmN3dHp6aHJzZGZ6eGlyamt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0MjM2MTMsImV4cCI6MjA5MTk5OTYxM30.BUfzNXfEobrz4CSeyBSj3I8To4F1eR-7AktC_kZfsO8'
-
 export async function login(
   email: string, password: string,
 ): Promise<{ user?: UserProfile; error?: string }> {
 
-  if (supabaseConfigured && supabase) {
-    // Bypass the Supabase JS client entirely — it can block on internal locks
-    // during initialization. Use raw fetch so the HTTP request fires immediately.
+  if (supabaseConfigured) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 15_000)
     try {
-      const res = await fetch(
-        `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
-        {
-          method: 'POST',
-          signal: controller.signal,
-          headers: {
-            'apikey': SUPABASE_ANON,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ email, password }),
-        }
-      )
+      const res = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'apikey': SUPA_ANON, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
       const body = await res.json()
-      if (!res.ok) {
-        return { error: body.error_description || body.msg || body.message || 'Identifiants incorrects.' }
-      }
-      // Inject the session into the Supabase client so onAuthStateChange fires.
-      if (supabase && body.access_token) {
-        supabase.auth.setSession({ access_token: body.access_token, refresh_token: body.refresh_token })
-          .catch(() => {}) // fire-and-forget; onAuthStateChange handles profile
-      }
-      const meta = body.user?.user_metadata ?? {}
+      if (!res.ok) return { error: body.error_description || body.msg || body.message || 'Identifiants incorrects.' }
+
+      setJwt(body.access_token)
+
+      // Fetch full profile now that JWT is stored
+      const profile = await fetchProfile(body.user?.id)
       return {
-        user: {
+        user: profile ?? {
           id: body.user?.id ?? '',
           email: body.user?.email ?? email,
-          pseudo: (meta.pseudo as string) ?? '',
-          countryCode: (meta.country_code as string) ?? '',
-          countryName: (meta.country_name as string) ?? '',
-          score: 0,
-          createdAt: Date.now(),
-          favorites: [],
+          pseudo: (body.user?.user_metadata?.pseudo as string) ?? '',
+          countryCode: (body.user?.user_metadata?.country_code as string) ?? '',
+          countryName: (body.user?.user_metadata?.country_name as string) ?? '',
+          score: 0, createdAt: Date.now(), favorites: [],
         },
       }
     } catch (e: unknown) {
@@ -162,56 +219,42 @@ export async function login(
 }
 
 export async function logout(): Promise<void> {
-  // Clear the session directly — supabase.auth.signOut() has the same
-  // internal lock issue as signInWithPassword. Wiping localStorage is
-  // sufficient for client-side logout; the refresh token expires server-side.
-  try { localStorage.removeItem('sb-tivcwtzzhrsdfzxirjkw-auth-token') } catch {}
+  const token = _jwt
+  setJwt(null)
   try { localStorage.removeItem(LS_SESSION) } catch {}
-  // Best-effort server-side invalidation (fire-and-forget, no await).
-  if (supabaseConfigured && supabase) {
-    fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+  try { localStorage.removeItem('sb-tivcwtzzhrsdfzxirjkw-auth-token') } catch {}
+  if (token) {
+    fetch(`${SUPA_URL}/auth/v1/logout`, {
       method: 'POST',
-      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+      headers: { 'apikey': SUPA_ANON, 'Authorization': `Bearer ${token}` },
     }).catch(() => {})
   }
 }
 
 type AuthCallback = (user: UserProfile | null) => void
 
-/** Subscribe to auth state changes. Returns an unsubscribe function. */
 export function subscribeToAuth(cb: AuthCallback): () => void {
-  if (supabaseConfigured && supabase) {
-    try {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        try {
-          if (!session) { cb(null); return }
-          const { data: profile } = await supabase!
-            .from('profiles').select('*').eq('id', session.user.id).single()
-          if (!profile) { cb(null); return }
-          cb({
-            id: session.user.id,
-            email: session.user.email ?? '',
-            pseudo: profile.pseudo,
-            countryCode: profile.country_code,
-            countryName: profile.country_name,
-            score: profile.score,
-            createdAt: new Date(profile.created_at as string).getTime(),
-            favorites: (profile.favorites as string[]) ?? [],
-          })
-        } catch (e) {
-          console.error('[Auth] onAuthStateChange callback error:', e)
-          cb(null)
-        }
+  if (supabaseConfigured) {
+    if (_jwt) {
+      // JWT restored from localStorage — fetch the profile
+      fetch(`${SUPA_URL}/auth/v1/user`, {
+        headers: { 'apikey': SUPA_ANON, 'Authorization': `Bearer ${_jwt}` },
       })
-      return () => subscription.unsubscribe()
-    } catch (e) {
-      console.error('[Auth] subscribeToAuth error:', e)
+        .then(r => r.ok ? r.json() : null)
+        .then(async user => {
+          if (!user?.id) { setJwt(null); cb(null); return }
+          const profile = await fetchProfile(user.id)
+          if (profile) { profile.email = user.email ?? ''; cb(profile) }
+          else cb(null)
+        })
+        .catch(() => cb(null))
+    } else {
       cb(null)
-      return () => {}
     }
+    return () => {}
   }
 
-  // localStorage: read synchronously once
+  // localStorage fallback
   try {
     const stored = localStorage.getItem(LS_SESSION)
     cb(stored ? JSON.parse(stored) as UserProfile : null)
@@ -222,11 +265,10 @@ export function subscribeToAuth(cb: AuthCallback): () => void {
 // ─── Favorites ───────────────────────────────────────────────────────────────
 
 export async function saveFavorites(userId: string, favorites: string[]): Promise<void> {
-  if (supabaseConfigured && supabase) {
-    await supabase.from('profiles').update({ favorites }).eq('id', userId)
+  if (supabaseConfigured) {
+    await authFetch('PATCH', `profiles?id=eq.${userId}`, { favorites })
     return
   }
-  // localStorage fallback: update stored session
   try {
     const stored = localStorage.getItem(LS_SESSION)
     if (stored) {
@@ -244,8 +286,7 @@ export async function getLeaderboard(): Promise<UserProfile[]> {
       .from('profiles').select('*').order('score', { ascending: false })
     if (!data) return []
     return data.map(p => ({
-      id: p.id as string,
-      email: '',
+      id: p.id as string, email: '',
       pseudo: p.pseudo as string,
       countryCode: p.country_code as string,
       countryName: p.country_name as string,
@@ -260,8 +301,8 @@ export async function getLeaderboard(): Promise<UserProfile[]> {
 // ─── Bets ─────────────────────────────────────────────────────────────────────
 
 export async function saveBet(bet: Omit<BetRecord, 'id' | 'createdAt'>): Promise<{ error?: string }> {
-  if (supabaseConfigured && supabase) {
-    const { error } = await supabase.from('bets').upsert({
+  if (supabaseConfigured) {
+    const res = await authFetch('POST', 'bets', {
       user_id:    bet.userId,
       match_id:   bet.matchId,
       home:       bet.home,
@@ -269,8 +310,21 @@ export async function saveBet(bet: Omit<BetRecord, 'id' | 'createdAt'>): Promise
       home_score: bet.homeScore,
       away_score: bet.awayScore,
       stage:      bet.stage,
-    }, { onConflict: 'user_id,match_id' })
-    if (error) return { error: 'Pari verrouillé — modification impossible.' }
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      // locked = bet already exists and match is locked
+      if (res.status === 409 || (err as any)?.code === '23505') {
+        // Try UPDATE if not locked
+        const upd = await authFetch('PATCH', `bets?user_id=eq.${bet.userId}&match_id=eq.${bet.matchId}&locked=eq.false`, {
+          home_score: bet.homeScore,
+          away_score: bet.awayScore,
+        })
+        if (!upd.ok) return { error: 'Pari verrouillé — modification impossible.' }
+        return {}
+      }
+      return { error: 'Erreur lors de l\'enregistrement du pari.' }
+    }
     return {}
   }
   // localStorage fallback
@@ -285,19 +339,19 @@ export async function saveBet(bet: Omit<BetRecord, 'id' | 'createdAt'>): Promise
 }
 
 export async function getBets(userId: string): Promise<BetRecord[]> {
-  if (supabaseConfigured && supabase) {
-    const { data } = await supabase
-      .from('bets').select('*').eq('user_id', userId).order('created_at', { ascending: false })
-    if (!data) return []
-    return data.map(b => ({
-      id:        b.id as string,
-      userId:    b.user_id as string,
-      matchId:   b.match_id as string,
-      home:      b.home as string,
-      away:      b.away as string,
+  if (supabaseConfigured) {
+    const res = await authFetch('GET', `bets?user_id=eq.${userId}&order=created_at.desc&select=*`)
+    if (!res.ok) return []
+    const data = await res.json()
+    return (data as any[]).map(b => ({
+      id:        b.id        as string,
+      userId:    b.user_id   as string,
+      matchId:   b.match_id  as string,
+      home:      b.home      as string,
+      away:      b.away      as string,
       homeScore: b.home_score as number,
       awayScore: b.away_score as number,
-      stage:     b.stage as string,
+      stage:     b.stage     as string,
       createdAt: new Date(b.created_at as string).getTime(),
     }))
   }
