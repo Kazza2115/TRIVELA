@@ -95,22 +95,45 @@ export async function register(
   return { user: profile }
 }
 
+const SUPABASE_URL  = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpdmN3dHp6aHJzZGZ6eGlyamt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0MjM2MTMsImV4cCI6MjA5MTk5OTYxM30.BUfzNXfEobrz4CSeyBSj3I8To4F1eR-7AktC_kZfsO8'
+
 export async function login(
   email: string, password: string,
 ): Promise<{ user?: UserProfile; error?: string }> {
 
   if (supabaseConfigured && supabase) {
-    const timeout = new Promise<{ user?: UserProfile; error: string }>(resolve =>
-      setTimeout(() => resolve({ error: 'Délai dépassé — réessaie.' }), 10_000)
-    )
-    const attempt = supabase.auth.signInWithPassword({ email, password }).then(({ data, error }) => {
-      if (error) return { error: error.message }
-      if (!data.user) return { error: 'Erreur de connexion.' }
-      const meta = data.user.user_metadata ?? {}
+    // Bypass the Supabase JS client entirely — it can block on internal locks
+    // during initialization. Use raw fetch so the HTTP request fires immediately.
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 15_000)
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/auth/v1/token?grant_type=password`,
+        {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            'apikey': SUPABASE_ANON,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, password }),
+        }
+      )
+      const body = await res.json()
+      if (!res.ok) {
+        return { error: body.error_description || body.msg || body.message || 'Identifiants incorrects.' }
+      }
+      // Inject the session into the Supabase client so onAuthStateChange fires.
+      if (supabase && body.access_token) {
+        supabase.auth.setSession({ access_token: body.access_token, refresh_token: body.refresh_token })
+          .catch(() => {}) // fire-and-forget; onAuthStateChange handles profile
+      }
+      const meta = body.user?.user_metadata ?? {}
       return {
         user: {
-          id: data.user.id,
-          email: data.user.email ?? email,
+          id: body.user?.id ?? '',
+          email: body.user?.email ?? email,
           pseudo: (meta.pseudo as string) ?? '',
           countryCode: (meta.country_code as string) ?? '',
           countryName: (meta.country_name as string) ?? '',
@@ -119,8 +142,13 @@ export async function login(
           favorites: [],
         },
       }
-    })
-    return Promise.race([attempt, timeout])
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === 'AbortError')
+        return { error: 'Connexion trop lente — vérifie ta connexion internet.' }
+      return { error: 'Erreur réseau.' }
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   // localStorage fallback
