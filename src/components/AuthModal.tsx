@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { register, login } from '../services/auth'
 import type { UserProfile } from '../services/auth'
 import { COUNTRIES } from '../data/countries'
@@ -18,6 +18,7 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
   const [country,    setCountry]    = useState(COUNTRIES[0])
   const [error,      setError]      = useState('')
   const [loading,    setLoading]    = useState(false)
+  const mouseDownTarget = useRef<EventTarget | null>(null)
 
   const switchMode = (m: Mode) => { setMode(m); setError('') }
 
@@ -50,7 +51,10 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
 
   return (
     <div
-      onClick={e => { if (!loading && e.target === e.currentTarget) onClose() }}
+      onMouseDown={e => { mouseDownTarget.current = e.target }}
+      onClick={e => {
+        if (!loading && mouseDownTarget.current === e.currentTarget && e.target === e.currentTarget) onClose()
+      }}
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
         background: 'rgba(0,0,0,0.45)',
