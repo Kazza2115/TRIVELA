@@ -61,11 +61,9 @@ export async function register(
     if (error) return { error: error.message }
     if (!data.user) return { error: 'Erreur lors de la création du compte.' }
 
-    const { error: profileError } = await supabase.from('profiles').insert({
-      id: data.user.id, pseudo,
-      country_code: countryCode, country_name: countryName, score: 0,
-    })
-    if (profileError) return { error: profileError.message }
+    // Profile is created automatically by the database trigger on_auth_user_created.
+    // Wait briefly for the trigger to complete before returning.
+    await new Promise(r => setTimeout(r, 600))
 
     return {
       user: {
