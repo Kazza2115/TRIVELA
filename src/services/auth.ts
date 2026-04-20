@@ -100,25 +100,27 @@ export async function login(
 ): Promise<{ user?: UserProfile; error?: string }> {
 
   if (supabaseConfigured && supabase) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) return { error: error.message }
-    if (!data.user) return { error: 'Erreur de connexion.' }
-
-    // Don't fetch the profile here — onAuthStateChange handles that.
-    // Build a minimal user from auth metadata so the modal can close immediately.
-    const meta = data.user.user_metadata ?? {}
-    return {
-      user: {
-        id: data.user.id,
-        email: data.user.email ?? email,
-        pseudo: (meta.pseudo as string) ?? '',
-        countryCode: (meta.country_code as string) ?? '',
-        countryName: (meta.country_name as string) ?? '',
-        score: 0,
-        createdAt: Date.now(),
-        favorites: [],
-      },
-    }
+    const timeout = new Promise<{ user?: UserProfile; error: string }>(resolve =>
+      setTimeout(() => resolve({ error: 'Délai dépassé — réessaie.' }), 10_000)
+    )
+    const attempt = supabase.auth.signInWithPassword({ email, password }).then(({ data, error }) => {
+      if (error) return { error: error.message }
+      if (!data.user) return { error: 'Erreur de connexion.' }
+      const meta = data.user.user_metadata ?? {}
+      return {
+        user: {
+          id: data.user.id,
+          email: data.user.email ?? email,
+          pseudo: (meta.pseudo as string) ?? '',
+          countryCode: (meta.country_code as string) ?? '',
+          countryName: (meta.country_name as string) ?? '',
+          score: 0,
+          createdAt: Date.now(),
+          favorites: [],
+        },
+      }
+    })
+    return Promise.race([attempt, timeout])
   }
 
   // localStorage fallback
