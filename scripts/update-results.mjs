@@ -53,25 +53,56 @@ const API_TEAM_MAP = {
   'Venezuela': 'VEN',
 }
 
-// ─── Group draw → internal match IDs ─────────────────────────────────────────
-const GROUPS = {
-  A: ['MEX','KOR','ZAF','CZE'], B: ['CAN','SUI','QAT','BIH'],
-  C: ['BRA','MAR','SCO','HAI'], D: ['USA','PAR','AUS','TUR'],
-  E: ['GER','ECU','CIV','CUR'], F: ['NED','JPN','SWE','TUN'],
-  G: ['BEL','EGY','IRN','NZL'], H: ['ESP','URU','SAU','CPV'],
-  I: ['FRA','SEN','NOR','IRQ'], J: ['ARG','DZA','AUT','JOR'],
-  K: ['POR','COL','UZB','COD'], L: ['ENG','CRO','PAN','GHA'],
-}
-const MD_MATCHUPS = [[[0,1],[2,3]],[[0,2],[1,3]],[[0,3],[1,2]]]
-
-const MATCH_LOOKUP = {}
-for (const [g, teams] of Object.entries(GROUPS)) {
-  for (let mdIdx = 0; mdIdx < 3; mdIdx++) {
-    const md = mdIdx + 1
-    for (const [hi, ai] of MD_MATCHUPS[mdIdx]) {
-      MATCH_LOOKUP[`${teams[hi]}-${teams[ai]}`] = `g${g}-md${md}-${hi}v${ai}`
-    }
-  }
+// ─── HOME-AWAY → internal match ID (mirrors wc2026Matches.ts exactly) ────────
+const MATCH_LOOKUP = {
+  // Group A
+  'MEX-ZAF':'gA-md1-mex-zaf', 'KOR-CZE':'gA-md1-kor-cze',
+  'CZE-ZAF':'gA-md2-cze-zaf', 'MEX-KOR':'gA-md2-mex-kor',
+  'CZE-MEX':'gA-md3-cze-mex', 'ZAF-KOR':'gA-md3-zaf-kor',
+  // Group B
+  'CAN-BIH':'gB-md1-can-bih', 'QAT-SUI':'gB-md1-qat-sui',
+  'SUI-BIH':'gB-md2-sui-bih', 'CAN-QAT':'gB-md2-can-qat',
+  'SUI-CAN':'gB-md3-sui-can', 'BIH-QAT':'gB-md3-bih-qat',
+  // Group C
+  'BRA-MAR':'gC-md1-bra-mar', 'HAI-SCO':'gC-md1-hai-sco',
+  'SCO-MAR':'gC-md2-sco-mar', 'BRA-HAI':'gC-md2-bra-hai',
+  'SCO-BRA':'gC-md3-sco-bra', 'MAR-HAI':'gC-md3-mar-hai',
+  // Group D
+  'USA-PAR':'gD-md1-usa-par', 'AUS-TUR':'gD-md1-aus-tur',
+  'USA-AUS':'gD-md2-usa-aus', 'TUR-PAR':'gD-md2-tur-par',
+  'TUR-USA':'gD-md3-tur-usa', 'PAR-AUS':'gD-md3-par-aus',
+  // Group E
+  'GER-CUR':'gE-md1-ger-cur', 'CIV-ECU':'gE-md1-civ-ecu',
+  'GER-CIV':'gE-md2-ger-civ', 'ECU-CUR':'gE-md2-ecu-cur',
+  'CUR-CIV':'gE-md3-cur-civ', 'ECU-GER':'gE-md3-ecu-ger',
+  // Group F
+  'NED-JPN':'gF-md1-ned-jpn', 'SWE-TUN':'gF-md1-swe-tun',
+  'TUN-JPN':'gF-md2-tun-jpn', 'NED-SWE':'gF-md2-ned-swe',
+  'JPN-SWE':'gF-md3-jpn-swe', 'TUN-NED':'gF-md3-tun-ned',
+  // Group G
+  'BEL-EGY':'gG-md1-bel-egy', 'IRN-NZL':'gG-md1-irn-nzl',
+  'BEL-IRN':'gG-md2-bel-irn', 'NZL-EGY':'gG-md2-nzl-egy',
+  'EGY-IRN':'gG-md3-egy-irn', 'NZL-BEL':'gG-md3-nzl-bel',
+  // Group H
+  'ESP-CPV':'gH-md1-esp-cpv', 'SAU-URU':'gH-md1-sau-uru',
+  'ESP-SAU':'gH-md2-esp-sau', 'URU-CPV':'gH-md2-uru-cpv',
+  'URU-ESP':'gH-md3-uru-esp', 'CPV-SAU':'gH-md3-cpv-sau',
+  // Group I
+  'FRA-SEN':'gI-md1-fra-sen', 'IRQ-NOR':'gI-md1-irq-nor',
+  'FRA-IRQ':'gI-md2-fra-irq', 'NOR-SEN':'gI-md2-nor-sen',
+  'NOR-FRA':'gI-md3-nor-fra', 'SEN-IRQ':'gI-md3-sen-irq',
+  // Group J
+  'ARG-DZA':'gJ-md1-arg-dza', 'AUT-JOR':'gJ-md1-aut-jor',
+  'ARG-AUT':'gJ-md2-arg-aut', 'JOR-DZA':'gJ-md2-jor-dza',
+  'DZA-AUT':'gJ-md3-dza-aut', 'JOR-ARG':'gJ-md3-jor-arg',
+  // Group K
+  'POR-COD':'gK-md1-por-cod', 'UZB-COL':'gK-md1-uzb-col',
+  'POR-UZB':'gK-md2-por-uzb', 'COL-COD':'gK-md2-col-cod',
+  'COL-POR':'gK-md3-col-por', 'COD-UZB':'gK-md3-cod-uzb',
+  // Group L
+  'ENG-CRO':'gL-md1-eng-cro', 'GHA-PAN':'gL-md1-gha-pan',
+  'ENG-GHA':'gL-md2-eng-gha', 'PAN-CRO':'gL-md2-pan-cro',
+  'PAN-ENG':'gL-md3-pan-eng', 'CRO-GHA':'gL-md3-cro-gha',
 }
 
 // ─── Fetch with retry ─────────────────────────────────────────────────────────
