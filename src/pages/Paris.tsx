@@ -522,9 +522,13 @@ function MatchCard({ match, prediction, confirmed, lockError, delay, onIncrement
           {lockError ? (
             <span style={{ color: '#dc2626', fontWeight: 700 }}>🔒 {lockError}</span>
           ) : (
-            <><span style={{ color: '#A07828', fontWeight: 700 }}>+3</span> score exact
-            &nbsp;·&nbsp;
-            <span style={{ color: 'rgba(160,120,40,0.7)', fontWeight: 600 }}>+1</span> bon résultat</>
+            <>
+              <span style={{ color: '#A07828', fontWeight: 700 }}>+5</span> exact
+              &nbsp;·&nbsp;
+              <span style={{ color: 'rgba(160,120,40,0.7)', fontWeight: 600 }}>+3</span> bon résultat
+              &nbsp;·&nbsp;
+              <span style={{ color: 'rgba(160,120,40,0.5)', fontWeight: 600 }}>+1</span> nul
+            </>
           )}
         </div>
         {locked ? (
