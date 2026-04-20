@@ -26,12 +26,18 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
     if (!email.trim() || !password.trim()) { setError('Remplis tous les champs.'); return }
     if (mode === 'register' && !pseudo.trim()) { setError('Choisis un pseudo.'); return }
     setLoading(true)
-    const result = mode === 'register'
-      ? await register(email.trim(), password, pseudo.trim(), country.code, country.name)
-      : await login(email.trim(), password)
-    setLoading(false)
-    if (result.error) { setError(result.error); return }
-    onSuccess(result.user!)
+    try {
+      const result = mode === 'register'
+        ? await register(email.trim(), password, pseudo.trim(), country.code, country.name)
+        : await login(email.trim(), password)
+      if (result.error) { setError(result.error); return }
+      onSuccess(result.user!)
+    } catch (e) {
+      setError('Erreur réseau — réessaie.')
+      console.error('[Auth] submit error:', e)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const input: React.CSSProperties = {
