@@ -2,8 +2,8 @@ name: Auto-update match results
 
 on:
   schedule:
-    # Every 30 minutes — only meaningful once WC 2026 starts (Jun 11, 2026)
-    - cron: '*/30 * * * *'
+    # Every 5 minutes — script exits immediately outside WC dates / match hours
+    - cron: '*/5 * * * *'
   workflow_dispatch:   # Manual trigger for testing
 
 jobs:

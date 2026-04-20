@@ -1,5 +1,5 @@
 // Fetches finished WC 2026 matches from football-data.org and settles points in Supabase.
-// Runs via GitHub Actions cron every 30 minutes during the tournament.
+// Runs via GitHub Actions cron every 5 minutes.
 import { createClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL         = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
@@ -13,7 +13,25 @@ if (!SUPABASE_SERVICE_KEY || !FOOTBALL_API_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-// football-data.org English team names → our short codes
+// ─── Smart time-window check ──────────────────────────────────────────────────
+// Only call the external API during WC 2026 and during match hours (UTC).
+// Kickoffs: 18:00 and 21:00 UTC. With extra time + penalties: end by 01:00 UTC.
+function isInMatchWindow() {
+  const now = new Date()
+
+  // WC 2026: Jun 11 → Jul 20 (UTC, with 1-day buffer)
+  const WC_START = Date.UTC(2026, 5, 11)   // June 11
+  const WC_END   = Date.UTC(2026, 6, 20)   // July 20
+  if (now.getTime() < WC_START || now.getTime() > WC_END) return false
+
+  // Active match hours: 17:30–01:00 UTC
+  const h = now.getUTCHours()
+  const m = now.getUTCMinutes()
+  const t = h * 60 + m
+  return t >= 17 * 60 + 30 || t <= 60
+}
+
+// ─── football-data.org English names → our short codes ───────────────────────
 const API_TEAM_MAP = {
   'Mexico': 'MEX', 'South Korea': 'KOR', 'South Africa': 'ZAF',
   'Czech Republic': 'CZE', 'Czechia': 'CZE',
@@ -35,7 +53,7 @@ const API_TEAM_MAP = {
   'Venezuela': 'VEN',
 }
 
-// Mirror the group draw from wc2026Matches.ts
+// ─── Group draw → internal match IDs ─────────────────────────────────────────
 const GROUPS = {
   A: ['MEX','KOR','ZAF','CZE'], B: ['CAN','SUI','QAT','BIH'],
   C: ['BRA','MAR','SCO','HAI'], D: ['USA','PAR','AUS','TUR'],
@@ -46,7 +64,6 @@ const GROUPS = {
 }
 const MD_MATCHUPS = [[[0,1],[2,3]],[[0,2],[1,3]],[[0,3],[1,2]]]
 
-// Build lookup: "HOME-AWAY" → our internal match_id
 const MATCH_LOOKUP = {}
 for (const [g, teams] of Object.entries(GROUPS)) {
   for (let mdIdx = 0; mdIdx < 3; mdIdx++) {
@@ -57,20 +74,44 @@ for (const [g, teams] of Object.entries(GROUPS)) {
   }
 }
 
-async function main() {
-  console.log(`[${new Date().toISOString()}] Checking WC 2026 results...`)
+// ─── Fetch with retry ─────────────────────────────────────────────────────────
+async function fetchWithRetry(url, options, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const res = await fetch(url, options)
+      if (res.ok) return res
+      if (res.status === 429) {
+        // Rate limited — wait 60s and retry once
+        console.warn('Rate limited (429) — waiting 60s...')
+        await new Promise(r => setTimeout(r, 60_000))
+        continue
+      }
+      throw new Error(`HTTP ${res.status}: ${await res.text()}`)
+    } catch (e) {
+      if (i === retries - 1) throw e
+      const wait = (i + 1) * 3000
+      console.warn(`Attempt ${i + 1} failed: ${e.message} — retrying in ${wait / 1000}s`)
+      await new Promise(r => setTimeout(r, wait))
+    }
+  }
+}
 
-  const res = await fetch(
+// ─── Main ─────────────────────────────────────────────────────────────────────
+async function main() {
+  const ts = new Date().toISOString()
+  console.log(`[${ts}] Checking WC 2026 results...`)
+
+  if (!isInMatchWindow()) {
+    console.log('Outside WC 2026 match window — nothing to do.')
+    return
+  }
+
+  const res = await fetchWithRetry(
     'https://api.football-data.org/v4/competitions/WC/matches?status=FINISHED&season=2026',
     { headers: { 'X-Auth-Token': FOOTBALL_API_KEY } }
   )
-  if (!res.ok) {
-    console.error('API error:', res.status, await res.text())
-    process.exit(1)
-  }
-
   const { matches = [] } = await res.json()
-  console.log(`${matches.length} finished matches from API`)
+  console.log(`${matches.length} finished match(es) from API`)
 
   // Already-settled API match IDs
   const { data: settled } = await supabase.from('match_results').select('api_match_id')
@@ -89,13 +130,18 @@ async function main() {
 
     const matchId = MATCH_LOOKUP[`${homeShort}-${awayShort}`]
     if (!matchId) {
-      // Knockout stage — teams are TBD until qualified; skip for now
-      console.log(`No match ID for ${homeShort}-${awayShort} (knockout?)`)
+      // Knockout stage — teams TBD until qualified
+      console.log(`No match ID for ${homeShort}-${awayShort} (knockout TBD)`)
       continue
     }
 
     const homeScore = match.score.fullTime.home
     const awayScore = match.score.fullTime.away
+    if (homeScore === null || awayScore === null) {
+      console.warn(`Score not yet available for ${matchId}`)
+      continue
+    }
+
     console.log(`Settling ${matchId}: ${homeShort} ${homeScore}-${awayScore} ${awayShort}`)
 
     const { error } = await supabase.rpc('settle_match', {
@@ -105,7 +151,7 @@ async function main() {
     })
     if (error) { console.error(`Error settling ${matchId}:`, error.message); continue }
 
-    // Tag the result row with the API match ID to avoid reprocessing
+    // Tag result row with API match ID to avoid reprocessing
     await supabase.from('match_results')
       .update({ api_match_id: match.id })
       .eq('match_id', matchId)
@@ -114,7 +160,7 @@ async function main() {
     processed++
   }
 
-  console.log(`Done — ${processed} new results settled.`)
+  console.log(`Done — ${processed} new result(s) settled.`)
 }
 
 main().catch(e => { console.error(e); process.exit(1) })
