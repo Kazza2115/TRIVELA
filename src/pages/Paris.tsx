@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import PageLayout from './PageLayout'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { saveBet } from '../services/auth'
-import type { UserProfile } from '../services/auth'
+import { saveBet, subscribeToResults } from '../services/auth'
+import type { UserProfile, MatchResult } from '../services/auth'
 
 type Tab = 'groupes' | 'eliminatoires'
 type Predictions = Record<string, { home: number; away: number }>
@@ -81,6 +81,13 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
   const [favorites,   setFavorites]   = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('trivela-favorites') ?? '[]') } catch { return [] }
   })
+  const [results, setResults] = useState<Record<string, MatchResult>>({})
+
+  useEffect(() => subscribeToResults(arr => {
+    const map: Record<string, MatchResult> = {}
+    arr.forEach(r => { map[r.matchId] = r })
+    setResults(map)
+  }), [])
 
   const toggleFavorite = (short: string) => {
     setFavorites(prev => {
@@ -289,6 +296,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
                     <MatchCard key={m.id} match={m}
                       prediction={predictions[m.id]} confirmed={confirmed.has(m.id)}
                       lockError={lockErrors[m.id]}
+                      result={results[m.id]}
                       delay={i * 55}
                       onIncrement={(s, d) => setPrediction(m.id, s, d)}
                       onConfirm={() => confirm(m.id)}
@@ -339,6 +347,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
               <MatchCard key={m.id} match={m}
                 prediction={predictions[m.id]} confirmed={confirmed.has(m.id)}
                 lockError={lockErrors[m.id]}
+                result={results[m.id]}
                 delay={i * 45}
                 onIncrement={(s, d) => setPrediction(m.id, s, d)}
                 onConfirm={() => confirm(m.id)}
@@ -426,18 +435,29 @@ function GroupBanner({ group, favorites, onToggleFavorite }: {
 }
 
 // ─── MatchCard ────────────────────────────────────────────────────────────
+function calcPoints(result: MatchResult, pred: { home: number; away: number }): number {
+  const { homeScore: rH, awayScore: rA } = result
+  const { home: pH, away: pA } = pred
+  if (rH === pH && rA === pA) return 5
+  if (rH > rA && pH > pA) return 3
+  if (rH < rA && pH < pA) return 3
+  if (rH === rA && pH === pA) return 1
+  return 0
+}
+
 interface MatchCardProps {
   match: Match
   prediction?: { home: number; away: number }
   confirmed: boolean
   lockError?: string
+  result?: MatchResult
   delay: number
   onIncrement: (side: 'home' | 'away', delta: number) => void
   onConfirm: () => void
   onEdit: () => void
 }
 
-function MatchCard({ match, prediction, confirmed, lockError, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
+function MatchCard({ match, prediction, confirmed, lockError, result, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
   const pred   = prediction ?? { home: 0, away: 0 }
   const isTBD  = match.home.code === 'un'
   const locked = isMatchLocked(match)
@@ -521,6 +541,13 @@ function MatchCard({ match, prediction, confirmed, lockError, delay, onIncrement
         <div style={{ fontSize: 10, color: 'var(--text-3)' }}>
           {lockError ? (
             <span style={{ color: '#dc2626', fontWeight: 700 }}>🔒 {lockError}</span>
+          ) : result ? (
+            <span style={{ fontWeight: 700, color: 'var(--text-2)', letterSpacing: 0.3 }}>
+              FT&thinsp;
+              <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 13, letterSpacing: 1 }}>
+                {result.homeScore}–{result.awayScore}
+              </span>
+            </span>
           ) : (
             <>
               <span style={{ color: '#A07828', fontWeight: 700 }}>+5</span> exact
@@ -531,7 +558,22 @@ function MatchCard({ match, prediction, confirmed, lockError, delay, onIncrement
             </>
           )}
         </div>
-        {locked ? (
+        {result && confirmed && prediction ? (() => {
+          const pts = calcPoints(result, prediction)
+          const colors: Record<number, string> = { 5: '#22c55e', 3: '#A07828', 1: '#6b7280', 0: '#dc2626' }
+          return (
+            <div style={{
+              padding: '4px 10px', borderRadius: 8,
+              background: pts === 5 ? 'rgba(34,197,94,0.12)' : pts === 3 ? 'rgba(200,155,60,0.12)' : 'rgba(110,110,115,0.1)',
+              border: `1px solid ${pts > 0 ? (pts === 5 ? 'rgba(34,197,94,0.3)' : 'rgba(200,155,60,0.3)') : 'rgba(110,110,115,0.2)'}`,
+              fontSize: 12, fontWeight: 700, color: colors[pts] ?? 'var(--text-3)',
+            }}>
+              {pts > 0 ? '+' : ''}{pts} pts
+            </div>
+          )
+        })() : result ? (
+          <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600 }}>terminé</div>
+        ) : locked ? (
           <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700, letterSpacing: 0.5 }}>
             🔒 Verrouillé
           </div>

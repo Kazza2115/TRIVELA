@@ -246,3 +246,53 @@ export async function getBets(userId: string): Promise<BetRecord[]> {
     return bets.filter(b => b.userId === userId).sort((a, b) => b.createdAt - a.createdAt)
   } catch { return [] }
 }
+
+// ─── Real-time subscriptions ──────────────────────────────────────────────────
+
+export interface MatchResult {
+  matchId:   string
+  homeScore: number
+  awayScore: number
+  settledAt: number
+}
+
+export function subscribeToResults(cb: (results: MatchResult[]) => void): () => void {
+  if (!supabase) { cb([]); return () => {} }
+
+  const fetchAll = async () => {
+    const { data } = await supabase!.from('match_results').select('*')
+    cb((data ?? []).map(r => ({
+      matchId:   r.match_id   as string,
+      homeScore: r.home_score as number,
+      awayScore: r.away_score as number,
+      settledAt: new Date(r.settled_at as string).getTime(),
+    })))
+  }
+
+  fetchAll()
+
+  const channel = supabase
+    .channel('match-results-rt')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'match_results' }, fetchAll)
+    .subscribe()
+
+  return () => { supabase!.removeChannel(channel) }
+}
+
+export function subscribeToLeaderboard(cb: (players: UserProfile[]) => void): () => void {
+  if (!supabase) {
+    getLeaderboard().then(cb)
+    return () => {}
+  }
+
+  getLeaderboard().then(cb)
+
+  const channel = supabase
+    .channel('profiles-rt')
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' },
+      () => getLeaderboard().then(cb)
+    )
+    .subscribe()
+
+  return () => { supabase!.removeChannel(channel) }
+}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import PageLayout from './PageLayout'
-import { getLeaderboard } from '../services/auth'
+import { subscribeToLeaderboard } from '../services/auth'
 import type { UserProfile } from '../services/auth'
 
 const PODIUM_COLORS  = ['#A0A0A8', '#C89B3C', '#A07040']
@@ -15,9 +15,7 @@ interface ClassementProps {
 export default function Classement({ onBack, currentUser, onOpenAuth }: ClassementProps) {
   const [players, setPlayers] = useState<UserProfile[]>([])
 
-  useEffect(() => {
-    getLeaderboard().then(setPlayers)
-  }, [currentUser])
+  useEffect(() => subscribeToLeaderboard(setPlayers), [])
 
   const top3   = players.slice(0, 3)
   const myRank = currentUser ? players.findIndex(p => p.id === currentUser.id) + 1 : null
