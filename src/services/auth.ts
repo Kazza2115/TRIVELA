@@ -162,10 +162,17 @@ export async function login(
 }
 
 export async function logout(): Promise<void> {
+  // Clear the session directly — supabase.auth.signOut() has the same
+  // internal lock issue as signInWithPassword. Wiping localStorage is
+  // sufficient for client-side logout; the refresh token expires server-side.
+  try { localStorage.removeItem('sb-tivcwtzzhrsdfzxirjkw-auth-token') } catch {}
+  try { localStorage.removeItem(LS_SESSION) } catch {}
+  // Best-effort server-side invalidation (fire-and-forget, no await).
   if (supabaseConfigured && supabase) {
-    await supabase.auth.signOut()
-  } else {
-    localStorage.removeItem(LS_SESSION)
+    fetch(`${SUPABASE_URL}/auth/v1/logout`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_ANON, 'Content-Type': 'application/json' },
+    }).catch(() => {})
   }
 }
 
