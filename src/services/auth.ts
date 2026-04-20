@@ -10,6 +10,7 @@ export interface UserProfile {
   countryName: string
   score: number
   createdAt: number
+  favorites: string[]
 }
 
 export interface BetRecord {
@@ -37,7 +38,9 @@ function lsUsers(): StoredUser[] {
 function weakHash(s: string) {
   return btoa(unescape(encodeURIComponent(s + '::trivela2026')))
 }
-function toProfile({ _pwKey: _, ...p }: StoredUser): UserProfile { return p }
+function toProfile({ _pwKey: _, ...p }: StoredUser): UserProfile {
+  return { ...p, favorites: (p as any).favorites ?? [] }
+}
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
@@ -70,6 +73,7 @@ export async function register(
         id: data.user.id, email,
         pseudo, countryCode, countryName,
         score: 0, createdAt: Date.now(),
+        favorites: [],
       },
     }
   }
@@ -83,7 +87,7 @@ export async function register(
 
   const user: StoredUser = {
     id: crypto.randomUUID(), email, pseudo, countryCode, countryName,
-    score: 0, createdAt: Date.now(), _pwKey: weakHash(password),
+    score: 0, createdAt: Date.now(), favorites: [], _pwKey: weakHash(password),
   }
   localStorage.setItem(LS_USERS, JSON.stringify([...users, user]))
   const profile = toProfile(user)
@@ -113,6 +117,7 @@ export async function login(
         countryName: profile.country_name,
         score: profile.score,
         createdAt: new Date(profile.created_at as string).getTime(),
+        favorites: (profile.favorites as string[]) ?? [],
       },
     }
   }
@@ -155,6 +160,7 @@ export function subscribeToAuth(cb: AuthCallback): () => void {
             countryName: profile.country_name,
             score: profile.score,
             createdAt: new Date(profile.created_at as string).getTime(),
+            favorites: (profile.favorites as string[]) ?? [],
           })
         } catch (e) {
           console.error('[Auth] onAuthStateChange callback error:', e)
@@ -177,6 +183,23 @@ export function subscribeToAuth(cb: AuthCallback): () => void {
   return () => {}
 }
 
+// ─── Favorites ───────────────────────────────────────────────────────────────
+
+export async function saveFavorites(userId: string, favorites: string[]): Promise<void> {
+  if (supabaseConfigured && supabase) {
+    await supabase.from('profiles').update({ favorites }).eq('id', userId)
+    return
+  }
+  // localStorage fallback: update stored session
+  try {
+    const stored = localStorage.getItem(LS_SESSION)
+    if (stored) {
+      const profile = JSON.parse(stored) as UserProfile
+      localStorage.setItem(LS_SESSION, JSON.stringify({ ...profile, favorites }))
+    }
+  } catch {}
+}
+
 // ─── Leaderboard ──────────────────────────────────────────────────────────────
 
 export async function getLeaderboard(): Promise<UserProfile[]> {
@@ -192,6 +215,7 @@ export async function getLeaderboard(): Promise<UserProfile[]> {
       countryName: p.country_name as string,
       score: p.score as number,
       createdAt: new Date(p.created_at as string).getTime(),
+      favorites: (p.favorites as string[]) ?? [],
     }))
   }
   return lsUsers().map(toProfile).sort((a, b) => b.score - a.score)

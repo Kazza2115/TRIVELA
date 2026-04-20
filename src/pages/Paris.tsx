@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import PageLayout from './PageLayout'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { saveBet, subscribeToResults } from '../services/auth'
+import { saveBet, saveFavorites, subscribeToResults } from '../services/auth'
 import type { UserProfile, MatchResult } from '../services/auth'
 
 type Tab = 'groupes' | 'eliminatoires'
@@ -78,10 +78,12 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
   const [predictions, setPredictions] = useState<Predictions>({})
   const [confirmed,   setConfirmed]   = useState<Set<string>>(new Set())
   const [lockErrors,  setLockErrors]  = useState<Record<string, string>>({})
-  const [favorites,   setFavorites]   = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem('trivela-favorites') ?? '[]') } catch { return [] }
-  })
+  const [favorites,   setFavorites]   = useState<string[]>([])
   const [results, setResults] = useState<Record<string, MatchResult>>({})
+
+  useEffect(() => {
+    setFavorites(currentUser?.favorites ?? [])
+  }, [currentUser])
 
   useEffect(() => subscribeToResults(arr => {
     const map: Record<string, MatchResult> = {}
@@ -90,9 +92,10 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
   }), [])
 
   const toggleFavorite = (short: string) => {
+    if (!currentUser) { onOpenAuth(); return }
     setFavorites(prev => {
       const next = prev.includes(short) ? prev.filter(s => s !== short) : [...prev, short]
-      try { localStorage.setItem('trivela-favorites', JSON.stringify(next)) } catch {}
+      saveFavorites(currentUser.id, next)
       return next
     })
   }
