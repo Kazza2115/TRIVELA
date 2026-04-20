@@ -104,20 +104,19 @@ export async function login(
     if (error) return { error: error.message }
     if (!data.user) return { error: 'Erreur de connexion.' }
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles').select('*').eq('id', data.user.id).single()
-    if (profileError || !profile) return { error: 'Profil introuvable.' }
-
+    // Don't fetch the profile here — onAuthStateChange handles that.
+    // Build a minimal user from auth metadata so the modal can close immediately.
+    const meta = data.user.user_metadata ?? {}
     return {
       user: {
         id: data.user.id,
         email: data.user.email ?? email,
-        pseudo: profile.pseudo,
-        countryCode: profile.country_code,
-        countryName: profile.country_name,
-        score: profile.score,
-        createdAt: new Date(profile.created_at as string).getTime(),
-        favorites: (profile.favorites as string[]) ?? [],
+        pseudo: (meta.pseudo as string) ?? '',
+        countryCode: (meta.country_code as string) ?? '',
+        countryName: (meta.country_name as string) ?? '',
+        score: 0,
+        createdAt: Date.now(),
+        favorites: [],
       },
     }
   }
