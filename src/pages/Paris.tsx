@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import PageLayout from './PageLayout'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { saveBet, saveFavorites, subscribeToResults } from '../services/auth'
+import { saveBet, saveFavorites, getBets, subscribeToResults } from '../services/auth'
 import type { UserProfile, MatchResult } from '../services/auth'
 
 type Tab = 'groupes' | 'eliminatoires'
@@ -81,8 +81,24 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
   const [favorites,   setFavorites]   = useState<string[]>([])
   const [results, setResults] = useState<Record<string, MatchResult>>({})
 
+  // Sync all user-specific state on login/logout
   useEffect(() => {
     setFavorites(currentUser?.favorites ?? [])
+    if (!currentUser) {
+      setPredictions({})
+      setConfirmed(new Set())
+      return
+    }
+    getBets(currentUser.id).then(bets => {
+      const preds: Predictions = {}
+      const conf = new Set<string>()
+      bets.forEach(b => {
+        preds[b.matchId] = { home: b.homeScore, away: b.awayScore }
+        conf.add(b.matchId)
+      })
+      setPredictions(preds)
+      setConfirmed(conf)
+    })
   }, [currentUser])
 
   useEffect(() => subscribeToResults(arr => {
