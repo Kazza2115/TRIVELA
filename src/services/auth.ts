@@ -199,9 +199,9 @@ export async function getLeaderboard(): Promise<UserProfile[]> {
 
 // ─── Bets ─────────────────────────────────────────────────────────────────────
 
-export async function saveBet(bet: Omit<BetRecord, 'id' | 'createdAt'>): Promise<void> {
+export async function saveBet(bet: Omit<BetRecord, 'id' | 'createdAt'>): Promise<{ error?: string }> {
   if (supabaseConfigured && supabase) {
-    await supabase.from('bets').upsert({
+    const { error } = await supabase.from('bets').upsert({
       user_id:    bet.userId,
       match_id:   bet.matchId,
       home:       bet.home,
@@ -210,7 +210,8 @@ export async function saveBet(bet: Omit<BetRecord, 'id' | 'createdAt'>): Promise
       away_score: bet.awayScore,
       stage:      bet.stage,
     }, { onConflict: 'user_id,match_id' })
-    return
+    if (error) return { error: 'Pari verrouillé — modification impossible.' }
+    return {}
   }
   // localStorage fallback
   let bets: BetRecord[] = []
@@ -220,6 +221,7 @@ export async function saveBet(bet: Omit<BetRecord, 'id' | 'createdAt'>): Promise
   if (idx >= 0) bets[idx] = record
   else bets.push(record)
   localStorage.setItem(LS_BETS, JSON.stringify(bets))
+  return {}
 }
 
 export async function getBets(userId: string): Promise<BetRecord[]> {

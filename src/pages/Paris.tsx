@@ -77,6 +77,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
   const [koRound,     setKoRound]     = useState<string>('r32')
   const [predictions, setPredictions] = useState<Predictions>({})
   const [confirmed,   setConfirmed]   = useState<Set<string>>(new Set())
+  const [lockErrors,  setLockErrors]  = useState<Record<string, string>>({})
   const [favorites,   setFavorites]   = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('trivela-favorites') ?? '[]') } catch { return [] }
   })
@@ -106,21 +107,25 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
 
   const confirm = async (id: string) => {
     if (!currentUser) { onOpenAuth(); return }
-    setConfirmed(prev => new Set(prev).add(id))
     const match = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES].find(m => m.id === id)
-    if (match) {
-      const pred = predictions[id] ?? { home: 0, away: 0 }
-      await saveBet({
-        userId: currentUser.id,
-        matchId: id,
-        home: match.home.name,
-        away: match.away.name,
-        homeScore: pred.home,
-        awayScore: pred.away,
-        stage: match.round === 'group'
-          ? `Groupe ${match.group} · J${match.matchday}`
-          : KO_LABELS[match.round as string] ?? String(match.round),
-      })
+    if (!match) return
+    const pred = predictions[id] ?? { home: 0, away: 0 }
+    const { error } = await saveBet({
+      userId: currentUser.id,
+      matchId: id,
+      home: match.home.name,
+      away: match.away.name,
+      homeScore: pred.home,
+      awayScore: pred.away,
+      stage: match.round === 'group'
+        ? `Groupe ${match.group} · J${match.matchday}`
+        : KO_LABELS[match.round as string] ?? String(match.round),
+    })
+    if (error) {
+      setLockErrors(prev => ({ ...prev, [id]: error }))
+      setTimeout(() => setLockErrors(prev => { const s = { ...prev }; delete s[id]; return s }), 3500)
+    } else {
+      setConfirmed(prev => new Set(prev).add(id))
     }
   }
 
@@ -283,6 +288,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
                   {mdMatches.map((m, i) => (
                     <MatchCard key={m.id} match={m}
                       prediction={predictions[m.id]} confirmed={confirmed.has(m.id)}
+                      lockError={lockErrors[m.id]}
                       delay={i * 55}
                       onIncrement={(s, d) => setPrediction(m.id, s, d)}
                       onConfirm={() => confirm(m.id)}
@@ -332,6 +338,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
             {koMatches.map((m, i) => (
               <MatchCard key={m.id} match={m}
                 prediction={predictions[m.id]} confirmed={confirmed.has(m.id)}
+                lockError={lockErrors[m.id]}
                 delay={i * 45}
                 onIncrement={(s, d) => setPrediction(m.id, s, d)}
                 onConfirm={() => confirm(m.id)}
@@ -423,13 +430,14 @@ interface MatchCardProps {
   match: Match
   prediction?: { home: number; away: number }
   confirmed: boolean
+  lockError?: string
   delay: number
   onIncrement: (side: 'home' | 'away', delta: number) => void
   onConfirm: () => void
   onEdit: () => void
 }
 
-function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
+function MatchCard({ match, prediction, confirmed, lockError, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
   const pred   = prediction ?? { home: 0, away: 0 }
   const isTBD  = match.home.code === 'un'
   const locked = isMatchLocked(match)
@@ -511,9 +519,13 @@ function MatchCard({ match, prediction, confirmed, delay, onIncrement, onConfirm
         padding: '9px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg)',
       }}>
         <div style={{ fontSize: 10, color: 'var(--text-3)' }}>
-          <span style={{ color: '#A07828', fontWeight: 700 }}>+3</span> score exact
-          &nbsp;·&nbsp;
-          <span style={{ color: 'rgba(160,120,40,0.7)', fontWeight: 600 }}>+1</span> bon résultat
+          {lockError ? (
+            <span style={{ color: '#dc2626', fontWeight: 700 }}>🔒 {lockError}</span>
+          ) : (
+            <><span style={{ color: '#A07828', fontWeight: 700 }}>+3</span> score exact
+            &nbsp;·&nbsp;
+            <span style={{ color: 'rgba(160,120,40,0.7)', fontWeight: 600 }}>+1</span> bon résultat</>
+          )}
         </div>
         {locked ? (
           <div style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 700, letterSpacing: 0.5 }}>
