@@ -444,7 +444,7 @@ function calcPoints(result: MatchResult, pred: { home: number; away: number }): 
   if (rH === pH && rA === pA) return 5
   if (rH > rA && pH > pA) return 3
   if (rH < rA && pH < pA) return 3
-  if (rH === rA && pH === pA) return 1
+  if (rH === rA) return 1   // match nul → +1 pour tout le monde
   return 0
 }
 
@@ -557,7 +557,7 @@ function MatchCard({ match, prediction, confirmed, lockError, result, delay, onI
               &nbsp;·&nbsp;
               <span style={{ color: 'rgba(160,120,40,0.7)', fontWeight: 600 }}>+3</span> bon résultat
               &nbsp;·&nbsp;
-              <span style={{ color: 'rgba(160,120,40,0.5)', fontWeight: 600 }}>+1</span> nul
+              <span style={{ color: 'rgba(160,120,40,0.5)', fontWeight: 600 }}>+1</span> si nul
             </>
           )}
         </div>
