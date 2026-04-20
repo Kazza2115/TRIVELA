@@ -30,8 +30,8 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
       const result = mode === 'register'
         ? await register(email.trim(), password, pseudo.trim(), country.code, country.name)
         : await login(email.trim(), password)
-      if (result.error) { setError(result.error); return }
-      onSuccess(result.user!)
+      if (result.error || !result.user) { setError(result.error ?? 'Erreur inattendue.'); return }
+      onSuccess(result.user)
     } catch (e) {
       setError('Erreur réseau — réessaie.')
       console.error('[Auth] submit error:', e)
@@ -50,7 +50,7 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
 
   return (
     <div
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+      onClick={e => { if (!loading && e.target === e.currentTarget) onClose() }}
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
         background: 'rgba(0,0,0,0.45)',
