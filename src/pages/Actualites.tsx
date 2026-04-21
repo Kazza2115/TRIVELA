@@ -20,21 +20,18 @@ interface Article {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const REFRESH_MS = 30 * 60 * 1000
-const CACHE_KEY  = 'trivela-news-v4'
+const CACHE_KEY  = 'trivela-news-v5'
+const WC_KEYWORDS = ['2026', 'mondial', 'coupe du monde', 'world cup', 'bleus', 'équipe de france']
 
-// Google News RSS queries — always have content, no CORS issues via proxy
+// Direct media RSS feeds (real article descriptions) + Google News as fallback
 const FEEDS = [
+  { url: 'https://www.eurosport.fr/football/rss.xml',            name: 'Eurosport',  filter: true  },
+  { url: 'https://dwh.lequipe.fr/api/edito/rss?path=/Football/', name: "L'Équipe",   filter: true  },
+  { url: 'https://rmcsport.bfmtv.com/rss/football.xml',         name: 'RMC Sport',  filter: true  },
   {
     url:  'https://news.google.com/rss/search?q=coupe+du+monde+2026+football&hl=fr&gl=FR&ceid=FR:fr',
-    name: 'Google News',
-  },
-  {
-    url:  'https://news.google.com/rss/search?q=%C3%A9quipe+de+france+2026+mondial&hl=fr&gl=FR&ceid=FR:fr',
-    name: 'Google News',
-  },
-  {
-    url:  'https://news.google.com/rss/search?q=FIFA+world+cup+2026&hl=fr&gl=FR&ceid=FR:fr',
-    name: 'Google News',
+    name: 'Actu Foot',
+    filter: false,
   },
 ]
 
@@ -48,7 +45,22 @@ const PROXIES = [
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim()
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>').replace(/&quot;/gi, '"').replace(/&#39;/gi, "'")
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/\s+/g, ' ').trim()
+}
+
+function briefExcerpt(raw: string, title: string): string {
+  const text = stripHtml(raw)
+  // Google News descriptions just repeat the title + source — skip them
+  if (text.toLowerCase().startsWith(title.toLowerCase().slice(0, 30))) return ''
+  // Take first sentence, capped at 130 chars
+  const dot = text.search(/[.!?]\s/)
+  const sentence = dot > 0 ? text.slice(0, dot + 1) : text
+  return sentence.length > 130 ? sentence.slice(0, 127).trimEnd() + '…' : sentence
 }
 
 function proxyImage(src: string): string {
@@ -88,7 +100,7 @@ function timeAgo(ts: number): string {
 
 // ── XML parser ────────────────────────────────────────────────────────────────
 
-function parseItems(xml: string, sourceName: string): Article[] {
+function parseItems(xml: string, sourceName: string, filter: boolean): Article[] {
   try {
     const doc   = new DOMParser().parseFromString(xml, 'text/xml')
     const items = [...doc.querySelectorAll('item')]
@@ -103,26 +115,27 @@ function parseItems(xml: string, sourceName: string): Article[] {
       const pubDate = item.querySelector('pubDate')?.textContent ?? ''
       if (!title) return []
 
-      const publishedAt = new Date(pubDate).getTime() || Date.now() - Math.random() * 86400000
+      const rawText = `${title} ${desc}`.toLowerCase()
 
-      // Google News articles have a source tag; use it for attribution
-      const sourceTag = item.querySelector('source')?.textContent?.trim()
+      // Apply WC keyword filter for media feeds
+      if (filter && !WC_KEYWORDS.some(k => rawText.includes(k))) return []
+
+      const publishedAt = new Date(pubDate).getTime() || Date.now() - Math.random() * 86400000
+      const sourceTag   = item.querySelector('source')?.textContent?.trim()
       const displaySource = sourceTag ?? sourceName
 
-      // Google News doesn't embed images in RSS; weserv can't help without a real image URL
-      // We'll leave image null and use the emoji fallback
       const mediaUrl = item.querySelector('content')?.getAttribute('url')
                     ?? item.querySelector('thumbnail')?.getAttribute('url')
                     ?? item.querySelector('enclosure')?.getAttribute('url')
                     ?? null
 
-      const rawText = `${title} ${desc}`
-      const { category, color: categoryColor, flag } = categorise(rawText)
+      const { category, color: categoryColor, flag } = categorise(`${title} ${desc}`)
+      const excerpt = briefExcerpt(desc, title)
 
       return [{
         id:           `${displaySource}-${title.slice(0, 40)}-${publishedAt}`,
         title,
-        excerpt:      stripHtml(desc).slice(0, 220).trimEnd() + '…',
+        excerpt,
         url:          link,
         source:       displaySource,
         image:        mediaUrl ? proxyImage(mediaUrl) : null,
@@ -140,7 +153,7 @@ function parseItems(xml: string, sourceName: string): Article[] {
 
 // ── RSS fetcher (tries each proxy in turn) ────────────────────────────────────
 
-async function fetchFeed(feedUrl: string, sourceName: string): Promise<Article[]> {
+async function fetchFeed(feedUrl: string, sourceName: string, filter: boolean): Promise<Article[]> {
   for (const makeProxy of PROXIES) {
     try {
       const res = await fetch(makeProxy(feedUrl), {
@@ -149,7 +162,7 @@ async function fetchFeed(feedUrl: string, sourceName: string): Promise<Article[]
       if (!res.ok) continue
       const text = await res.text()
       if (!text.includes('<item')) continue
-      const articles = parseItems(text, sourceName)
+      const articles = parseItems(text, sourceName, filter)
       if (articles.length > 0) return articles
     } catch {}
   }
@@ -182,7 +195,7 @@ function useNews() {
     setFetchFailed(false)
 
     try {
-      const results = await Promise.allSettled(FEEDS.map(f => fetchFeed(f.url, f.name)))
+      const results = await Promise.allSettled(FEEDS.map(f => fetchFeed(f.url, f.name, f.filter)))
 
       const all: Article[] = []
       results.forEach(r => { if (r.status === 'fulfilled') all.push(...r.value) })
@@ -386,9 +399,11 @@ function ArticleCard({ article: a }: { article: Article }) {
           {a.title}
         </div>
 
-        <p style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.55, marginBottom: 10 }}>
-          {a.excerpt}
-        </p>
+        {a.excerpt && (
+          <p style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.55, marginBottom: 10 }}>
+            {a.excerpt}
+          </p>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600 }}>
