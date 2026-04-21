@@ -20,16 +20,30 @@ interface Article {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const REFRESH_MS = 30 * 60 * 1000
-const CACHE_KEY  = 'trivela-news-v3'
+const CACHE_KEY  = 'trivela-news-v4'
 
+// Google News RSS queries — always have content, no CORS issues via proxy
 const FEEDS = [
-  { url: 'https://www.eurosport.fr/football/rss.xml',             name: 'Eurosport' },
-  { url: 'https://dwh.lequipe.fr/api/edito/rss?path=/Football/',  name: "L'Équipe"  },
-  { url: 'https://rmcsport.bfmtv.com/rss/football.xml',          name: 'RMC Sport' },
-  { url: 'https://www.foot01.com/rss.xml',                        name: 'Foot01'    },
+  {
+    url:  'https://news.google.com/rss/search?q=coupe+du+monde+2026+football&hl=fr&gl=FR&ceid=FR:fr',
+    name: 'Google News',
+  },
+  {
+    url:  'https://news.google.com/rss/search?q=%C3%A9quipe+de+france+2026+mondial&hl=fr&gl=FR&ceid=FR:fr',
+    name: 'Google News',
+  },
+  {
+    url:  'https://news.google.com/rss/search?q=FIFA+world+cup+2026&hl=fr&gl=FR&ceid=FR:fr',
+    name: 'Google News',
+  },
 ]
 
-const WC_KEYWORDS = ['2026', 'mondial', 'coupe du monde', 'world cup', 'fifa', 'équipe de france', 'bleus', 'qualification']
+// CORS proxies tried in order
+const PROXIES = [
+  (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+  (url: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  (url: string) => `https://thingproxy.freeboard.io/fetch/${url}`,
+]
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -55,7 +69,7 @@ function categorise(text: string): { category: string; color: string; flag: stri
     return { category: 'Officiel', color: '#6366f1', flag: '⚽' }
   if (/billet|ticket/.test(t))
     return { category: 'Billetterie', color: '#f59e0b', flag: '🎫' }
-  return { category: 'Football', color: '#C89B3C', flag: '⚽' }
+  return { category: 'Mondial 2026', color: '#C89B3C', flag: '⚽' }
 }
 
 function formatDate(ts: number): string {
@@ -72,90 +86,73 @@ function timeAgo(ts: number): string {
   return `il y a ${Math.floor(h / 24)}j`
 }
 
-// ── RSS fetcher ───────────────────────────────────────────────────────────────
+// ── XML parser ────────────────────────────────────────────────────────────────
 
-function parseXmlItems(xml: string, sourceName: string): Article[] {
-  const doc   = new DOMParser().parseFromString(xml, 'text/xml')
-  const items = [...doc.querySelectorAll('item')]
-  if (!items.length) return []
+function parseItems(xml: string, sourceName: string): Article[] {
+  try {
+    const doc   = new DOMParser().parseFromString(xml, 'text/xml')
+    const items = [...doc.querySelectorAll('item')]
+    if (!items.length) return []
 
-  return items.slice(0, 25).flatMap((item): Article[] => {
-    const title    = item.querySelector('title')?.textContent?.trim() ?? ''
-    const desc     = item.querySelector('description')?.textContent ?? ''
-    const link     = item.querySelector('link')?.textContent?.trim() ?? '#'
-    const pubDate  = item.querySelector('pubDate')?.textContent ?? ''
-    if (!title) return []
+    return items.flatMap((item): Article[] => {
+      const title   = item.querySelector('title')?.textContent?.trim() ?? ''
+      const desc    = item.querySelector('description')?.textContent ?? ''
+      const link    = item.querySelector('link')?.textContent?.trim()
+               ?? item.getElementsByTagName('link')[0]?.textContent?.trim()
+               ?? '#'
+      const pubDate = item.querySelector('pubDate')?.textContent ?? ''
+      if (!title) return []
 
-    const publishedAt = new Date(pubDate).getTime() || 0
+      const publishedAt = new Date(pubDate).getTime() || Date.now() - Math.random() * 86400000
 
-    // Look for image in common RSS image fields
-    const mediaUrl   = item.querySelector('content')?.getAttribute('url')
+      // Google News articles have a source tag; use it for attribution
+      const sourceTag = item.querySelector('source')?.textContent?.trim()
+      const displaySource = sourceTag ?? sourceName
+
+      // Google News doesn't embed images in RSS; weserv can't help without a real image URL
+      // We'll leave image null and use the emoji fallback
+      const mediaUrl = item.querySelector('content')?.getAttribute('url')
                     ?? item.querySelector('thumbnail')?.getAttribute('url')
                     ?? item.querySelector('enclosure')?.getAttribute('url')
                     ?? null
 
-    const rawText = `${title} ${desc}`
-    const { category, color: categoryColor, flag } = categorise(rawText)
+      const rawText = `${title} ${desc}`
+      const { category, color: categoryColor, flag } = categorise(rawText)
 
-    return [{
-      id:           `${sourceName}-${title.slice(0, 30)}-${publishedAt}`,
-      title,
-      excerpt:      stripHtml(desc).slice(0, 220).trimEnd() + '…',
-      url:          link,
-      source:       sourceName,
-      image:        mediaUrl ? proxyImage(mediaUrl) : null,
-      category,
-      categoryColor,
-      flag,
-      isNew:        Date.now() - publishedAt < 86_400_000,
-      publishedAt,
-    }]
-  })
+      return [{
+        id:           `${displaySource}-${title.slice(0, 40)}-${publishedAt}`,
+        title,
+        excerpt:      stripHtml(desc).slice(0, 220).trimEnd() + '…',
+        url:          link,
+        source:       displaySource,
+        image:        mediaUrl ? proxyImage(mediaUrl) : null,
+        category,
+        categoryColor,
+        flag,
+        isNew:        Date.now() - publishedAt < 86_400_000,
+        publishedAt,
+      }]
+    })
+  } catch {
+    return []
+  }
 }
 
-async function fetchFeed(rssUrl: string, sourceName: string): Promise<Article[]> {
-  // Try rss2json first (returns JSON, no XML parsing needed)
-  try {
-    const api = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=25&order_by=pubDate`
-    const res = await fetch(api, { signal: AbortSignal.timeout(7000) })
-    if (res.ok) {
-      const data = await res.json()
-      if (data.status === 'ok' && Array.isArray(data.items) && data.items.length > 0) {
-        return data.items.slice(0, 25).flatMap((item: any): Article[] => {
-          const title = (item.title ?? '').trim()
-          if (!title) return []
-          const publishedAt = new Date(item.pubDate ?? 0).getTime()
-          const thumb: string | undefined = item.thumbnail || item.enclosure?.link
-          const rawText = `${title} ${item.description ?? ''}`
-          const { category, color: categoryColor, flag } = categorise(rawText)
-          return [{
-            id:           `${sourceName}-${title.slice(0, 30)}-${publishedAt}`,
-            title,
-            excerpt:      stripHtml(item.description ?? '').slice(0, 220).trimEnd() + '…',
-            url:          item.link ?? '#',
-            source:       sourceName,
-            image:        thumb ? proxyImage(thumb) : null,
-            category,
-            categoryColor,
-            flag,
-            isNew:        Date.now() - publishedAt < 86_400_000,
-            publishedAt,
-          }]
-        })
-      }
-    }
-  } catch {}
+// ── RSS fetcher (tries each proxy in turn) ────────────────────────────────────
 
-  // Fallback: fetch raw XML via allorigins.win
-  try {
-    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`
-    const res   = await fetch(proxy, { signal: AbortSignal.timeout(9000) })
-    if (res.ok) {
-      const xml = await res.text()
-      return parseXmlItems(xml, sourceName)
-    }
-  } catch {}
-
+async function fetchFeed(feedUrl: string, sourceName: string): Promise<Article[]> {
+  for (const makeProxy of PROXIES) {
+    try {
+      const res = await fetch(makeProxy(feedUrl), {
+        headers: { Accept: 'application/xml, text/xml, */*' },
+      })
+      if (!res.ok) continue
+      const text = await res.text()
+      if (!text.includes('<item')) continue
+      const articles = parseItems(text, sourceName)
+      if (articles.length > 0) return articles
+    } catch {}
+  }
   return []
 }
 
@@ -175,30 +172,24 @@ function useNews() {
   const [articles,   setArticles]   = useState<Article[]>(cached?.articles ?? [])
   const [updatedAt,  setUpdatedAt]  = useState<number>(cached?.ts ?? 0)
   const [refreshing, setRefreshing] = useState(false)
-  const [error,      setError]      = useState(false)
+  const [fetchFailed, setFetchFailed] = useState(false)
 
   const refresh = useCallback(async (force = false) => {
     const cache = loadCache()
     if (!force && cache && Date.now() - cache.ts < REFRESH_MS) return
 
     setRefreshing(true)
-    setError(false)
+    setFetchFailed(false)
+
     try {
       const results = await Promise.allSettled(FEEDS.map(f => fetchFeed(f.url, f.name)))
+
       const all: Article[] = []
       results.forEach(r => { if (r.status === 'fulfilled') all.push(...r.value) })
 
-      // Prefer World Cup articles; fall back to all football articles
-      const wcFiltered = all.filter(a => {
-        const t = `${a.title} ${a.excerpt}`.toLowerCase()
-        return WC_KEYWORDS.some(k => t.includes(k))
-      })
-
-      const pool = wcFiltered.length >= 4 ? wcFiltered : all
-
       const deduped = Array.from(
-        new Map(pool.map(a => [a.id, a])).values()
-      ).sort((a, b) => b.publishedAt - a.publishedAt).slice(0, 15)
+        new Map(all.map(a => [a.id, a])).values()
+      ).sort((a, b) => b.publishedAt - a.publishedAt).slice(0, 20)
 
       if (deduped.length > 0) {
         setArticles(deduped)
@@ -207,11 +198,12 @@ function useNews() {
           localStorage.setItem(CACHE_KEY, JSON.stringify({ articles: deduped, ts: Date.now() }))
         } catch {}
       } else {
-        setError(true)
+        setFetchFailed(true)
       }
     } catch {
-      setError(true)
+      setFetchFailed(true)
     }
+
     setRefreshing(false)
   }, [])
 
@@ -221,13 +213,15 @@ function useNews() {
     return () => clearInterval(id)
   }, [refresh])
 
-  return { articles, updatedAt, refreshing, error, refresh }
+  return { articles, updatedAt, refreshing, fetchFailed, refresh }
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Actualites({ onBack }: { onBack: () => void }) {
-  const { articles, updatedAt, refreshing, error, refresh } = useNews()
+  const { articles, updatedAt, refreshing, fetchFailed, refresh } = useNews()
+
+  const isEmpty = articles.length === 0
 
   return (
     <PageLayout onBack={onBack} accentColor="#C89B3C" flag="📰" title="ACTUALITÉS" subtitle="Coupe du Monde 2026">
@@ -267,47 +261,48 @@ export default function Actualites({ onBack }: { onBack: () => void }) {
         </button>
       </div>
 
-      {/* State: loading skeleton */}
-      {refreshing && articles.length === 0 && (
+      {/* Skeleton */}
+      {refreshing && isEmpty && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {[1, 2, 3].map(i => (
             <div key={i} style={{
               background: 'var(--bg-card)', border: '1px solid var(--border)',
-              borderRadius: 16, overflow: 'hidden', height: 260,
-              opacity: 0.5,
+              borderRadius: 16, overflow: 'hidden', opacity: 0.5,
             }}>
               <div style={{ height: 170, background: 'var(--bg-fill)' }} />
-              <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ height: 10, width: '40%', background: 'var(--bg-fill)', borderRadius: 4 }} />
-                <div style={{ height: 16, width: '90%', background: 'var(--bg-fill)', borderRadius: 4 }} />
-                <div style={{ height: 12, width: '70%', background: 'var(--bg-fill)', borderRadius: 4 }} />
+              <div style={{ padding: '14px 14px 16px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+                <div style={{ height: 9, width: '35%', background: 'var(--bg-fill)', borderRadius: 4 }} />
+                <div style={{ height: 15, width: '88%', background: 'var(--bg-fill)', borderRadius: 4 }} />
+                <div style={{ height: 11, width: '65%', background: 'var(--bg-fill)', borderRadius: 4 }} />
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* State: error */}
-      {error && articles.length === 0 && !refreshing && (
+      {/* Error */}
+      {fetchFailed && isEmpty && !refreshing && (
         <div style={{
-          textAlign: 'center', padding: '48px 20px',
-          fontSize: 13, color: 'var(--text-3)', lineHeight: 1.7,
+          textAlign: 'center', padding: '52px 24px',
+          fontSize: 13, color: 'var(--text-3)', lineHeight: 1.8,
         }}>
+          <div style={{ fontSize: 36, marginBottom: 14 }}>📡</div>
           Impossible de charger les articles.<br />
-          <span style={{ fontSize: 11 }}>Vérifiez votre connexion.</span><br /><br />
+          <span style={{ fontSize: 11 }}>Vérifiez votre connexion internet.</span>
+          <br /><br />
           <button
             onClick={() => refresh(true)}
             style={{
-              background: '#C89B3C', color: '#000', border: 'none',
-              borderRadius: 10, padding: '10px 20px', fontSize: 13,
-              fontWeight: 700, cursor: 'pointer',
+              background: '#C89B3C', color: '#0D0800', border: 'none',
+              borderRadius: 10, padding: '11px 24px', fontSize: 13,
+              fontWeight: 700, cursor: 'pointer', letterSpacing: 0.5,
             }}
           >Réessayer</button>
         </div>
       )}
 
       {/* Articles */}
-      {articles.length > 0 && (
+      {!isEmpty && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {articles.map(a => <ArticleCard key={a.id} article={a} />)}
         </div>
@@ -336,10 +331,10 @@ function ArticleCard({ article: a }: { article: Article }) {
         boxShadow: 'var(--shadow-sm)', cursor: 'pointer', transition: 'opacity 0.12s',
       }}
     >
-      {/* Image */}
+      {/* Image zone */}
       <div style={{
-        height: 170, overflow: 'hidden', position: 'relative',
-        background: `linear-gradient(135deg, ${a.categoryColor}20, ${a.categoryColor}38)`,
+        height: 160, overflow: 'hidden', position: 'relative',
+        background: `linear-gradient(135deg, ${a.categoryColor}1a, ${a.categoryColor}35)`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         {a.image && imgOk ? (
@@ -349,16 +344,17 @@ function ArticleCard({ article: a }: { article: Article }) {
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
           />
         ) : (
-          <span style={{ fontSize: 52, opacity: 0.7 }}>{a.flag}</span>
+          <span style={{ fontSize: 48, opacity: 0.65 }}>{a.flag}</span>
         )}
 
-        {/* Source pill */}
+        {/* Source */}
         <div style={{
           position: 'absolute', bottom: 8, left: 10,
           background: 'rgba(0,0,0,0.58)', backdropFilter: 'blur(6px)',
           WebkitBackdropFilter: 'blur(6px)', borderRadius: 6,
           padding: '3px 8px', fontSize: 9, fontWeight: 700,
           letterSpacing: 0.8, color: 'rgba(255,255,255,0.92)', textTransform: 'uppercase',
+          maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{a.source}</div>
 
         {a.isNew && (
