@@ -35,8 +35,24 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null)
   const [showAuth,    setShowAuth]    = useState(false)
   const [showProfile, setShowProfile] = useState(false)
+  const [darkMode,    setDarkMode]    = useState(() => {
+    try { return localStorage.getItem('trivela-theme') === 'dark' } catch { return false }
+  })
 
   useEffect(() => subscribeToAuth(setCurrentUser), [])
+
+  useEffect(() => {
+    if (darkMode) document.documentElement.classList.add('dark')
+    else          document.documentElement.classList.remove('dark')
+  }, [darkMode])
+
+  const toggleTheme = () => {
+    setDarkMode(d => {
+      const next = !d
+      try { localStorage.setItem('trivela-theme', next ? 'dark' : 'light') } catch {}
+      return next
+    })
+  }
 
   // ── Parier banner — smooth swipe-to-dismiss ────────────────────────────────
   // bannerShown drives the CSS transition (always rendered, never unmounted).
@@ -97,10 +113,10 @@ export default function App() {
         flexShrink: 0, height: 'var(--header-h)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 16px', zIndex: 10,
-        background: 'rgba(242,242,247,0.85)',
+        background: 'var(--bg-header)',
         backdropFilter: 'saturate(180%) blur(20px)',
         WebkitBackdropFilter: 'saturate(180%) blur(20px)',
-        borderBottom: '1px solid rgba(60,60,67,0.14)',
+        borderBottom: '1px solid var(--border-ui)',
       }}>
         <button onClick={() => setSection('globe')} style={{
           background: 'none', border: 'none', cursor: 'pointer',
@@ -111,6 +127,42 @@ export default function App() {
           onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
         >
           <TrivelaLogo size={110} color={gold} />
+        </button>
+
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          title={darkMode ? 'Mode clair' : 'Mode sombre'}
+          style={{
+            width: 34, height: 34, flexShrink: 0,
+            background: 'var(--bg-fill)', border: '1px solid var(--border-ui)',
+            borderRadius: 10, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'opacity 0.15s, background 0.2s',
+            marginLeft: 'auto', marginRight: 10,
+          }}
+          onPointerDown={e => (e.currentTarget.style.opacity = '0.5')}
+          onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
+        >
+          {darkMode ? (
+            /* Sun */
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={gold} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="4"/>
+              <line x1="12" y1="2"  x2="12" y2="5"/>
+              <line x1="12" y1="19" x2="12" y2="22"/>
+              <line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/>
+              <line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/>
+              <line x1="2"  y1="12" x2="5"  y2="12"/>
+              <line x1="19" y1="12" x2="22" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/>
+              <line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/>
+            </svg>
+          ) : (
+            /* Moon */
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={dimCol} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          )}
         </button>
 
         {currentUser ? (
@@ -254,8 +306,8 @@ export default function App() {
         height: 72,
         position: 'relative',
         overflow: 'hidden',
-        background: 'rgba(242,242,247,0.92)',
-        borderTop: '1px solid rgba(60,60,67,0.10)',
+        background: 'var(--bg-nav)',
+        borderTop: '1px solid var(--border-ui)',
         backdropFilter: 'saturate(180%) blur(24px)',
         WebkitBackdropFilter: 'saturate(180%) blur(24px)',
         zIndex: 20,
@@ -279,10 +331,10 @@ export default function App() {
                 alignItems: 'center', justifyContent: 'center', gap: 4,
                 background: active
                   ? 'rgba(200,155,60,0.10)'
-                  : 'rgba(242,242,247,0.94)',
+                  : 'var(--bg-nav-item)',
                 border: active
                   ? `1px solid ${gold}55`
-                  : '1px solid rgba(60,60,67,0.13)',
+                  : '1px solid var(--border-ui)',
                 borderRadius: 14,
                 backdropFilter: 'saturate(180%) blur(20px)',
                 WebkitBackdropFilter: 'saturate(180%) blur(20px)',
