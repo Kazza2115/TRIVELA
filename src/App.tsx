@@ -133,19 +133,21 @@ export default function App() {
         <button
           onClick={toggleTheme}
           title={darkMode ? 'Mode clair' : 'Mode sombre'}
+          className={darkMode ? 'sun-btn' : 'moon-btn'}
           style={{
             width: 34, height: 34, flexShrink: 0,
-            background: 'var(--bg-fill)', border: '1px solid var(--border-ui)',
+            background: darkMode ? 'rgba(200,155,60,0.10)' : 'rgba(139,92,246,0.08)',
+            border: darkMode ? '1px solid rgba(200,155,60,0.25)' : '1px solid rgba(139,92,246,0.25)',
             borderRadius: 10, cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'opacity 0.15s, background 0.2s',
+            transition: 'opacity 0.15s, background 0.3s, border-color 0.3s',
             marginLeft: 'auto', marginRight: 10,
           }}
           onPointerDown={e => (e.currentTarget.style.opacity = '0.5')}
           onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
         >
           {darkMode ? (
-            /* Sun */
+            /* Sun — gold */
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={gold} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="4"/>
               <line x1="12" y1="2"  x2="12" y2="5"/>
@@ -158,8 +160,8 @@ export default function App() {
               <line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/>
             </svg>
           ) : (
-            /* Moon */
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={dimCol} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            /* Moon — violet */
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
             </svg>
           )}
