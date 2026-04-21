@@ -19,14 +19,17 @@ interface Article {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const REFRESH_MS   = 30 * 60 * 1000
-const CACHE_KEY    = 'trivela-news-v2'
-const KEYWORDS     = ['2026', 'mondial', 'coupe du monde', 'world cup']
+const REFRESH_MS = 30 * 60 * 1000
+const CACHE_KEY  = 'trivela-news-v3'
 
 const FEEDS = [
-  { url: 'https://www.eurosport.fr/football/rss.xml', name: 'Eurosport' },
-  { url: 'https://dwh.lequipe.fr/api/edito/rss?path=/Football/', name: "L'Équipe" },
+  { url: 'https://www.eurosport.fr/football/rss.xml',             name: 'Eurosport' },
+  { url: 'https://dwh.lequipe.fr/api/edito/rss?path=/Football/',  name: "L'Équipe"  },
+  { url: 'https://rmcsport.bfmtv.com/rss/football.xml',          name: 'RMC Sport' },
+  { url: 'https://www.foot01.com/rss.xml',                        name: 'Foot01'    },
 ]
+
+const WC_KEYWORDS = ['2026', 'mondial', 'coupe du monde', 'world cup', 'fifa', 'équipe de france', 'bleus', 'qualification']
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -52,7 +55,7 @@ function categorise(text: string): { category: string; color: string; flag: stri
     return { category: 'Officiel', color: '#6366f1', flag: '⚽' }
   if (/billet|ticket/.test(t))
     return { category: 'Billetterie', color: '#f59e0b', flag: '🎫' }
-  return { category: 'Mondial 2026', color: '#C89B3C', flag: '⚽' }
+  return { category: 'Football', color: '#C89B3C', flag: '⚽' }
 }
 
 function formatDate(ts: number): string {
@@ -71,38 +74,89 @@ function timeAgo(ts: number): string {
 
 // ── RSS fetcher ───────────────────────────────────────────────────────────────
 
+function parseXmlItems(xml: string, sourceName: string): Article[] {
+  const doc   = new DOMParser().parseFromString(xml, 'text/xml')
+  const items = [...doc.querySelectorAll('item')]
+  if (!items.length) return []
+
+  return items.slice(0, 25).flatMap((item): Article[] => {
+    const title    = item.querySelector('title')?.textContent?.trim() ?? ''
+    const desc     = item.querySelector('description')?.textContent ?? ''
+    const link     = item.querySelector('link')?.textContent?.trim() ?? '#'
+    const pubDate  = item.querySelector('pubDate')?.textContent ?? ''
+    if (!title) return []
+
+    const publishedAt = new Date(pubDate).getTime() || 0
+
+    // Look for image in common RSS image fields
+    const mediaUrl   = item.querySelector('content')?.getAttribute('url')
+                    ?? item.querySelector('thumbnail')?.getAttribute('url')
+                    ?? item.querySelector('enclosure')?.getAttribute('url')
+                    ?? null
+
+    const rawText = `${title} ${desc}`
+    const { category, color: categoryColor, flag } = categorise(rawText)
+
+    return [{
+      id:           `${sourceName}-${title.slice(0, 30)}-${publishedAt}`,
+      title,
+      excerpt:      stripHtml(desc).slice(0, 220).trimEnd() + '…',
+      url:          link,
+      source:       sourceName,
+      image:        mediaUrl ? proxyImage(mediaUrl) : null,
+      category,
+      categoryColor,
+      flag,
+      isNew:        Date.now() - publishedAt < 86_400_000,
+      publishedAt,
+    }]
+  })
+}
+
 async function fetchFeed(rssUrl: string, sourceName: string): Promise<Article[]> {
-  const api = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=30&order_by=pubDate`
-  const res = await fetch(api)
-  if (!res.ok) return []
-  const data = await res.json()
-  if (data.status !== 'ok' || !Array.isArray(data.items)) return []
-
-  return data.items
-    .filter((item: any) => {
-      const text = `${item.title ?? ''} ${item.description ?? ''}`.toLowerCase()
-      return KEYWORDS.some(k => text.includes(k))
-    })
-    .map((item: any): Article => {
-      const publishedAt = new Date(item.pubDate ?? 0).getTime()
-      const rawText     = `${item.title ?? ''} ${item.description ?? ''}`
-      const { category, color: categoryColor, flag } = categorise(rawText)
-      const thumb: string | undefined = item.thumbnail || item.enclosure?.link
-
-      return {
-        id:           `${sourceName}-${publishedAt}`,
-        title:        (item.title ?? '').trim(),
-        excerpt:      stripHtml(item.description ?? '').slice(0, 220).trimEnd() + '…',
-        url:          item.link ?? '#',
-        source:       sourceName,
-        image:        thumb ? proxyImage(thumb) : null,
-        category,
-        categoryColor,
-        flag,
-        isNew:        Date.now() - publishedAt < 86_400_000,
-        publishedAt,
+  // Try rss2json first (returns JSON, no XML parsing needed)
+  try {
+    const api = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=25&order_by=pubDate`
+    const res = await fetch(api, { signal: AbortSignal.timeout(7000) })
+    if (res.ok) {
+      const data = await res.json()
+      if (data.status === 'ok' && Array.isArray(data.items) && data.items.length > 0) {
+        return data.items.slice(0, 25).flatMap((item: any): Article[] => {
+          const title = (item.title ?? '').trim()
+          if (!title) return []
+          const publishedAt = new Date(item.pubDate ?? 0).getTime()
+          const thumb: string | undefined = item.thumbnail || item.enclosure?.link
+          const rawText = `${title} ${item.description ?? ''}`
+          const { category, color: categoryColor, flag } = categorise(rawText)
+          return [{
+            id:           `${sourceName}-${title.slice(0, 30)}-${publishedAt}`,
+            title,
+            excerpt:      stripHtml(item.description ?? '').slice(0, 220).trimEnd() + '…',
+            url:          item.link ?? '#',
+            source:       sourceName,
+            image:        thumb ? proxyImage(thumb) : null,
+            category,
+            categoryColor,
+            flag,
+            isNew:        Date.now() - publishedAt < 86_400_000,
+            publishedAt,
+          }]
+        })
       }
-    })
+    }
+  } catch {}
+
+  // Fallback: fetch raw XML via allorigins.win
+  try {
+    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(rssUrl)}`
+    const res   = await fetch(proxy, { signal: AbortSignal.timeout(9000) })
+    if (res.ok) {
+      const xml = await res.text()
+      return parseXmlItems(xml, sourceName)
+    }
+  } catch {}
+
+  return []
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -118,30 +172,46 @@ function useNews() {
 
   const cached = loadCache()
 
-  const [articles,    setArticles]    = useState<Article[]>(cached?.articles ?? [])
-  const [updatedAt,   setUpdatedAt]   = useState<number>(cached?.ts ?? 0)
-  const [refreshing,  setRefreshing]  = useState(false)
+  const [articles,   setArticles]   = useState<Article[]>(cached?.articles ?? [])
+  const [updatedAt,  setUpdatedAt]  = useState<number>(cached?.ts ?? 0)
+  const [refreshing, setRefreshing] = useState(false)
+  const [error,      setError]      = useState(false)
 
   const refresh = useCallback(async (force = false) => {
     const cache = loadCache()
     if (!force && cache && Date.now() - cache.ts < REFRESH_MS) return
 
     setRefreshing(true)
+    setError(false)
     try {
       const results = await Promise.allSettled(FEEDS.map(f => fetchFeed(f.url, f.name)))
       const all: Article[] = []
       results.forEach(r => { if (r.status === 'fulfilled') all.push(...r.value) })
 
-      const deduped = Array.from(new Map(all.map(a => [a.id, a])).values())
-        .sort((a, b) => b.publishedAt - a.publishedAt)
-        .slice(0, 12)
+      // Prefer World Cup articles; fall back to all football articles
+      const wcFiltered = all.filter(a => {
+        const t = `${a.title} ${a.excerpt}`.toLowerCase()
+        return WC_KEYWORDS.some(k => t.includes(k))
+      })
+
+      const pool = wcFiltered.length >= 4 ? wcFiltered : all
+
+      const deduped = Array.from(
+        new Map(pool.map(a => [a.id, a])).values()
+      ).sort((a, b) => b.publishedAt - a.publishedAt).slice(0, 15)
 
       if (deduped.length > 0) {
         setArticles(deduped)
         setUpdatedAt(Date.now())
-        try { localStorage.setItem(CACHE_KEY, JSON.stringify({ articles: deduped, ts: Date.now() })) } catch {}
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ articles: deduped, ts: Date.now() }))
+        } catch {}
+      } else {
+        setError(true)
       }
-    } catch {}
+    } catch {
+      setError(true)
+    }
     setRefreshing(false)
   }, [])
 
@@ -151,13 +221,13 @@ function useNews() {
     return () => clearInterval(id)
   }, [refresh])
 
-  return { articles, updatedAt, refreshing, refresh }
+  return { articles, updatedAt, refreshing, error, refresh }
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Actualites({ onBack }: { onBack: () => void }) {
-  const { articles, updatedAt, refreshing, refresh } = useNews()
+  const { articles, updatedAt, refreshing, error, refresh } = useNews()
 
   return (
     <PageLayout onBack={onBack} accentColor="#C89B3C" flag="📰" title="ACTUALITÉS" subtitle="Coupe du Monde 2026">
@@ -168,9 +238,11 @@ export default function Actualites({ onBack }: { onBack: () => void }) {
         marginBottom: 16,
       }}>
         <span style={{ fontSize: 10, color: 'var(--text-3)', letterSpacing: 0.4 }}>
-          {updatedAt > 0
-            ? `Mis à jour ${timeAgo(updatedAt)}`
-            : 'Chargement…'}
+          {refreshing
+            ? 'Chargement…'
+            : updatedAt > 0
+              ? `Mis à jour ${timeAgo(updatedAt)}`
+              : 'En attente…'}
         </span>
         <button
           onClick={() => refresh(true)}
@@ -195,16 +267,47 @@ export default function Actualites({ onBack }: { onBack: () => void }) {
         </button>
       </div>
 
-      {/* Articles */}
-      {articles.length === 0 && !refreshing ? (
+      {/* State: loading skeleton */}
+      {refreshing && articles.length === 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderRadius: 16, overflow: 'hidden', height: 260,
+              opacity: 0.5,
+            }}>
+              <div style={{ height: 170, background: 'var(--bg-fill)' }} />
+              <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ height: 10, width: '40%', background: 'var(--bg-fill)', borderRadius: 4 }} />
+                <div style={{ height: 16, width: '90%', background: 'var(--bg-fill)', borderRadius: 4 }} />
+                <div style={{ height: 12, width: '70%', background: 'var(--bg-fill)', borderRadius: 4 }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* State: error */}
+      {error && articles.length === 0 && !refreshing && (
         <div style={{
           textAlign: 'center', padding: '48px 20px',
           fontSize: 13, color: 'var(--text-3)', lineHeight: 1.7,
         }}>
-          Aucun article trouvé.<br />
-          Vérifiez votre connexion et réactualisez.
+          Impossible de charger les articles.<br />
+          <span style={{ fontSize: 11 }}>Vérifiez votre connexion.</span><br /><br />
+          <button
+            onClick={() => refresh(true)}
+            style={{
+              background: '#C89B3C', color: '#000', border: 'none',
+              borderRadius: 10, padding: '10px 20px', fontSize: 13,
+              fontWeight: 700, cursor: 'pointer',
+            }}
+          >Réessayer</button>
         </div>
-      ) : (
+      )}
+
+      {/* Articles */}
+      {articles.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {articles.map(a => <ArticleCard key={a.id} article={a} />)}
         </div>
