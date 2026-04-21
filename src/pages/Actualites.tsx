@@ -1,292 +1,305 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import PageLayout from './PageLayout'
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Article {
   id: string
-  category: string
-  categoryColor: string
   title: string
   excerpt: string
-  date: string
-  flag: string
-  isNew?: boolean
-  source: string
   url: string
+  source: string
+  image: string | null
+  category: string
+  categoryColor: string
+  flag: string
+  isNew: boolean
+  publishedAt: number
 }
 
-const NEWS: Article[] = [
-  {
-    id: '1',
-    category: 'Équipe de France',
-    categoryColor: '#3b82f6',
-    title: 'Mbappé : sa blessure au genou "est derrière moi"',
-    excerpt: 'Le capitaine des Bleus a confirmé être pleinement rétabli avant les amicaux de mars aux États-Unis. Son retour a immédiatement rassuré Deschamps à trois mois du Mondial.',
-    date: '24 mars 2026',
-    flag: '🇫🇷',
-    isNew: true,
-    source: 'France Bleu',
-    url: 'https://www.francebleu.fr/sports/football/football-la-blessure-au-genou-est-derriere-moi-affirme-kylian-mbappe-5650436',
-  },
-  {
-    id: '2',
-    category: 'Qualifications',
-    categoryColor: '#ef4444',
-    title: 'Cauchemar sans fin : l\'Italie éliminée aux tirs au but par la Bosnie',
-    excerpt: 'Pour la troisième édition consécutive, la Squadra Azzurra ne disputera pas la Coupe du monde. Battue aux penaltys (4-3) à Zenica après une expulsion décisive de Bastoni, l\'Italie sombre à nouveau.',
-    date: '1 avr. 2026',
-    flag: '🇮🇹',
-    isNew: true,
-    source: 'Eurosport',
-    url: 'https://www.eurosport.fr/football/qualif-coupe-du-monde/2026/barrages-coupe-du-monde-2026-i-le-cauchemar-sans-fin-litalie-eliminee-aux-tirs-au-but-par-la-bosnie-herzegovine_sto23286351/story.shtml',
-  },
-  {
-    id: '3',
-    category: 'Bleus',
-    categoryColor: '#3b82f6',
-    title: 'Réduits à 10, les Bleus matent le Brésil grâce à Mbappé et Ekitike',
-    excerpt: 'À Gillette Stadium, la France a renversé la Seleção (2-1) en amical malgré l\'infériorité numérique. Mbappé, auteur du 1-0, inscrit son 56e but en Bleu, à une unité du record de Giroud.',
-    date: '26 mars 2026',
-    flag: '⚽',
-    isNew: true,
-    source: 'Eurosport',
-    url: 'https://www.eurosport.fr/football/matches-amicaux/2026/reduits-a-dix-les-bleus-matent-quand-meme-le-bresil-grace-a-kylian-mbappe-et-hugo-ekitike-en-match-amical-avant-la-coupe-du-monde-2026_sto23284889/story.shtml',
-  },
-  {
-    id: '4',
-    category: 'Officiel',
-    categoryColor: '#6366f1',
-    title: 'FIFA : 170 officiels de match dont Clément Turpin pour la France',
-    excerpt: 'Le 9 avril, la FIFA a officialisé les 52 arbitres, 88 assistants et 30 officiels VAR. L\'UEFA (15) et la CONMEBOL (12) dominent. Clément Turpin figure parmi les arbitres sélectionnés.',
-    date: '9 avr. 2026',
-    flag: '🟨',
-    isNew: true,
-    source: 'FIFA',
-    url: 'https://inside.fifa.com/media-releases/fifa-world-cup-2026-match-referees-appointed',
-  },
-  {
-    id: '5',
-    category: 'Groupes',
-    categoryColor: '#C89B3C',
-    title: 'La France dans le groupe I : Sénégal, Norvège et Irak au programme',
-    excerpt: 'Tirage au sort le 5 décembre 2025 à Washington. Les Bleus affrontent le Sénégal le 16 juin à New York, l\'Irak le 22 juin à Philadelphie et la Norvège le 26 juin à Boston.',
-    date: '5 déc. 2025',
-    flag: '🎲',
-    isNew: false,
-    source: 'Eurosport',
-    url: 'https://www.eurosport.fr/football/coupe-du-monde/2026/coupe-du-monde-2026-le-tirage-au-sort-en-direct-lespagne-et-la-france-favoris-pour-remporter-le-mondial-en-amerique-du-nord_sto23247563/story.shtml',
-  },
-  {
-    id: '6',
-    category: 'Stades',
-    categoryColor: '#10b981',
-    title: 'Mexique–Afrique du Sud : l\'Azteca lance le Mondial pour la 3e fois',
-    excerpt: 'L\'Estadio Azteca accueillera le coup d\'envoi le 11 juin, devenant le seul stade à avoir ouvert un Mondial à trois reprises (1970, 1986, 2026). Rénové, il affiche une capacité de 87 000 places.',
-    date: '11 juin 2026',
-    flag: '🇲🇽',
-    isNew: false,
-    source: 'FIFA',
-    url: 'https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/articles/estadio-azteca-mexico-city-host-opening-match-world-cup-2026',
-  },
-  {
-    id: '7',
-    category: 'Équipe de France',
-    categoryColor: '#3b82f6',
-    title: 'Deschamps dévoilera ses 26 Bleus le 14 mai sur TF1 — son dernier Mondial',
-    excerpt: 'Le sélectionneur annoncera sa liste lors du 20h de TF1. À l\'issue de cette Coupe du monde, après 14 ans de règne, Didier Deschamps quittera définitivement son poste de sélectionneur des Bleus.',
-    date: 'À venir · 14 mai 2026',
-    flag: '📋',
-    isNew: false,
-    source: 'Topmercato',
-    url: 'https://www.topmercato.com/2066991-liste-didier-deschamps-coupe-monde-2026-date-quand-annonce/',
-  },
-  {
-    id: '8',
-    category: 'Groupes',
-    categoryColor: '#C89B3C',
-    title: 'Les 12 groupes officiels de la Coupe du Monde 2026',
-    excerpt: '48 équipes réparties en 12 groupes de 4 dans un format inédit. Les 2 premiers et les 8 meilleurs troisièmes se qualifient pour les 8es de finale. Retrouvez le tableau complet.',
-    date: '5 déc. 2025',
-    flag: '🌍',
-    isNew: false,
-    source: 'FIFA',
-    url: 'https://www.fifa.com/fr/articles/resultats-tirage-au-sort-mondial-2026',
-  },
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const REFRESH_MS   = 30 * 60 * 1000
+const CACHE_KEY    = 'trivela-news-v2'
+const KEYWORDS     = ['2026', 'mondial', 'coupe du monde', 'world cup']
+
+const FEEDS = [
+  { url: 'https://www.eurosport.fr/football/rss.xml', name: 'Eurosport' },
+  { url: 'https://dwh.lequipe.fr/api/edito/rss?path=/Football/', name: "L'Équipe" },
 ]
 
-// ── Hook: fetch OG image via Microlink, cached in sessionStorage ──────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
-function useOgImage(articleUrl: string): { src: string | null; loading: boolean } {
-  const cacheKey = `oimg:${articleUrl}`
-  const [src, setSrc] = useState<string | null>(() => {
-    try { return sessionStorage.getItem(cacheKey) } catch { return null }
-  })
-  const [loading, setLoading] = useState(!src)
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function proxyImage(src: string): string {
+  return `https://images.weserv.nl/?url=${encodeURIComponent(src)}&w=800&h=420&fit=cover&output=webp&q=80`
+}
+
+function categorise(text: string): { category: string; color: string; flag: string } {
+  const t = text.toLowerCase()
+  if (/mbappe|mbappé|deschamps|bleus|équipe de france|les bleus/.test(t))
+    return { category: 'Équipe de France', color: '#3b82f6', flag: '🇫🇷' }
+  if (/barrage|qualif|éliminé|eliminé|barrages/.test(t))
+    return { category: 'Qualifications', color: '#f59e0b', flag: '🏆' }
+  if (/groupe|tirage|poule/.test(t))
+    return { category: 'Groupes', color: '#C89B3C', flag: '🎲' }
+  if (/stade|stadium|azteca|metlife|sofi/.test(t))
+    return { category: 'Stades', color: '#10b981', flag: '🏟️' }
+  if (/fifa|officiel|arbitre/.test(t))
+    return { category: 'Officiel', color: '#6366f1', flag: '⚽' }
+  if (/billet|ticket/.test(t))
+    return { category: 'Billetterie', color: '#f59e0b', flag: '🎫' }
+  return { category: 'Mondial 2026', color: '#C89B3C', flag: '⚽' }
+}
+
+function formatDate(ts: number): string {
+  const d = new Date(ts)
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function timeAgo(ts: number): string {
+  const mins = Math.floor((Date.now() - ts) / 60000)
+  if (mins < 1)  return 'à l\'instant'
+  if (mins < 60) return `il y a ${mins} min`
+  const h = Math.floor(mins / 60)
+  if (h < 24)    return `il y a ${h}h`
+  return `il y a ${Math.floor(h / 24)}j`
+}
+
+// ── RSS fetcher ───────────────────────────────────────────────────────────────
+
+async function fetchFeed(rssUrl: string, sourceName: string): Promise<Article[]> {
+  const api = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=30&order_by=pubDate`
+  const res = await fetch(api)
+  if (!res.ok) return []
+  const data = await res.json()
+  if (data.status !== 'ok' || !Array.isArray(data.items)) return []
+
+  return data.items
+    .filter((item: any) => {
+      const text = `${item.title ?? ''} ${item.description ?? ''}`.toLowerCase()
+      return KEYWORDS.some(k => text.includes(k))
+    })
+    .map((item: any): Article => {
+      const publishedAt = new Date(item.pubDate ?? 0).getTime()
+      const rawText     = `${item.title ?? ''} ${item.description ?? ''}`
+      const { category, color: categoryColor, flag } = categorise(rawText)
+      const thumb: string | undefined = item.thumbnail || item.enclosure?.link
+
+      return {
+        id:           `${sourceName}-${publishedAt}`,
+        title:        (item.title ?? '').trim(),
+        excerpt:      stripHtml(item.description ?? '').slice(0, 220).trimEnd() + '…',
+        url:          item.link ?? '#',
+        source:       sourceName,
+        image:        thumb ? proxyImage(thumb) : null,
+        category,
+        categoryColor,
+        flag,
+        isNew:        Date.now() - publishedAt < 86_400_000,
+        publishedAt,
+      }
+    })
+}
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
+
+function useNews() {
+  const loadCache = (): { articles: Article[]; ts: number } | null => {
+    try {
+      const raw = localStorage.getItem(CACHE_KEY)
+      if (raw) return JSON.parse(raw)
+    } catch {}
+    return null
+  }
+
+  const cached = loadCache()
+
+  const [articles,    setArticles]    = useState<Article[]>(cached?.articles ?? [])
+  const [updatedAt,   setUpdatedAt]   = useState<number>(cached?.ts ?? 0)
+  const [refreshing,  setRefreshing]  = useState(false)
+
+  const refresh = useCallback(async (force = false) => {
+    const cache = loadCache()
+    if (!force && cache && Date.now() - cache.ts < REFRESH_MS) return
+
+    setRefreshing(true)
+    try {
+      const results = await Promise.allSettled(FEEDS.map(f => fetchFeed(f.url, f.name)))
+      const all: Article[] = []
+      results.forEach(r => { if (r.status === 'fulfilled') all.push(...r.value) })
+
+      const deduped = Array.from(new Map(all.map(a => [a.id, a])).values())
+        .sort((a, b) => b.publishedAt - a.publishedAt)
+        .slice(0, 12)
+
+      if (deduped.length > 0) {
+        setArticles(deduped)
+        setUpdatedAt(Date.now())
+        try { localStorage.setItem(CACHE_KEY, JSON.stringify({ articles: deduped, ts: Date.now() })) } catch {}
+      }
+    } catch {}
+    setRefreshing(false)
+  }, [])
 
   useEffect(() => {
-    if (src) { setLoading(false); return }
-    const ctrl = new AbortController()
-    fetch(`https://api.microlink.io?url=${encodeURIComponent(articleUrl)}`, { signal: ctrl.signal })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        const imgUrl: string | undefined = data?.data?.image?.url
-        if (imgUrl) {
-          setSrc(imgUrl)
-          try { sessionStorage.setItem(cacheKey, imgUrl) } catch {}
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-    return () => ctrl.abort()
-  }, [articleUrl, src, cacheKey])
+    refresh()
+    const id = setInterval(() => refresh(true), REFRESH_MS)
+    return () => clearInterval(id)
+  }, [refresh])
 
-  return { src, loading }
+  return { articles, updatedAt, refreshing, refresh }
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-interface ActualitesProps {
-  onBack: () => void
-}
+export default function Actualites({ onBack }: { onBack: () => void }) {
+  const { articles, updatedAt, refreshing, refresh } = useNews()
 
-export default function Actualites({ onBack }: ActualitesProps) {
   return (
-    <PageLayout
-      onBack={onBack}
-      accentColor="#C89B3C"
-      flag="📰"
-      title="ACTUALITÉS"
-      subtitle="Coupe du Monde 2026"
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {NEWS.map(article => (
-          <ArticleCard key={article.id} article={article} />
-        ))}
+    <PageLayout onBack={onBack} accentColor="#C89B3C" flag="📰" title="ACTUALITÉS" subtitle="Coupe du Monde 2026">
+
+      {/* Refresh bar */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 16,
+      }}>
+        <span style={{ fontSize: 10, color: 'var(--text-3)', letterSpacing: 0.4 }}>
+          {updatedAt > 0
+            ? `Mis à jour ${timeAgo(updatedAt)}`
+            : 'Chargement…'}
+        </span>
+        <button
+          onClick={() => refresh(true)}
+          disabled={refreshing}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            background: 'var(--bg-fill)', border: '1px solid var(--border)',
+            borderRadius: 8, padding: '5px 10px', cursor: refreshing ? 'default' : 'pointer',
+            fontSize: 10, fontWeight: 700, color: refreshing ? 'var(--text-3)' : 'var(--text-2)',
+            opacity: refreshing ? 0.5 : 1, transition: 'opacity 0.2s',
+          }}
+        >
+          <svg
+            width="11" height="11" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+            style={{ animation: refreshing ? 'spin 0.7s linear infinite' : 'none' }}
+          >
+            <polyline points="23 4 23 10 17 10"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+          Actualiser
+        </button>
       </div>
+
+      {/* Articles */}
+      {articles.length === 0 && !refreshing ? (
+        <div style={{
+          textAlign: 'center', padding: '48px 20px',
+          fontSize: 13, color: 'var(--text-3)', lineHeight: 1.7,
+        }}>
+          Aucun article trouvé.<br />
+          Vérifiez votre connexion et réactualisez.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {articles.map(a => <ArticleCard key={a.id} article={a} />)}
+        </div>
+      )}
     </PageLayout>
   )
 }
 
 // ── Card ──────────────────────────────────────────────────────────────────────
 
-function ArticleCard({ article }: { article: Article }) {
-  const { src: imgSrc, loading } = useOgImage(article.url)
-  const open = () => window.open(article.url, '_blank', 'noopener,noreferrer')
+function ArticleCard({ article: a }: { article: Article }) {
+  const [imgOk, setImgOk] = useState(!!a.image)
+
+  const open = () => window.open(a.url, '_blank', 'noopener,noreferrer')
 
   return (
     <div
-      onClick={open}
-      role="link"
-      tabIndex={0}
+      onClick={open} role="link" tabIndex={0}
       onKeyDown={e => e.key === 'Enter' && open()}
-      onPointerDown={e => (e.currentTarget.style.opacity = '0.78')}
+      onPointerDown={e => (e.currentTarget.style.opacity = '0.75')}
       onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
       onPointerLeave={e => (e.currentTarget.style.opacity = '1')}
       style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        borderRadius: 16,
-        overflow: 'hidden',
-        boxShadow: 'var(--shadow-sm)',
-        cursor: 'pointer',
-        transition: 'opacity 0.12s',
+        background: 'var(--bg-card)', border: '1px solid var(--border)',
+        borderRadius: 16, overflow: 'hidden',
+        boxShadow: 'var(--shadow-sm)', cursor: 'pointer', transition: 'opacity 0.12s',
       }}
     >
-      {/* ── Image section ── */}
+      {/* Image */}
       <div style={{
-        height: 180, position: 'relative', overflow: 'hidden',
-        background: `linear-gradient(135deg, ${article.categoryColor}18 0%, ${article.categoryColor}30 100%)`,
+        height: 170, overflow: 'hidden', position: 'relative',
+        background: `linear-gradient(135deg, ${a.categoryColor}20, ${a.categoryColor}38)`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {imgSrc ? (
+        {a.image && imgOk ? (
           <img
-            src={imgSrc}
-            alt={article.title}
+            src={a.image} alt=""
+            onError={() => setImgOk(false)}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
           />
         ) : (
-          <div style={{
-            width: '100%', height: '100%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            opacity: loading ? 0.5 : 0.8,
-            transition: 'opacity 0.3s',
-          }}>
-            <span style={{ fontSize: 56, filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.15))' }}>
-              {article.flag}
-            </span>
-          </div>
+          <span style={{ fontSize: 52, opacity: 0.7 }}>{a.flag}</span>
         )}
 
-        {/* Source badge overlay */}
+        {/* Source pill */}
         <div style={{
           position: 'absolute', bottom: 8, left: 10,
-          background: 'rgba(0,0,0,0.55)',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
-          borderRadius: 6, padding: '3px 8px',
-          fontSize: 9, fontWeight: 700, letterSpacing: 0.8,
-          color: 'rgba(255,255,255,0.90)', textTransform: 'uppercase',
-        }}>
-          {article.source}
-        </div>
+          background: 'rgba(0,0,0,0.58)', backdropFilter: 'blur(6px)',
+          WebkitBackdropFilter: 'blur(6px)', borderRadius: 6,
+          padding: '3px 8px', fontSize: 9, fontWeight: 700,
+          letterSpacing: 0.8, color: 'rgba(255,255,255,0.92)', textTransform: 'uppercase',
+        }}>{a.source}</div>
 
-        {article.isNew && (
+        {a.isNew && (
           <div style={{
             position: 'absolute', top: 8, right: 10,
             background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
             borderRadius: 6, padding: '3px 8px',
-            fontSize: 9, fontWeight: 800, letterSpacing: 1,
-            color: '#0D0800',
-          }}>
-            NEW
-          </div>
+            fontSize: 9, fontWeight: 800, letterSpacing: 1, color: '#0D0800',
+          }}>NEW</div>
         )}
       </div>
 
-      {/* ── Text section ── */}
+      {/* Content */}
       <div style={{ padding: '12px 14px 14px' }}>
-        {/* Category */}
         <span style={{
-          display: 'inline-block',
-          fontSize: 8, fontWeight: 800, letterSpacing: 1.2,
-          textTransform: 'uppercase',
-          color: article.categoryColor,
-          background: `${article.categoryColor}14`,
-          border: `1px solid ${article.categoryColor}30`,
-          borderRadius: 5, padding: '3px 7px',
-          marginBottom: 8,
+          display: 'inline-block', marginBottom: 8,
+          fontSize: 8, fontWeight: 800, letterSpacing: 1.2, textTransform: 'uppercase',
+          color: a.categoryColor, background: `${a.categoryColor}14`,
+          border: `1px solid ${a.categoryColor}30`, borderRadius: 5, padding: '3px 7px',
         }}>
-          {article.category}
+          {a.category}
         </span>
 
-        {/* Title */}
         <div style={{
           fontFamily: "'Bebas Neue', cursive",
-          fontSize: 18, letterSpacing: 1.3,
-          color: 'var(--text-1)', lineHeight: 1.15,
+          fontSize: 18, letterSpacing: 1.3, color: 'var(--text-1)', lineHeight: 1.15,
           marginBottom: 7,
         }}>
-          {article.title}
+          {a.title}
         </div>
 
-        {/* Excerpt */}
-        <p style={{
-          fontSize: 12, color: 'var(--text-2)', lineHeight: 1.55,
-          marginBottom: 10,
-        }}>
-          {article.excerpt}
+        <p style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.55, marginBottom: 10 }}>
+          {a.excerpt}
         </p>
 
-        {/* Footer */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600, letterSpacing: 0.3 }}>
-            {article.date}
+          <span style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600 }}>
+            {formatDate(a.publishedAt)}
           </span>
           <span style={{
-            fontSize: 11, fontWeight: 700,
-            color: article.categoryColor,
+            fontSize: 11, fontWeight: 700, color: a.categoryColor,
             display: 'flex', alignItems: 'center', gap: 4,
           }}>
-            Lire l'article
+            Lire
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="5" y1="12" x2="19" y2="12"/>
