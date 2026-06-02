@@ -11,6 +11,10 @@ on:
         type: choice
         options: [seed, cleanup]
         default: seed
+  # Permet de lancer la démo en poussant ce fichier (seed par défaut).
+  push:
+    branches: [claude/resume-codebase-work-i3uAg]
+    paths: ['scripts/social-demo.mjs', '.github/workflows/social-demo.yml']
 
 jobs:
   social-demo:
