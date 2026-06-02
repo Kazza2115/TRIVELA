@@ -1,0 +1,22 @@
+name: Verify setup (diagnostic)
+
+# Déclenchement manuel uniquement — vérifie le backend de production.
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js --no-save --no-package-lock
+      - name: Run diagnostic
+        run: node scripts/verify-setup.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
