@@ -82,37 +82,35 @@ async function insert(table, rows, representation = false) {
   return representation ? res.json() : []
 }
 
-// Crée un compte DEMO de façon robuste. Essaie avec métadonnées ; en cas
-// d'échec (souvent une collision UNIQUE sur le pseudo dans le trigger
-// handle_new_user), retente SANS métadonnées puis renomme le profil.
+// Crée un compte DEMO puis GARANTIT son profil par un upsert direct (service
+// role), indépendamment du trigger handle_new_user (qui peut être neutralisé).
 async function createPlayer(email, pseudo, code, country) {
-  let res = await sb('/auth/v1/admin/users', {
+  const res = await sb('/auth/v1/admin/users', {
     method: 'POST',
     body: JSON.stringify({
       email, password: crypto.randomUUID(), email_confirm: true,
       user_metadata: { pseudo, country_code: code, country_name: country },
     }),
   })
-  let u = await res.json().catch(() => ({}))
-  if (u.id) return { id: u.id, pseudo, code, country }
-  console.error(`  ⚠️  création avec métadonnées KO (${res.status}) pour "${pseudo}": ${JSON.stringify(u)}`)
-
-  // Repli : sans métadonnées (le trigger met des valeurs par défaut), puis PATCH
-  res = await sb('/auth/v1/admin/users', {
-    method: 'POST',
-    body: JSON.stringify({ email, password: crypto.randomUUID(), email_confirm: true }),
-  })
-  u = await res.json().catch(() => ({}))
+  const u = await res.json().catch(() => ({}))
   if (!u.id) {
-    console.error(`  ❌ création SANS métadonnées KO aussi (${res.status}): ${JSON.stringify(u)}`)
+    console.error(`  ❌ createUser KO (${res.status}) pour "${pseudo}": ${JSON.stringify(u)}`)
     return null
   }
-  const patch = await sb(`/rest/v1/profiles?id=eq.${u.id}`, {
-    method: 'PATCH', headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({ pseudo, country_code: code, country_name: country }),
+  // Profil garanti (merge-duplicates sur la PK id)
+  const pr = await sb('/rest/v1/profiles?on_conflict=id', {
+    method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({ id: u.id, pseudo, country_code: code, country_name: country }),
   })
-  console.log(`  ↪︎ repli sans métadonnées OK pour "${pseudo}" (PATCH profil ${patch.status}).`)
+  if (!pr.ok) console.error(`  ⚠️ upsert profil ${pr.status}: ${await pr.text().catch(() => '')}`)
   return { id: u.id, pseudo, code, country }
+}
+
+async function showSignupErrors() {
+  const res = await sb('/rest/v1/signup_errors?order=created_at.desc&limit=3&select=err,created_at')
+  if (!res.ok) return
+  const rows = await res.json().catch(() => [])
+  if (rows.length) console.log('🩺 Dernières erreurs de trigger (cause racine) :', JSON.stringify(rows))
 }
 
 async function seed() {
@@ -130,8 +128,9 @@ async function seed() {
     const p = await createPlayer(email, pseudo, code, country)
     if (p) players.push(p)
   }
-  await sleep(1500) // laisse le trigger créer les profils
+  await sleep(1000)
   console.log(`👤 ${players.length} joueurs DEMO créés.`)
+  await showSignupErrors()
 
   // 2. Matchs DEMO (seront RÉGLÉS → scores + points visibles)
   const DEMO_MATCHES = [
