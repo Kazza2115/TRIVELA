@@ -105,6 +105,43 @@ Quand les qualifiés sont connus :
 
 ---
 
+## 7. Sauvegardes & filet manuel (important avec de l'argent)
+
+### Sauvegarde de la base
+- Workflow **« Backup database »** : exporte `profiles`, `bets`, `match_results`
+  toutes les 6 h dans un **artifact privé** (Actions → run → Artifacts,
+  conservé 90 jours). Jamais commité (dépôt public → données joueurs protégées).
+- Déclencher à la demande : Actions → « Backup database » → Run workflow.
+- **Restaurer** : télécharger l'artifact, dézipper dans `db-backup/`, puis
+  `MODE=restore SUPABASE_SERVICE_ROLE_KEY=… node scripts/backup-db.mjs`
+  (réinjecte en upsert). Note : restaurer `profiles` suppose que les comptes
+  `auth.users` existent encore (gérés/sauvegardés par Supabase séparément).
+- Supabase fait aussi ses propres sauvegardes quotidiennes (selon le plan).
+
+### Source de scores de secours
+- Statut : à finaliser. TheSportsDB gratuit ne couvre pas la WC 2026.
+- Obtenir une clé **API-Football** (gratuit, 100 req/j) ou **TheSportsDB Premium**,
+  puis l'ajouter en secret et me demander de câbler la bascule automatique
+  + la validation (couverture des 72 matchs).
+
+### Filet manuel (toujours disponible)
+Si l'API principale échoue ou se trompe, règle un match à la main dans
+Supabase → SQL Editor :
+```sql
+select settle_match('gA-md1-mex-zaf', 2, 0);  -- (match_id, score domicile, score extérieur)
+```
+- Voir les matchs déjà réglés : `select * from match_results order by settled_at desc;`
+- Pour **corriger** un score déjà réglé (settle_match est idempotent et ne
+  recompte pas) : il faut annuler manuellement (supprimer la ligne
+  `match_results` + ajuster les points concernés). Me demander la procédure.
+
+### Vérifier la fiabilité de la source avant le tournoi
+- Workflow **« Validate data source »** : relancer la veille du 11 juin pour
+  confirmer que les 72 matchs sont correctement mappés (noms d'équipes,
+  orientation domicile/extérieur).
+
+---
+
 ## Résumé : ça marchera si…
 
 1. `supabase-schema.sql` a été exécuté ✅
