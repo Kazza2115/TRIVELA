@@ -25,11 +25,10 @@ function isInMatchWindow() {
   const WC_END   = Date.UTC(2026, 6, 20)   // July 20
   if (now.getTime() < WC_START || now.getTime() > WC_END) return false
 
-  // Active match hours: 17:30–01:00 UTC
-  const h = now.getUTCHours()
-  const m = now.getUTCMinutes()
-  const t = h * 60 + m
-  return t >= 17 * 60 + 30 || t <= 60
+  // Plan payant football-data.org = pas de limite de requêtes : on traite toute
+  // la journée pendant le Mondial pour régler chaque match au plus vite (live),
+  // y compris les matchs joués tôt.
+  return true
 }
 
 // ─── football-data.org English names → our short codes ───────────────────────
