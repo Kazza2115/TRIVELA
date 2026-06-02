@@ -13,6 +13,7 @@ const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
 const MODE     = process.env.MODE || 'seed'
 const USER_EMAIL = process.env.TARGET_EMAIL || 'thebigchungus08@gmail.com'
+const TARGET_PSEUDO = process.env.TARGET_PSEUDO || 'KAZA'
 const DOMAIN   = '@trivela-social.invalid'
 if (!SERVICE) { console.error('SUPABASE_SERVICE_ROLE_KEY absent'); process.exit(1) }
 
@@ -157,21 +158,28 @@ async function seed() {
   }
   console.log('⚽ Matchs DEMO réglés (scores + points visibles).')
 
-  // 5. Cible aussi l'utilisateur réel : ses pronostics recevront notes/commentaires
-  const all = await adminUsers()
-  const me = all.find(u => (u.email || '').toLowerCase() === USER_EMAIL.toLowerCase())
+  // 5. Cible aussi TON compte (recherché par pseudo) : tes pronos reçoivent notes/commentaires
+  let meId = null
+  const pr = await sb(`/rest/v1/profiles?pseudo=eq.${encodeURIComponent(TARGET_PSEUDO)}&select=id&limit=1`)
+  const prRows = await pr.json().catch(() => [])
+  if (prRows[0]?.id) meId = prRows[0].id
+  if (!meId) {
+    const all = await adminUsers()
+    const u = all.find(x => (x.email || '').toLowerCase() === USER_EMAIL.toLowerCase())
+    if (u) meId = u.id
+  }
   let myBets = []
-  if (me) {
-    const res = await sb(`/rest/v1/bets?user_id=eq.${me.id}&select=match_id,home,away,stage&limit=6`)
+  if (meId) {
+    const res = await sb(`/rest/v1/bets?user_id=eq.${meId}&select=match_id&limit=8`)
     myBets = await res.json().catch(() => [])
-    console.log(`📨 ${myBets.length} pronostic(s) de ton compte trouvé(s) → ils recevront des notes/commentaires.`)
+    console.log(`📨 Compte cible "${TARGET_PSEUDO}" trouvé : ${myBets.length} pronostic(s) → recevront notes/commentaires.`)
   } else {
-    console.log(`⚠️  Compte ${USER_EMAIL} introuvable — on note seulement entre joueurs DEMO.`)
+    console.log(`⚠️  Compte cible introuvable (pseudo "${TARGET_PSEUDO}") — on note seulement entre DEMO.`)
   }
 
   // Cibles à noter/commenter : (joueur DEMO, ses matchs) + (toi, tes matchs)
   const targets = players.map(p => ({ id: p.id, matchIds: ALL_MATCHES.map(m => m.id) }))
-  if (me && myBets.length) targets.push({ id: me.id, matchIds: myBets.map(b => b.match_id) })
+  if (meId && myBets.length) targets.push({ id: meId, matchIds: myBets.map(b => b.match_id) })
 
   // 6. Notes ⭐, commentaires 💬 et réactions 👍/👎
   let nRatings = 0, nComments = 0, nReactions = 0
