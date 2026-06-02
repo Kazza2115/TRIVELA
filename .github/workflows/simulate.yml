@@ -1,0 +1,26 @@
+name: Simulate tournament (diagnostic)
+
+# Simulation complète du pipeline de paris (10 joueurs, paris aléatoires,
+# scores simulés, vérif Realtime + classement, puis nettoyage).
+# Déclenché par push sur les fichiers de simulation, puis repassé en manuel.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/resume-codebase-work-i3uAg]
+    paths: ['scripts/simulate-tournament.mjs', '.github/workflows/simulate.yml']
+
+jobs:
+  simulate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js --no-save --no-package-lock
+      - name: Run simulation
+        run: node scripts/simulate-tournament.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
