@@ -5,7 +5,6 @@ import { createClient } from '@supabase/supabase-js'
 const SUPABASE_URL         = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 const FOOTBALL_API_KEY     = process.env.FOOTBALL_DATA_API_KEY
-const APIFOOTBALL_KEY      = process.env.APIFOOTBALL_KEY   // source de secours (optionnelle)
 
 if (!SUPABASE_SERVICE_KEY || !FOOTBALL_API_KEY) {
   console.error('Missing SUPABASE_SERVICE_ROLE_KEY or FOOTBALL_DATA_API_KEY')
@@ -192,45 +191,7 @@ async function main() {
     processed++
   }
 
-  // Source de secours : règle les matchs que la source principale n'a pas réglés.
-  try { await settleFromBackup() } catch (e) { console.error('[backup] erreur (ignorée):', e.message) }
-
   console.log(`Done — ${processed} new result(s) settled.`)
-}
-
-// ─── Source de scores de secours (API-Football) — optionnelle ────────────────
-// N'agit que si le secret APIFOOTBALL_KEY est défini. Règle les matchs encore
-// absents de match_results et gère l'inversion domicile/extérieur (scores
-// permutés si l'orientation diffère de wc2026Matches.ts).
-async function settleFromBackup() {
-  if (!APIFOOTBALL_KEY) return
-  const { data: done } = await supabase.from('match_results').select('match_id')
-  const doneIds = new Set((done ?? []).map(r => r.match_id))
-  const pending = [...new Set(Object.values(MATCH_LOOKUP))].filter(id => !doneIds.has(id))
-  if (pending.length === 0) return
-  console.log(`[backup] ${pending.length} match(s) non réglé(s) — interrogation API-Football…`)
-
-  const r = await fetch('https://v3.football.api-sports.io/fixtures?league=1&season=2026&status=FT',
-    { headers: { 'x-apisports-key': APIFOOTBALL_KEY } })
-  if (!r.ok) { console.warn(`[backup] API-Football HTTP ${r.status}`); return }
-  const fixtures = (await r.json()).response ?? []
-
-  let n = 0
-  for (const f of fixtures) {
-    const h = API_TEAM_MAP[f.teams?.home?.name]
-    const a = API_TEAM_MAP[f.teams?.away?.name]
-    if (!h || !a) { console.warn(`[backup] équipe inconnue: "${f.teams?.home?.name}" / "${f.teams?.away?.name}"`); continue }
-    let matchId = MATCH_LOOKUP[`${h}-${a}`]
-    let hs = f.goals?.home, as = f.goals?.away
-    if (!matchId) { matchId = MATCH_LOOKUP[`${a}-${h}`]; if (matchId) { const t = hs; hs = as; as = t } }
-    if (!matchId || doneIds.has(matchId) || hs == null || as == null) continue
-    const { error } = await supabase.rpc('settle_match', { p_match_id: matchId, p_home_score: hs, p_away_score: as })
-    if (error) { console.error(`[backup] settle ${matchId}:`, error.message); continue }
-    doneIds.add(matchId)
-    console.log(`[backup] ✓ ${matchId} réglé via secours — ${hs}:${as}`)
-    n++
-  }
-  console.log(`[backup] ${n} match(s) réglé(s) via la source de secours.`)
 }
 
 // Ne lance le settlement que si exécuté directement (pas lors d'un import).

@@ -118,11 +118,11 @@ Quand les qualifiés sont connus :
   `auth.users` existent encore (gérés/sauvegardés par Supabase séparément).
 - Supabase fait aussi ses propres sauvegardes quotidiennes (selon le plan).
 
-### Source de scores de secours
-- Statut : à finaliser. TheSportsDB gratuit ne couvre pas la WC 2026.
-- Obtenir une clé **API-Football** (gratuit, 100 req/j) ou **TheSportsDB Premium**,
-  puis l'ajouter en secret et me demander de câbler la bascule automatique
-  + la validation (couverture des 72 matchs).
+### Source de scores
+- Source unique : **football-data.org (plan payant)** → données live, fiables,
+  sans limite de requêtes. Le robot tourne toute la journée pendant le Mondial.
+- Pas de 2e source automatique (choix assumé) : le filet manuel ci-dessous
+  couvre les cas rares où l'API se tromperait ou serait indisponible.
 
 ### Filet manuel (toujours disponible)
 Si l'API principale échoue ou se trompe, règle un match à la main dans
