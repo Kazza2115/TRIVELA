@@ -2,8 +2,6 @@ import { useState, useRef, useEffect } from 'react'
 import Globe        from './components/Globe'
 import Paris        from './pages/Paris'
 import Classement   from './pages/Classement'
-import MonAlbum     from './pages/MonAlbum'
-import MesPacks     from './pages/MesPacks'
 import Actualites   from './pages/Actualites'
 import AuthModal    from './components/AuthModal'
 import ProfileModal from './components/ProfileModal'
@@ -12,25 +10,23 @@ import TrivelaLogo  from './components/TrivelaLogo'
 import { subscribeToAuth } from './services/auth'
 import type { UserProfile } from './services/auth'
 import {
-  IconGlobe, IconTrophy, IconPacks, IconAlbum, IconBolt,
+  IconGlobe, IconTrophy, IconBolt,
 } from './components/NavIcons'
 import './index.css'
 
-export type SectionId = 'globe' | 'paris' | 'classement' | 'album' | 'packs' | 'actualites'
+export type SectionId = 'globe' | 'paris' | 'classement' | 'actualites'
 
 const NAV_ITEMS: {
   id: SectionId; Icon: React.FC<{ size?: number; color?: string }>
   label: string
 }[] = [
   { id: 'paris',      Icon: IconBolt,   label: 'Paris'      },
-  { id: 'album',      Icon: IconAlbum,  label: 'Album'      },
   { id: 'globe',      Icon: IconGlobe,  label: 'Globe'      },
-  { id: 'packs',      Icon: IconPacks,  label: 'Packs'      },
   { id: 'classement', Icon: IconTrophy, label: 'Classement' },
 ]
 
 // Funnel: all items stay within the nav band — outer items touch the top edge
-const FUNNEL_BOTTOM_PX = [14, 8, 2, 8, 14]
+const FUNNEL_BOTTOM_PX = [8, 2, 8]
 
 export default function App() {
   const [section,     setSection]     = useState<SectionId>('globe')
@@ -319,8 +315,6 @@ export default function App() {
           </button>
         </div>
 
-        {section === 'album'      && <MonAlbum    onBack={back} />}
-        {section === 'packs'      && <MesPacks    onBack={back} />}
         {section === 'actualites' && <Actualites  onBack={back} />}
         {section === 'paris'      && <Paris        onBack={back} currentUser={currentUser} onOpenAuth={openAuth} />}
         {section === 'classement' && (
@@ -340,7 +334,7 @@ export default function App() {
         {NAV_ITEMS.map(({ id, Icon, label }, idx) => {
           const active   = activeNav === id
           const bottomPx = FUNNEL_BOTTOM_PX[idx]
-          const leftPct  = (idx + 0.5) * 20
+          const leftPct  = (idx + 0.5) * (100 / NAV_ITEMS.length)
           const isGlobe  = id === 'globe'
 
           return (

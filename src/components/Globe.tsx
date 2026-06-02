@@ -11,9 +11,7 @@ export const FEATURED: Record<number, {
   name: string; code: string; color: string; svgFill?: string
   sectionId: string; sectionName: string; icon: string
 }> = {
-  76:  { name:'Brésil',  code:'br', color:'#009B3A',                              sectionId:'packs',      sectionName:'Mes Packs',   icon:'📦' },
   686: { name:'Sénégal', code:'sn', color:'#FCDD09',                              sectionId:'classement', sectionName:'Classement',  icon:'🏆' },
-  724: { name:'Espagne', code:'es', color:'#C60B1E',                              sectionId:'album',      sectionName:'Mon Album',   icon:'📖' },
   392: { name:'Japon',   code:'jp', color:'#BC002D', svgFill:'url(#japan-grad)', sectionId:'echange',    sectionName:'Échange',     icon:'🔄' },
   840: { name:'USA',     code:'us', color:'#3C3B6E',                              sectionId:'paris',      sectionName:'Paris 2026',  icon:'⚡' },
 }
@@ -126,8 +124,8 @@ const CONF_CENTER: Record<string, [number, number]> = {
 
 // Which app section each confederation links to
 const CONF_SECTION: Record<string, { sectionId: string; sectionName: string; icon: string }> = {
-  CONMEBOL: { sectionId: 'packs',      sectionName: 'Mes Packs',   icon: '📦' },
-  UEFA:     { sectionId: 'album',      sectionName: 'Mon Album',   icon: '📖' },
+  CONMEBOL: { sectionId: 'paris',      sectionName: 'Paris 2026',  icon: '⚡' },
+  UEFA:     { sectionId: 'classement', sectionName: 'Classement',  icon: '🏆' },
   CONCACAF: { sectionId: 'paris',      sectionName: 'Paris 2026',  icon: '⚡' },
   CAF:      { sectionId: 'classement', sectionName: 'Classement',  icon: '🏆' },
   AFC:      { sectionId: 'paris',      sectionName: 'Paris 2026',  icon: '⚡' },
