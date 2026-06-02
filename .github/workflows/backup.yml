@@ -1,0 +1,34 @@
+name: Backup database
+
+# Sauvegarde automatique de la base (profiles, bets, match_results) en artifact
+# privé toutes les 6 h. Restauration : voir DEPLOYMENT.md.
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+  push:
+    branches: [claude/resume-codebase-work-i3uAg]
+    paths: ['scripts/backup-db.mjs', '.github/workflows/backup.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Export database
+        run: node scripts/backup-db.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      - name: Upload private backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: db-backup/
+          retention-days: 90
