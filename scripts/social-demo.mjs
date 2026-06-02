@@ -26,9 +26,9 @@ const pick  = a => a[rnd(a.length)]
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 const PLAYERS = [
-  ['DEMO Léa', 'fr', 'France'],
+  ['DEMO Lea', 'fr', 'France'],
   ['DEMO Max', 'be', 'Belgique'],
-  ['DEMO Zoé', 'pt', 'Portugal'],
+  ['DEMO Zoe', 'pt', 'Portugal'],
 ]
 
 // Vrais matchs à venir → resteront MASQUÉS 🔒 (démontre l'équité avant coup d'envoi)
@@ -82,26 +82,53 @@ async function insert(table, rows, representation = false) {
   return representation ? res.json() : []
 }
 
+// Crée un compte DEMO de façon robuste. Essaie avec métadonnées ; en cas
+// d'échec (souvent une collision UNIQUE sur le pseudo dans le trigger
+// handle_new_user), retente SANS métadonnées puis renomme le profil.
+async function createPlayer(email, pseudo, code, country) {
+  let res = await sb('/auth/v1/admin/users', {
+    method: 'POST',
+    body: JSON.stringify({
+      email, password: crypto.randomUUID(), email_confirm: true,
+      user_metadata: { pseudo, country_code: code, country_name: country },
+    }),
+  })
+  let u = await res.json().catch(() => ({}))
+  if (u.id) return { id: u.id, pseudo, code, country }
+  console.error(`  ⚠️  création avec métadonnées KO (${res.status}) pour "${pseudo}": ${JSON.stringify(u)}`)
+
+  // Repli : sans métadonnées (le trigger met des valeurs par défaut), puis PATCH
+  res = await sb('/auth/v1/admin/users', {
+    method: 'POST',
+    body: JSON.stringify({ email, password: crypto.randomUUID(), email_confirm: true }),
+  })
+  u = await res.json().catch(() => ({}))
+  if (!u.id) {
+    console.error(`  ❌ création SANS métadonnées KO aussi (${res.status}): ${JSON.stringify(u)}`)
+    return null
+  }
+  const patch = await sb(`/rest/v1/profiles?id=eq.${u.id}`, {
+    method: 'PATCH', headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ pseudo, country_code: code, country_name: country }),
+  })
+  console.log(`  ↪︎ repli sans métadonnées OK pour "${pseudo}" (PATCH profil ${patch.status}).`)
+  return { id: u.id, pseudo, code, country }
+}
+
 async function seed() {
   await cleanup()
   const stamp = Date.now()
   console.log('\n▶️  Création de la démo sociale…\n')
 
-  // 1. Comptes DEMO
+  // 1. Comptes DEMO — pseudos rendus uniques pour éviter toute collision UNIQUE
+  const sfx = stamp.toString(36).slice(-4)
   const players = []
   for (let i = 0; i < PLAYERS.length; i++) {
-    const [pseudo, code, country] = PLAYERS[i]
-    const res = await sb('/auth/v1/admin/users', {
-      method: 'POST',
-      body: JSON.stringify({
-        email: `social_${stamp}_${i}${DOMAIN}`,
-        password: crypto.randomUUID(), email_confirm: true,
-        user_metadata: { pseudo, country_code: code, country_name: country },
-      }),
-    })
-    const u = await res.json().catch(() => ({}))
-    if (u.id) players.push({ id: u.id, pseudo, code, country })
-    else console.error('❌ création joueur:', JSON.stringify(u))
+    const [base, code, country] = PLAYERS[i]
+    const pseudo = `${base} ${sfx}`
+    const email  = `social_${stamp}_${i}${DOMAIN}`
+    const p = await createPlayer(email, pseudo, code, country)
+    if (p) players.push(p)
   }
   await sleep(1500) // laisse le trigger créer les profils
   console.log(`👤 ${players.length} joueurs DEMO créés.`)
