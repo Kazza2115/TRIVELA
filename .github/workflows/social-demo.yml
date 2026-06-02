@@ -1,0 +1,28 @@
+name: Social demo (test notes/commentaires)
+
+# Crée des joueurs DEMO avec pronostics qui se notent/commentent/réagissent
+# entre eux et sur tes propres pronostics, pour tester la page profil.
+# Actions → "Social demo" → Run workflow → seed (créer) ou cleanup (supprimer).
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'seed = créer la démo · cleanup = tout supprimer'
+        type: choice
+        options: [seed, cleanup]
+        default: seed
+
+jobs:
+  social-demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run social demo
+        run: node scripts/social-demo.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MODE: ${{ github.event.inputs.mode || 'seed' }}
