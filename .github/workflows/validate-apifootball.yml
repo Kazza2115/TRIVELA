@@ -1,0 +1,29 @@
+name: Validate backup source (API-Football)
+
+# Vérifie que la source de secours API-Football couvre la WC 2026 et que les
+# noms d'équipes sont mappables. Nécessite le secret APIFOOTBALL_KEY.
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/resume-codebase-work-i3uAg]
+    paths:
+      - 'scripts/validate-apifootball.mjs'
+      - '.github/workflows/validate-apifootball.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js --no-save --no-package-lock
+      - name: Validate API-Football coverage
+        run: node scripts/validate-apifootball.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+          APIFOOTBALL_KEY: ${{ secrets.APIFOOTBALL_KEY }}
