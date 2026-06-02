@@ -1,0 +1,29 @@
+name: Validate data source (foot API)
+
+# Vérifie que les vrais matchs WC 2026 de football-data.org correspondent
+# aux tables de correspondance du robot (aucun match ignoré le jour J).
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/resume-codebase-work-i3uAg]
+    paths:
+      - 'scripts/validate-data-source.mjs'
+      - 'scripts/update-results.mjs'
+      - '.github/workflows/validate.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js --no-save --no-package-lock
+      - name: Cross-check API vs mappings
+        run: node scripts/validate-data-source.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}

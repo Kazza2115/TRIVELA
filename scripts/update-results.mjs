@@ -32,7 +32,7 @@ function isInMatchWindow() {
 }
 
 // ─── football-data.org English names → our short codes ───────────────────────
-const API_TEAM_MAP = {
+export const API_TEAM_MAP = {
   'Mexico': 'MEX', 'South Korea': 'KOR', 'South Africa': 'ZAF',
   'Czech Republic': 'CZE', 'Czechia': 'CZE',
   'Canada': 'CAN', 'Switzerland': 'SUI', 'Qatar': 'QAT',
@@ -54,7 +54,7 @@ const API_TEAM_MAP = {
 }
 
 // ─── HOME-AWAY → internal match ID (mirrors wc2026Matches.ts exactly) ────────
-const MATCH_LOOKUP = {
+export const MATCH_LOOKUP = {
   // Group A
   'MEX-ZAF':'gA-md1-mex-zaf', 'KOR-CZE':'gA-md1-kor-cze',
   'CZE-ZAF':'gA-md2-cze-zaf', 'MEX-KOR':'gA-md2-mex-kor',
@@ -194,4 +194,8 @@ async function main() {
   console.log(`Done — ${processed} new result(s) settled.`)
 }
 
-main().catch(e => { console.error(e); process.exit(1) })
+// Ne lance le settlement que si exécuté directement (pas lors d'un import).
+import { pathToFileURL } from 'node:url'
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(e => { console.error(e); process.exit(1) })
+}
