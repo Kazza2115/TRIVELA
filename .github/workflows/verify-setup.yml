@@ -1,11 +1,8 @@
 name: Verify setup (diagnostic)
 
-# Diagnostic du backend de production (temporaire).
+# Diagnostic du backend de production — déclenchement manuel (Actions → Run workflow).
 on:
   workflow_dispatch:
-  push:
-    branches: [claude/resume-codebase-work-i3uAg]
-    paths: ['.github/workflows/verify-setup.yml', 'scripts/verify-setup.mjs']
 
 jobs:
   verify:
