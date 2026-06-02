@@ -3,11 +3,12 @@ import PageLayout from './PageLayout'
 import { ALL_MATCHES } from '../data/wc2026Matches'
 import type { Match } from '../data/wc2026Matches'
 import {
-  getPublicBets, getResults, getRatings, getComments,
-  rateBet, addComment, deleteComment, subscribeToPlayerSocial,
+  getPublicBets, getResults, getRatings, getComments, getCommentReactions,
+  rateBet, addComment, deleteComment, reactToComment, unreactToComment,
+  subscribeToPlayerSocial,
 } from '../services/auth'
 import type {
-  UserProfile, PublicBet, MatchResult, BetRating, BetComment,
+  UserProfile, PublicBet, MatchResult, BetRating, BetComment, CommentReaction,
 } from '../services/auth'
 
 // ─── Lookups & date helpers ─────────────────────────────────────────────────
@@ -50,6 +51,7 @@ export default function PlayerProfile({ player, rank, currentUser, onBack }: Pla
   const [results,  setResults]  = useState<Map<string, MatchResult>>(new Map())
   const [ratings,  setRatings]  = useState<BetRating[]>([])
   const [comments, setComments] = useState<BetComment[]>([])
+  const [reactions, setReactions] = useState<CommentReaction[]>([])
   const [loading,  setLoading]  = useState(true)
 
   const isSelf = currentUser?.id === player.id
@@ -57,6 +59,7 @@ export default function PlayerProfile({ player, rank, currentUser, onBack }: Pla
   const loadSocial = useCallback(async () => {
     const [r, c] = await Promise.all([getRatings(player.id), getComments(player.id)])
     setRatings(r); setComments(c)
+    setReactions(await getCommentReactions(c.map(x => x.id)))
   }, [player.id])
 
   useEffect(() => {
@@ -170,6 +173,7 @@ export default function PlayerProfile({ player, rank, currentUser, onBack }: Pla
               result={results.get(bet.matchId)}
               ratings={ratings.filter(r => r.matchId === bet.matchId)}
               comments={comments.filter(c => c.matchId === bet.matchId)}
+              reactions={reactions}
               currentUser={currentUser}
               isSelf={isSelf}
               targetUserId={player.id}
@@ -189,6 +193,7 @@ interface BetSocialCardProps {
   result?: MatchResult
   ratings: BetRating[]
   comments: BetComment[]
+  reactions: CommentReaction[]
   currentUser: UserProfile | null
   isSelf: boolean
   targetUserId: string
@@ -196,11 +201,12 @@ interface BetSocialCardProps {
 }
 
 function BetSocialCard({
-  bet, match, result, ratings, comments, currentUser, isSelf, targetUserId, onChanged,
+  bet, match, result, ratings, comments, reactions, currentUser, isSelf, targetUserId, onChanged,
 }: BetSocialCardProps) {
   const [open, setOpen]   = useState(false)
   const [draft, setDraft] = useState('')
   const [busy, setBusy]   = useState(false)
+  const [err,  setErr]    = useState('')
 
   const homeName = match?.home.name ?? bet.home
   const awayName = match?.away.name ?? bet.away
@@ -213,8 +219,17 @@ function BetSocialCard({
 
   const rate = async (n: number) => {
     if (!currentUser || isSelf || busy) return
+    setBusy(true); setErr('')
+    const { error } = await rateBet(targetUserId, bet.matchId, currentUser.id, n)
+    if (error) setErr(error)
+    await onChanged()
+    setBusy(false)
+  }
+  const react = async (commentId: string, value: 1 | -1, mine: number) => {
+    if (!currentUser || busy) return
     setBusy(true)
-    await rateBet(targetUserId, bet.matchId, currentUser.id, n)
+    if (mine === value) await unreactToComment(commentId, currentUser.id)
+    else await reactToComment(commentId, currentUser.id, value)
     await onChanged()
     setBusy(false)
   }
@@ -309,25 +324,54 @@ function BetSocialCard({
         </button>
       </div>
 
+      {/* Rating feedback */}
+      {err && (
+        <div style={{ padding: '0 14px 8px', fontSize: 11, color: '#dc2626', wordBreak: 'break-word' }}>{err}</div>
+      )}
+      {isSelf && (
+        <div style={{ padding: '0 14px 8px', fontSize: 10, color: 'var(--text-3)' }}>
+          Vous ne pouvez pas noter vos propres pronostics.
+        </div>
+      )}
+
       {/* Comments thread */}
       {open && (
         <div style={{ padding: '4px 14px 12px', borderTop: '1px solid var(--border)' }}>
           {comments.length === 0 && (
             <div style={{ fontSize: 11, color: 'var(--text-3)', padding: '8px 0' }}>Aucun commentaire — soyez le premier.</div>
           )}
-          {comments.map(c => (
-            <div key={c.id} style={{ display: 'flex', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: GOLD }}>{c.authorPseudo}</span>
-                <span style={{ fontSize: 13, color: 'var(--text-1)', marginLeft: 6, wordBreak: 'break-word' }}>{c.body}</span>
+          {comments.map(c => {
+            const likes    = reactions.filter(r => r.commentId === c.id && r.value === 1).length
+            const dislikes = reactions.filter(r => r.commentId === c.id && r.value === -1).length
+            const mine     = currentUser ? reactions.find(r => r.commentId === c.id && r.userId === currentUser.id)?.value ?? 0 : 0
+            return (
+              <div key={c.id} style={{ padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: GOLD }}>{c.authorPseudo}</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-1)', marginLeft: 6, wordBreak: 'break-word' }}>{c.body}</span>
+                  </div>
+                  {currentUser?.id === c.authorId && (
+                    <button onClick={() => remove(c.id)} style={{
+                      background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 12,
+                    }}>✕</button>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 14, marginTop: 5 }}>
+                  <button onClick={() => react(c.id, 1, mine)} disabled={!currentUser || busy} style={{
+                    background: 'none', border: 'none', cursor: currentUser ? 'pointer' : 'default',
+                    fontSize: 12, fontWeight: 700, padding: 0,
+                    color: mine === 1 ? '#16a34a' : 'var(--text-3)',
+                  }}>👍 {likes}</button>
+                  <button onClick={() => react(c.id, -1, mine)} disabled={!currentUser || busy} style={{
+                    background: 'none', border: 'none', cursor: currentUser ? 'pointer' : 'default',
+                    fontSize: 12, fontWeight: 700, padding: 0,
+                    color: mine === -1 ? '#dc2626' : 'var(--text-3)',
+                  }}>👎 {dislikes}</button>
+                </div>
               </div>
-              {currentUser?.id === c.authorId && (
-                <button onClick={() => remove(c.id)} style={{
-                  background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 12,
-                }}>✕</button>
-              )}
-            </div>
-          ))}
+            )
+          })}
 
           {currentUser ? (
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>

@@ -262,12 +262,33 @@ create policy "comments_select_all" on bet_comments for select using (true);
 create policy "comments_insert_own" on bet_comments for insert with check (auth.uid() = author_id);
 create policy "comments_delete_own" on bet_comments for delete using (auth.uid() = author_id);
 
+-- ══ comment_reactions — 👍 / 👎 sur un commentaire ════════════════════════════
+create table if not exists comment_reactions (
+  id         uuid        primary key default gen_random_uuid(),
+  comment_id uuid        not null references bet_comments(id) on delete cascade,
+  user_id    uuid        not null references profiles(id) on delete cascade,
+  value      smallint    not null check (value in (-1, 1)),  -- -1 dislike, +1 like
+  created_at timestamptz not null default now(),
+  unique (comment_id, user_id)
+);
+alter table comment_reactions enable row level security;
+drop policy if exists "reactions_select_all" on comment_reactions;
+drop policy if exists "reactions_insert_own" on comment_reactions;
+drop policy if exists "reactions_update_own" on comment_reactions;
+drop policy if exists "reactions_delete_own" on comment_reactions;
+create policy "reactions_select_all" on comment_reactions for select using (true);
+create policy "reactions_insert_own" on comment_reactions for insert with check (auth.uid() = user_id);
+create policy "reactions_update_own" on comment_reactions for update using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "reactions_delete_own" on comment_reactions for delete using (auth.uid() = user_id);
+
 -- Realtime sur les interactions sociales (fil de commentaires/notes en direct)
 do $$
 begin
   begin alter publication supabase_realtime add table bet_comments;
   exception when duplicate_object then null; end;
   begin alter publication supabase_realtime add table bet_ratings;
+  exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table comment_reactions;
   exception when duplicate_object then null; end;
 end $$;
 

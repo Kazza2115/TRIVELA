@@ -480,10 +480,14 @@ export async function rateBet(
   targetUserId: string, matchId: string, raterId: string, rating: number,
 ): Promise<{ error?: string }> {
   if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
-  const res = await authFetch('POST', 'bet_ratings', {
+  // on_conflict cible la contrainte unique métier (et non la PK id), pour que
+  // re-noter mette à jour la ligne existante au lieu d'échouer.
+  const res = await authFetch('POST', 'bet_ratings?on_conflict=match_id,target_user_id,rater_id', {
     target_user_id: targetUserId, match_id: matchId, rater_id: raterId, rating,
   })
-  return res.ok ? {} : { error: 'Impossible d\'enregistrer la note.' }
+  if (res.ok) return {}
+  const detail = await res.text().catch(() => '')
+  return { error: `Note refusée (${res.status}). ${detail}`.trim() }
 }
 
 // ── Commentaires ──────────────────────────────────────────────────────────────
@@ -520,13 +524,45 @@ export async function deleteComment(id: string): Promise<void> {
   await authFetch('DELETE', `bet_comments?id=eq.${id}`)
 }
 
-/** Notifie à chaque note/commentaire sur les pronostics d'un joueur (live). */
+// ── Réactions aux commentaires (👍 / 👎) ──────────────────────────────────────
+export interface CommentReaction { commentId: string; userId: string; value: number }
+
+export async function getCommentReactions(commentIds: string[]): Promise<CommentReaction[]> {
+  if (!supabaseConfigured || commentIds.length === 0) return []
+  const list = commentIds.join(',')
+  const res = await authFetch('GET', `comment_reactions?comment_id=in.(${list})&select=comment_id,user_id,value`)
+  if (!res.ok) return []
+  return (await res.json() as any[]).map(r => ({
+    commentId: r.comment_id as string, userId: r.user_id as string, value: r.value as number,
+  }))
+}
+
+/** Pose ou met à jour une réaction (value = 1 pour like, -1 pour dislike). */
+export async function reactToComment(
+  commentId: string, userId: string, value: 1 | -1,
+): Promise<{ error?: string }> {
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+  const res = await authFetch('POST', 'comment_reactions?on_conflict=comment_id,user_id', {
+    comment_id: commentId, user_id: userId, value,
+  })
+  if (res.ok) return {}
+  const detail = await res.text().catch(() => '')
+  return { error: `Réaction refusée (${res.status}). ${detail}`.trim() }
+}
+
+export async function unreactToComment(commentId: string, userId: string): Promise<void> {
+  if (!supabaseConfigured) return
+  await authFetch('DELETE', `comment_reactions?comment_id=eq.${commentId}&user_id=eq.${userId}`)
+}
+
+/** Notifie à chaque note/commentaire/réaction sur les pronostics d'un joueur. */
 export function subscribeToPlayerSocial(targetUserId: string, cb: () => void): () => void {
   if (!supabase) return () => {}
   const channel = supabase
     .channel(`social-${targetUserId}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bet_comments', filter: `target_user_id=eq.${targetUserId}` }, cb)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bet_ratings',  filter: `target_user_id=eq.${targetUserId}` }, cb)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'comment_reactions' }, cb)
     .subscribe()
   return () => { supabase!.removeChannel(channel) }
 }
