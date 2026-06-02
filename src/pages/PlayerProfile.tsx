@@ -296,24 +296,30 @@ function BetSocialCard({
       {/* Rating + comment toggle */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px',
-        borderTop: '1px solid var(--border)',
+        borderTop: '1px solid var(--border)', flexWrap: 'wrap',
       }}>
-        <div style={{ display: 'flex', gap: 2 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)' }}>
+          {currentUser && !isSelf ? 'Noter :' : 'Note reçue :'}
+        </span>
+        <div style={{ display: 'flex', gap: 3 }}>
           {[1, 2, 3, 4, 5].map(n => {
-            const filled = (currentUser && !isSelf ? myRating : Math.round(avg)) >= n
+            const showVal   = currentUser && !isSelf ? myRating : Math.round(avg)
+            const filled    = showVal >= n
+            const clickable = !!currentUser && !isSelf
             return (
               <span key={n}
                 onClick={() => rate(n)}
+                title={clickable ? `Noter ${n}/5` : undefined}
                 style={{
-                  fontSize: 15, lineHeight: 1,
-                  cursor: currentUser && !isSelf ? 'pointer' : 'default',
-                  color: filled ? GOLD : 'var(--text-3)', opacity: filled ? 1 : 0.4,
-                }}>★</span>
+                  fontSize: 18, lineHeight: 1,
+                  cursor: clickable ? 'pointer' : 'default',
+                  color: filled ? GOLD : 'var(--text-3)', opacity: filled ? 1 : 0.6,
+                }}>{filled ? '★' : '☆'}</span>
             )
           })}
         </div>
         <span style={{ fontSize: 10, color: 'var(--text-3)' }}>
-          {ratings.length ? `${avg.toFixed(1)} (${ratings.length})` : 'Pas de note'}
+          {ratings.length ? `${avg.toFixed(1)} (${ratings.length})` : '—'}
         </span>
 
         <button onClick={() => setOpen(o => !o)} style={{
