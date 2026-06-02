@@ -410,3 +410,123 @@ export function subscribeToLeaderboard(cb: (players: UserProfile[]) => void): ()
 
   return () => { supabase!.removeChannel(channel) }
 }
+
+// ─── Social : pronostics publics, notes & commentaires ──────────────────────
+
+/** Pari d'un joueur tel que vu par les autres. Le score n'est dévoilé qu'au
+ *  coup d'envoi (revealed=true) — la vue public_bets le masque sinon. */
+export interface PublicBet {
+  id:        string
+  userId:    string
+  matchId:   string
+  home:      string
+  away:      string
+  stage:     string
+  homeScore: number | null
+  awayScore: number | null
+  points:    number | null
+  locked:    boolean
+  revealed:  boolean
+  createdAt: number
+}
+
+export async function getPublicBets(userId: string): Promise<PublicBet[]> {
+  if (!supabaseConfigured) return []
+  const res = await authFetch('GET', `public_bets?user_id=eq.${userId}&order=created_at.desc&select=*`)
+  if (!res.ok) return []
+  const data = await res.json()
+  return (data as any[]).map(b => ({
+    id:        b.id         as string,
+    userId:    b.user_id    as string,
+    matchId:   b.match_id   as string,
+    home:      b.home       as string,
+    away:      b.away       as string,
+    stage:     b.stage      as string,
+    homeScore: b.home_score as number | null,
+    awayScore: b.away_score as number | null,
+    points:    b.points     as number | null,
+    locked:    b.locked     as boolean,
+    revealed:  b.revealed   as boolean,
+    createdAt: new Date(b.created_at as string).getTime(),
+  }))
+}
+
+export async function getResults(): Promise<MatchResult[]> {
+  if (!supabase) return []
+  const { data } = await supabase.from('match_results').select('*')
+  return (data ?? []).map(r => ({
+    matchId:   r.match_id   as string,
+    homeScore: r.home_score as number,
+    awayScore: r.away_score as number,
+    settledAt: new Date(r.settled_at as string).getTime(),
+  }))
+}
+
+// ── Notes (1–5 ⭐) ────────────────────────────────────────────────────────────
+export interface BetRating { matchId: string; raterId: string; rating: number }
+
+export async function getRatings(targetUserId: string): Promise<BetRating[]> {
+  if (!supabaseConfigured) return []
+  const res = await authFetch('GET', `bet_ratings?target_user_id=eq.${targetUserId}&select=match_id,rater_id,rating`)
+  if (!res.ok) return []
+  return (await res.json() as any[]).map(r => ({
+    matchId: r.match_id as string, raterId: r.rater_id as string, rating: r.rating as number,
+  }))
+}
+
+/** Note (ou re-note) le pronostic d'un joueur sur un match. Upsert via la
+ *  contrainte unique (Prefer: resolution=merge-duplicates dans authFetch). */
+export async function rateBet(
+  targetUserId: string, matchId: string, raterId: string, rating: number,
+): Promise<{ error?: string }> {
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+  const res = await authFetch('POST', 'bet_ratings', {
+    target_user_id: targetUserId, match_id: matchId, rater_id: raterId, rating,
+  })
+  return res.ok ? {} : { error: 'Impossible d\'enregistrer la note.' }
+}
+
+// ── Commentaires ──────────────────────────────────────────────────────────────
+export interface BetComment {
+  id: string; matchId: string; authorId: string; authorPseudo: string; body: string; createdAt: number
+}
+
+export async function getComments(targetUserId: string): Promise<BetComment[]> {
+  if (!supabaseConfigured) return []
+  const res = await authFetch('GET', `bet_comments?target_user_id=eq.${targetUserId}&order=created_at.asc&select=*`)
+  if (!res.ok) return []
+  return (await res.json() as any[]).map(c => ({
+    id: c.id as string, matchId: c.match_id as string,
+    authorId: c.author_id as string, authorPseudo: c.author_pseudo as string,
+    body: c.body as string, createdAt: new Date(c.created_at as string).getTime(),
+  }))
+}
+
+export async function addComment(
+  targetUserId: string, matchId: string, authorId: string, authorPseudo: string, body: string,
+): Promise<{ error?: string }> {
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+  const text = body.trim()
+  if (text.length < 1 || text.length > 280) return { error: 'Commentaire vide ou trop long (280 max).' }
+  const res = await authFetch('POST', 'bet_comments', {
+    target_user_id: targetUserId, match_id: matchId,
+    author_id: authorId, author_pseudo: authorPseudo, body: text,
+  })
+  return res.ok ? {} : { error: 'Impossible d\'envoyer le commentaire.' }
+}
+
+export async function deleteComment(id: string): Promise<void> {
+  if (!supabaseConfigured) return
+  await authFetch('DELETE', `bet_comments?id=eq.${id}`)
+}
+
+/** Notifie à chaque note/commentaire sur les pronostics d'un joueur (live). */
+export function subscribeToPlayerSocial(targetUserId: string, cb: () => void): () => void {
+  if (!supabase) return () => {}
+  const channel = supabase
+    .channel(`social-${targetUserId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'bet_comments', filter: `target_user_id=eq.${targetUserId}` }, cb)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'bet_ratings',  filter: `target_user_id=eq.${targetUserId}` }, cb)
+    .subscribe()
+  return () => { supabase!.removeChannel(channel) }
+}

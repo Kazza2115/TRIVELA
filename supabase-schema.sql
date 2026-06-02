@@ -186,3 +186,196 @@ begin
   exception when duplicate_object then null;
   end;
 end $$;
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ══ SOCIAL : voir / noter / commenter les pronostics des autres ════════════
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ══ match_schedule — coup d'envoi (UTC) de chaque match ══════════════════════
+-- Sert à révéler le score d'un pronostic UNIQUEMENT à partir du coup d'envoi
+-- (équité : on ne peut pas copier le score d'un autre avant le match).
+create table if not exists match_schedule (
+  match_id text        primary key,
+  kickoff  timestamptz not null
+);
+alter table match_schedule enable row level security;
+drop policy if exists "schedule_select_all" on match_schedule;
+create policy "schedule_select_all" on match_schedule for select using (true);
+-- Écriture réservée au service role (le seed ci-dessous est lancé en SQL admin).
+
+-- ══ public_bets — vue publique des paris, SCORE MASQUÉ avant le coup d'envoi ══
+-- security_invoker reste à false (défaut) : la vue lit tous les paris en
+-- contournant la RLS de `bets`, mais ne dévoile home_score/away_score que si le
+-- match a démarré (kickoff passé) ou est déjà réglé (locked). La table `bets`
+-- garde sa RLS « select own » : aucun accès direct au score d'autrui.
+create or replace view public_bets as
+select
+  b.id, b.user_id, b.match_id, b.home, b.away, b.stage,
+  b.points, b.locked, b.created_at,
+  case when b.user_id = auth.uid() or b.locked or (s.kickoff is not null and now() >= s.kickoff)
+       then b.home_score end as home_score,
+  case when b.user_id = auth.uid() or b.locked or (s.kickoff is not null and now() >= s.kickoff)
+       then b.away_score end as away_score,
+  (b.user_id = auth.uid() or b.locked or (s.kickoff is not null and now() >= s.kickoff)) as revealed,
+  s.kickoff
+from bets b
+left join match_schedule s on s.match_id = b.match_id;
+
+grant select on public_bets to anon, authenticated;
+
+-- ══ bet_ratings — note (1–5 ⭐) d'un joueur sur le pronostic d'un autre ════════
+create table if not exists bet_ratings (
+  id             uuid        primary key default gen_random_uuid(),
+  match_id       text        not null,
+  target_user_id uuid        not null references profiles(id) on delete cascade,
+  rater_id       uuid        not null references profiles(id) on delete cascade,
+  rating         smallint    not null check (rating between 1 and 5),
+  created_at     timestamptz not null default now(),
+  unique (match_id, target_user_id, rater_id),
+  check (rater_id <> target_user_id)   -- on ne note pas son propre pronostic
+);
+alter table bet_ratings enable row level security;
+drop policy if exists "ratings_select_all" on bet_ratings;
+drop policy if exists "ratings_insert_own" on bet_ratings;
+drop policy if exists "ratings_update_own" on bet_ratings;
+drop policy if exists "ratings_delete_own" on bet_ratings;
+create policy "ratings_select_all" on bet_ratings for select using (true);
+create policy "ratings_insert_own" on bet_ratings for insert with check (auth.uid() = rater_id);
+create policy "ratings_update_own" on bet_ratings for update using (auth.uid() = rater_id) with check (auth.uid() = rater_id);
+create policy "ratings_delete_own" on bet_ratings for delete using (auth.uid() = rater_id);
+
+-- ══ bet_comments — commentaire sur le pronostic d'un joueur ═══════════════════
+create table if not exists bet_comments (
+  id             uuid        primary key default gen_random_uuid(),
+  match_id       text        not null,
+  target_user_id uuid        not null references profiles(id) on delete cascade,
+  author_id      uuid        not null references profiles(id) on delete cascade,
+  author_pseudo  text        not null,
+  body           text        not null check (char_length(body) between 1 and 280),
+  created_at     timestamptz not null default now()
+);
+alter table bet_comments enable row level security;
+drop policy if exists "comments_select_all" on bet_comments;
+drop policy if exists "comments_insert_own" on bet_comments;
+drop policy if exists "comments_delete_own" on bet_comments;
+create policy "comments_select_all" on bet_comments for select using (true);
+create policy "comments_insert_own" on bet_comments for insert with check (auth.uid() = author_id);
+create policy "comments_delete_own" on bet_comments for delete using (auth.uid() = author_id);
+
+-- Realtime sur les interactions sociales (fil de commentaires/notes en direct)
+do $$
+begin
+  begin alter publication supabase_realtime add table bet_comments;
+  exception when duplicate_object then null; end;
+  begin alter publication supabase_realtime add table bet_ratings;
+  exception when duplicate_object then null; end;
+end $$;
+
+-- ══ Seed des horaires (104 matchs : 72 poules + 32 à élimination directe) ═════
+-- Régénérable via : node scripts/gen-schedule-sql.mjs
+insert into match_schedule (match_id, kickoff) values
+  ('gA-md1-mex-zaf', '2026-06-11T19:00:00Z'),
+  ('gA-md1-kor-cze', '2026-06-12T02:00:00Z'),
+  ('gA-md2-cze-zaf', '2026-06-18T16:00:00Z'),
+  ('gA-md2-mex-kor', '2026-06-19T01:00:00Z'),
+  ('gA-md3-cze-mex', '2026-06-25T01:00:00Z'),
+  ('gA-md3-zaf-kor', '2026-06-25T01:00:00Z'),
+  ('gB-md1-can-bih', '2026-06-12T19:00:00Z'),
+  ('gB-md1-qat-sui', '2026-06-13T19:00:00Z'),
+  ('gB-md2-sui-bih', '2026-06-18T19:00:00Z'),
+  ('gB-md2-can-qat', '2026-06-18T22:00:00Z'),
+  ('gB-md3-sui-can', '2026-06-24T19:00:00Z'),
+  ('gB-md3-bih-qat', '2026-06-24T19:00:00Z'),
+  ('gC-md1-bra-mar', '2026-06-13T22:00:00Z'),
+  ('gC-md1-hai-sco', '2026-06-14T01:00:00Z'),
+  ('gC-md2-sco-mar', '2026-06-19T22:00:00Z'),
+  ('gC-md2-bra-hai', '2026-06-20T00:30:00Z'),
+  ('gC-md3-sco-bra', '2026-06-24T22:00:00Z'),
+  ('gC-md3-mar-hai', '2026-06-24T22:00:00Z'),
+  ('gD-md1-usa-par', '2026-06-13T01:00:00Z'),
+  ('gD-md1-aus-tur', '2026-06-13T04:00:00Z'),
+  ('gD-md2-usa-aus', '2026-06-19T19:00:00Z'),
+  ('gD-md2-tur-par', '2026-06-20T03:00:00Z'),
+  ('gD-md3-tur-usa', '2026-06-26T02:00:00Z'),
+  ('gD-md3-par-aus', '2026-06-26T02:00:00Z'),
+  ('gE-md1-ger-cur', '2026-06-14T17:00:00Z'),
+  ('gE-md1-civ-ecu', '2026-06-14T23:00:00Z'),
+  ('gE-md2-ger-civ', '2026-06-20T20:00:00Z'),
+  ('gE-md2-ecu-cur', '2026-06-21T00:00:00Z'),
+  ('gE-md3-cur-civ', '2026-06-25T20:00:00Z'),
+  ('gE-md3-ecu-ger', '2026-06-25T20:00:00Z'),
+  ('gF-md1-ned-jpn', '2026-06-14T20:00:00Z'),
+  ('gF-md1-swe-tun', '2026-06-15T02:00:00Z'),
+  ('gF-md2-tun-jpn', '2026-06-20T04:00:00Z'),
+  ('gF-md2-ned-swe', '2026-06-20T17:00:00Z'),
+  ('gF-md3-jpn-swe', '2026-06-25T23:00:00Z'),
+  ('gF-md3-tun-ned', '2026-06-25T23:00:00Z'),
+  ('gG-md1-bel-egy', '2026-06-15T19:00:00Z'),
+  ('gG-md1-irn-nzl', '2026-06-16T01:00:00Z'),
+  ('gG-md2-bel-irn', '2026-06-21T19:00:00Z'),
+  ('gG-md2-nzl-egy', '2026-06-22T01:00:00Z'),
+  ('gG-md3-egy-irn', '2026-06-27T03:00:00Z'),
+  ('gG-md3-nzl-bel', '2026-06-27T03:00:00Z'),
+  ('gH-md1-esp-cpv', '2026-06-15T16:00:00Z'),
+  ('gH-md1-sau-uru', '2026-06-15T22:00:00Z'),
+  ('gH-md2-esp-sau', '2026-06-21T16:00:00Z'),
+  ('gH-md2-uru-cpv', '2026-06-21T22:00:00Z'),
+  ('gH-md3-uru-esp', '2026-06-27T00:00:00Z'),
+  ('gH-md3-cpv-sau', '2026-06-27T00:00:00Z'),
+  ('gI-md1-fra-sen', '2026-06-16T19:00:00Z'),
+  ('gI-md1-irq-nor', '2026-06-16T22:00:00Z'),
+  ('gI-md2-fra-irq', '2026-06-22T21:00:00Z'),
+  ('gI-md2-nor-sen', '2026-06-23T00:00:00Z'),
+  ('gI-md3-nor-fra', '2026-06-26T19:00:00Z'),
+  ('gI-md3-sen-irq', '2026-06-26T19:00:00Z'),
+  ('gJ-md1-arg-dza', '2026-06-17T01:00:00Z'),
+  ('gJ-md1-aut-jor', '2026-06-17T04:00:00Z'),
+  ('gJ-md2-arg-aut', '2026-06-22T17:00:00Z'),
+  ('gJ-md2-jor-dza', '2026-06-23T03:00:00Z'),
+  ('gJ-md3-dza-aut', '2026-06-28T02:00:00Z'),
+  ('gJ-md3-jor-arg', '2026-06-28T02:00:00Z'),
+  ('gK-md1-por-cod', '2026-06-17T17:00:00Z'),
+  ('gK-md1-uzb-col', '2026-06-18T02:00:00Z'),
+  ('gK-md2-por-uzb', '2026-06-23T17:00:00Z'),
+  ('gK-md2-col-cod', '2026-06-24T02:00:00Z'),
+  ('gK-md3-col-por', '2026-06-27T23:30:00Z'),
+  ('gK-md3-cod-uzb', '2026-06-27T23:30:00Z'),
+  ('gL-md1-eng-cro', '2026-06-17T20:00:00Z'),
+  ('gL-md1-gha-pan', '2026-06-17T23:00:00Z'),
+  ('gL-md2-eng-gha', '2026-06-23T20:00:00Z'),
+  ('gL-md2-pan-cro', '2026-06-23T23:00:00Z'),
+  ('gL-md3-pan-eng', '2026-06-27T21:00:00Z'),
+  ('gL-md3-cro-gha', '2026-06-27T21:00:00Z'),
+  ('r32-1', '2026-06-28T19:00:00Z'),
+  ('r32-2', '2026-06-28T22:00:00Z'),
+  ('r32-3', '2026-06-29T19:00:00Z'),
+  ('r32-4', '2026-06-29T22:00:00Z'),
+  ('r32-5', '2026-06-30T19:00:00Z'),
+  ('r32-6', '2026-06-30T22:00:00Z'),
+  ('r32-7', '2026-07-01T19:00:00Z'),
+  ('r32-8', '2026-07-01T22:00:00Z'),
+  ('r32-9', '2026-07-02T19:00:00Z'),
+  ('r32-10', '2026-07-02T22:00:00Z'),
+  ('r32-11', '2026-07-03T19:00:00Z'),
+  ('r32-12', '2026-07-03T22:00:00Z'),
+  ('r32-13', '2026-07-04T19:00:00Z'),
+  ('r32-14', '2026-07-04T22:00:00Z'),
+  ('r32-15', '2026-07-05T19:00:00Z'),
+  ('r32-16', '2026-07-05T22:00:00Z'),
+  ('r16-1', '2026-07-06T19:00:00Z'),
+  ('r16-2', '2026-07-06T22:00:00Z'),
+  ('r16-3', '2026-07-07T19:00:00Z'),
+  ('r16-4', '2026-07-07T22:00:00Z'),
+  ('r16-5', '2026-07-08T19:00:00Z'),
+  ('r16-6', '2026-07-08T22:00:00Z'),
+  ('r16-7', '2026-07-09T19:00:00Z'),
+  ('r16-8', '2026-07-09T22:00:00Z'),
+  ('qf-1', '2026-07-11T19:00:00Z'),
+  ('qf-2', '2026-07-11T22:00:00Z'),
+  ('qf-3', '2026-07-12T19:00:00Z'),
+  ('qf-4', '2026-07-12T22:00:00Z'),
+  ('sf-1', '2026-07-15T00:00:00Z'),
+  ('sf-2', '2026-07-16T00:00:00Z'),
+  ('3rd', '2026-07-18T22:00:00Z'),
+  ('final', '2026-07-19T20:00:00Z')
+on conflict (match_id) do update set kickoff = excluded.kickoff;

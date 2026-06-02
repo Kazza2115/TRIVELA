@@ -6,10 +6,11 @@ interface PageLayoutProps {
   flag: ReactNode
   title: string
   subtitle?: string
+  backLabel?: string
   children: ReactNode
 }
 
-export default function PageLayout({ onBack, accentColor, flag, title, subtitle, children }: PageLayoutProps) {
+export default function PageLayout({ onBack, accentColor, flag, title, subtitle, backLabel = 'Globe', children }: PageLayoutProps) {
   return (
     <div style={{
       width: '100%', height: '100%',
@@ -42,7 +43,7 @@ export default function PageLayout({ onBack, accentColor, flag, title, subtitle,
           onPointerDown={e => (e.currentTarget.style.opacity = '0.45')}
           onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
         >
-          ‹ Globe
+          ‹ {backLabel}
         </button>
 
         <div style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0 }} />

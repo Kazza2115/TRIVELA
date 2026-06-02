@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import Globe        from './components/Globe'
 import Paris        from './pages/Paris'
 import Classement   from './pages/Classement'
+import PlayerProfile from './pages/PlayerProfile'
 import Actualites   from './pages/Actualites'
 import AuthModal    from './components/AuthModal'
 import ProfileModal from './components/ProfileModal'
@@ -76,13 +77,14 @@ export default function App() {
   }
 
   const [activeNav, setActiveNav] = useState<SectionId>('globe')
+  const [viewedPlayer, setViewedPlayer] = useState<{ player: UserProfile; rank: number } | null>(null)
 
-  const back       = () => { setSection('globe'); setActiveNav('globe') }
+  const back       = () => { setViewedPlayer(null); setSection('globe'); setActiveNav('globe') }
   const openAuth   = () => setShowAuth(true)
   const handleAuth = (user: UserProfile) => { setCurrentUser(user); setShowAuth(false) }
   const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
-  const navigateTo   = (s: string) => { setSection(s as SectionId); setActiveNav(s as SectionId) }
-  const navigateMenu = (s: SectionId) => { setSection(s) }
+  const navigateTo   = (s: string) => { setViewedPlayer(null); setSection(s as SectionId); setActiveNav(s as SectionId) }
+  const navigateMenu = (s: SectionId) => { setViewedPlayer(null); setSection(s) }
 
   const gold   = '#C89B3C'
   const dimCol = '#AEAEB2'
@@ -318,7 +320,13 @@ export default function App() {
         {section === 'actualites' && <Actualites  onBack={back} />}
         {section === 'paris'      && <Paris        onBack={back} currentUser={currentUser} onOpenAuth={openAuth} />}
         {section === 'classement' && (
-          <Classement onBack={back} currentUser={currentUser} onOpenAuth={openAuth} />
+          viewedPlayer
+            ? <PlayerProfile
+                player={viewedPlayer.player} rank={viewedPlayer.rank}
+                currentUser={currentUser} onBack={() => setViewedPlayer(null)} />
+            : <Classement
+                onBack={back} currentUser={currentUser} onOpenAuth={openAuth}
+                onSelectPlayer={(player, rank) => setViewedPlayer({ player, rank })} />
         )}
       </div>
 
@@ -339,7 +347,7 @@ export default function App() {
 
           return (
             <button key={id}
-              onClick={() => { setActiveNav(id); setSection(id) }}
+              onClick={() => { setViewedPlayer(null); setActiveNav(id); setSection(id) }}
               style={{
                 position: 'absolute',
                 bottom: bottomPx, left: `${leftPct}%`,

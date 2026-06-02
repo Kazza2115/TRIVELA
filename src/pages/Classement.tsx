@@ -10,9 +10,10 @@ interface ClassementProps {
   onBack: () => void
   currentUser: UserProfile | null
   onOpenAuth: () => void
+  onSelectPlayer: (player: UserProfile, rank: number) => void
 }
 
-export default function Classement({ onBack, currentUser, onOpenAuth }: ClassementProps) {
+export default function Classement({ onBack, currentUser, onOpenAuth, onSelectPlayer }: ClassementProps) {
   const [players, setPlayers] = useState<UserProfile[]>([])
 
   useEffect(() => subscribeToLeaderboard(setPlayers), [])
@@ -89,10 +90,13 @@ export default function Classement({ onBack, currentUser, onOpenAuth }: Classeme
               if (!p) return <div key={i} style={{ width: 100, flexShrink: 0 }} />
               const c = PODIUM_COLORS[i]
               const medals = ['🥈', '🥇', '🥉']
+              const podiumRank = i === 0 ? 2 : i === 1 ? 1 : 3
               return (
-                <div key={p.id} style={{
+                <div key={p.id}
+                  onClick={() => onSelectPlayer(p, podiumRank)}
+                  style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                  flex: '0 0 auto', width: 100,
+                  flex: '0 0 auto', width: 100, cursor: 'pointer',
                 }}>
                   <img src={`https://flagcdn.com/w40/${p.countryCode}.png`} alt={p.countryName}
                     style={{ width: 28, height: 19, borderRadius: 3, objectFit: 'cover',
@@ -124,12 +128,14 @@ export default function Classement({ onBack, currentUser, onOpenAuth }: Classeme
             {players.map((p, i) => {
               const isMe = currentUser?.id === p.id
               return (
-                <div key={p.id} style={{
+                <div key={p.id}
+                  onClick={() => onSelectPlayer(p, i + 1)}
+                  style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '12px 16px',
                   background: isMe ? 'rgba(200,155,60,0.08)' : 'var(--bg-card)',
                   border: isMe ? '1px solid rgba(200,155,60,0.35)' : '1px solid var(--border)',
-                  borderRadius: 12, boxShadow: 'var(--shadow-sm)',
+                  borderRadius: 12, boxShadow: 'var(--shadow-sm)', cursor: 'pointer',
                   animation: `fadeSlideUp 0.35s ease ${i * 35}ms both`,
                 }}>
                   <div style={{
@@ -163,6 +169,7 @@ export default function Classement({ onBack, currentUser, onOpenAuth }: Classeme
                     {p.score.toLocaleString()}&thinsp;
                     <span style={{ fontSize: 9, color: 'var(--text-3)' }}>pts</span>
                   </div>
+                  <span style={{ color: 'var(--text-3)', fontSize: 18, marginLeft: 2, flexShrink: 0 }}>›</span>
                 </div>
               )
             })}
