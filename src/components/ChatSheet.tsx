@@ -133,11 +133,13 @@ export default function ChatSheet({ open, onClose, currentUser, onOpenAuth, onOp
                         border: isAdminAuthor ? `1.5px solid ${GOLD}` : '1px solid var(--border)',
                         boxShadow: isAdminAuthor ? `0 0 0 1px ${GOLD}33` : 'none',
                       }}>
-                      {/* Le drapeau du pays remplit la pastille, incliné (effet italique) */}
+                      {/* Drapeau décalé vers la droite + incliné, fondu vers le centre */}
                       <img src={`https://flagcdn.com/w80/${m.countryCode}.png`} alt="" aria-hidden
-                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%',
-                          objectFit: 'cover', opacity: 0.28,
-                          transform: 'skewX(-12deg) scale(1.3)', transformOrigin: 'center' }} />
+                        style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: '72%', height: '100%',
+                          objectFit: 'cover', opacity: 0.32,
+                          transform: 'skewX(-12deg) scale(1.1)', transformOrigin: 'right',
+                          WebkitMaskImage: 'linear-gradient(to right, transparent, #000 45%)',
+                          maskImage: 'linear-gradient(to right, transparent, #000 45%)' }} />
                       <span style={{ position: 'relative', fontSize: 13, fontWeight: 600,
                         color: 'var(--text-1)', textShadow: '0 1px 1px rgba(0,0,0,0.12)' }}>{m.pseudo}</span>
                     </button>
