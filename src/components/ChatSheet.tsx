@@ -12,13 +12,6 @@ function timeLabel(ts: number): string {
   })
 }
 
-// Couleur stable propre à chaque pays (dérivée du code pays).
-function countryHue(code: string): number {
-  let h = 0
-  for (let i = 0; i < code.length; i++) h = (h * 31 + code.charCodeAt(i)) % 360
-  return h
-}
-
 interface ChatSheetProps {
   open: boolean
   onClose: () => void
@@ -126,10 +119,6 @@ export default function ChatSheet({ open, onClose, currentUser, onOpenAuth, onOp
             messages.map(m => {
               const mine    = currentUser?.id === m.userId
               const isAdminAuthor = admins.has(m.userId)
-              const hue     = countryHue(m.countryCode || 'un')
-              const nameColor = isAdminAuthor ? '#8a6a1e' : `hsl(${hue}, 70%, 40%)`
-              const chipBg    = isAdminAuthor ? 'linear-gradient(135deg,#C89B3C,#E8D080)' : `hsla(${hue}, 70%, 50%, 0.14)`
-              const chipBorder = isAdminAuthor ? GOLD : `hsla(${hue}, 60%, 45%, 0.45)`
               return (
                 <div key={m.id} style={{ display: 'flex', flexDirection: 'column',
                   alignItems: mine ? 'flex-end' : 'flex-start' }}>
@@ -137,15 +126,22 @@ export default function ChatSheet({ open, onClose, currentUser, onOpenAuth, onOp
                     flexDirection: mine ? 'row-reverse' : 'row' }}>
                     <button onClick={() => onOpenProfile(m.userId)} title="Voir le profil"
                       style={{
+                        position: 'relative', overflow: 'hidden',
                         display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
-                        padding: '4px 10px', borderRadius: 999,
-                        background: chipBg, border: `1px solid ${chipBorder}`,
+                        padding: '4px 12px', borderRadius: 999,
+                        background: isAdminAuthor ? 'linear-gradient(135deg,#C89B3C,#E8D080)' : 'var(--bg-fill)',
+                        border: `1px solid ${isAdminAuthor ? GOLD : 'var(--border)'}`,
                       }}>
-                      <img src={`https://flagcdn.com/w20/${m.countryCode}.png`} alt=""
-                        style={{ width: 18, height: 12, borderRadius: 2, objectFit: 'cover' }} />
-                      <span style={{ fontSize: 13, fontWeight: 800,
-                        color: isAdminAuthor ? '#0D0800' : nameColor }}>{m.pseudo}</span>
-                      {isAdminAuthor && <span style={{ fontSize: 11 }}>👑</span>}
+                      {/* Le drapeau remplit la pastille (transparent) ; doré pour les admins */}
+                      {!isAdminAuthor && (
+                        <img src={`https://flagcdn.com/w80/${m.countryCode}.png`} alt="" aria-hidden
+                          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%',
+                            objectFit: 'cover', opacity: 0.4 }} />
+                      )}
+                      <span style={{ position: 'relative', fontSize: 13, fontWeight: 800,
+                        color: isAdminAuthor ? '#0D0800' : 'var(--text-1)',
+                        textShadow: isAdminAuthor ? 'none' : '0 1px 2px rgba(0,0,0,0.22)' }}>{m.pseudo}</span>
+                      {isAdminAuthor && <span style={{ position: 'relative', fontSize: 11 }}>👑</span>}
                     </button>
                     <span style={{ fontSize: 9, color: 'var(--text-3)' }}>{timeLabel(m.createdAt)}</span>
                     {(mine || currentUser?.isAdmin) && (
