@@ -604,8 +604,10 @@ export async function deleteChatMessage(id: string): Promise<void> {
 /** Notifie à chaque nouveau message (ou suppression) du chat global. */
 export function subscribeToChat(cb: () => void): () => void {
   if (!supabase) return () => {}
+  // Nom de canal unique : plusieurs composants (aperçu + panneau) peuvent
+  // s'abonner en même temps sans entrer en collision sur le même canal.
   const channel = supabase
-    .channel('chat-rt')
+    .channel(`chat-rt-${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, cb)
     .subscribe()
   return () => { supabase!.removeChannel(channel) }
