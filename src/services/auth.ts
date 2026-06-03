@@ -764,3 +764,34 @@ export function subscribeToNewMessages(cb: (m: ChatMessage) => void): () => void
     .subscribe()
   return () => { supabase!.removeChannel(channel) }
 }
+
+// ── Accusés de lecture du chat (« vu par ») ──────────────────────────────────
+export interface ChatRead { userId: string; pseudo: string; countryCode: string; lastRead: number }
+
+export async function getChatReads(): Promise<ChatRead[]> {
+  if (!supabaseConfigured) return []
+  const res = await authFetch('GET', 'chat_reads?select=user_id,pseudo,country_code,last_read')
+  if (!res.ok) return []
+  return (await res.json() as any[]).map(r => ({
+    userId: r.user_id as string, pseudo: r.pseudo as string,
+    countryCode: (r.country_code as string) ?? 'un',
+    lastRead: new Date(r.last_read as string).getTime(),
+  }))
+}
+
+/** Marque le chat comme lu jusqu'à maintenant pour l'utilisateur courant. */
+export async function markChatRead(userId: string, pseudo: string, countryCode: string): Promise<void> {
+  if (!supabaseConfigured) return
+  await authFetch('POST', 'chat_reads?on_conflict=user_id', {
+    user_id: userId, pseudo, country_code: countryCode, last_read: new Date().toISOString(),
+  })
+}
+
+export function subscribeToChatReads(cb: () => void): () => void {
+  if (!supabase) return () => {}
+  const channel = supabase
+    .channel(`chat-reads-${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_reads' }, cb)
+    .subscribe()
+  return () => { supabase!.removeChannel(channel) }
+}

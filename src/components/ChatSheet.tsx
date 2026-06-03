@@ -2,8 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   getChatMessages, sendChatMessage, deleteChatMessage, subscribeToChat,
   clearChat, getAdminIds, getMentionables,
+  getChatReads, markChatRead, subscribeToChatReads,
 } from '../services/auth'
-import type { ChatMessage, UserProfile, PresenceUser } from '../services/auth'
+import type { ChatMessage, UserProfile, PresenceUser, ChatRead } from '../services/auth'
 
 const GOLD = '#C89B3C'
 
@@ -45,6 +46,8 @@ export default function ChatSheet({
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [admins, setAdmins]     = useState<Set<string>>(new Set())
   const [mentionables, setMentionables] = useState<{ id: string; pseudo: string; countryCode: string }[]>([])
+  const [reads, setReads]       = useState<ChatRead[]>([])
+  const [showOnline, setShowOnline] = useState(false)
   const [draft, setDraft]       = useState('')
   const [busy, setBusy]         = useState(false)
   const [loading, setLoading]   = useState(true)
@@ -54,6 +57,7 @@ export default function ChatSheet({
   const inputRef  = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => { setMessages(await getChatMessages()) }, [])
+  const loadReads = useCallback(async () => { setReads(await getChatReads()) }, [])
 
   useEffect(() => {
     if (!open) return
@@ -61,14 +65,21 @@ export default function ChatSheet({
     setLoading(true)
     ;(async () => {
       await load()
-      const [ids, ment] = await Promise.all([getAdminIds(), getMentionables()])
+      const [ids, ment] = await Promise.all([getAdminIds(), getMentionables(), loadReads()])
       if (alive) { setAdmins(new Set(ids)); setMentionables(ment); setLoading(false) }
     })()
     const unsub = subscribeToChat(load)
-    return () => { alive = false; unsub() }
-  }, [open, load])
+    const unsubReads = subscribeToChatReads(loadReads)
+    return () => { alive = false; unsub(); unsubReads() }
+  }, [open, load, loadReads])
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  // Défile en bas + marque le chat comme « lu » (met à jour les accusés de lecture)
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (open && currentUser && !document.hidden) {
+      markChatRead(currentUser.id, currentUser.pseudo, currentUser.countryCode).then(loadReads)
+    }
+  }, [messages, open, currentUser, loadReads])
 
   // Autocomplétion des mentions : token @ en fin de saisie
   const mentionMatch = draft.match(/@([\p{L}0-9_]*)$/u)
@@ -124,10 +135,13 @@ export default function ChatSheet({
             <span style={{ fontSize: 16 }}>💬</span>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>Chat en direct</div>
-              <div style={{ fontSize: 10, color: 'var(--text-3)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <button onClick={() => setShowOnline(s => !s)} style={{
+                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                fontSize: 10, color: 'var(--text-3)', display: 'flex', alignItems: 'center', gap: 5,
+              }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16a34a', display: 'inline-block' }} />
-                {online.length} en ligne
-              </div>
+                {online.length} en ligne {showOnline ? '▲' : '▼'}
+              </button>
             </div>
             {currentUser?.isAdmin && (
               <button onClick={clearAll} disabled={busy} title="Vider le chat" style={{
@@ -141,6 +155,28 @@ export default function ChatSheet({
             }}>✕</button>
           </div>
         </div>
+
+        {/* Liste des personnes en ligne */}
+        {showOnline && (
+          <div style={{ position: 'absolute', top: 62, left: 12, right: 12, zIndex: 6, maxHeight: 260, overflowY: 'auto',
+            background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.2)', padding: 6 }}>
+            {online.length === 0 ? (
+              <div style={{ padding: 12, fontSize: 12, color: 'var(--text-3)', textAlign: 'center' }}>Personne en ligne.</div>
+            ) : online.map(u => (
+              <button key={u.id} onClick={() => { setShowOnline(false); onOpenProfile(u.id) }} style={{
+                display: 'flex', alignItems: 'center', gap: 8, width: '100%', cursor: 'pointer',
+                padding: '8px 10px', borderRadius: 10, background: 'none', border: 'none', textAlign: 'left',
+              }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16a34a', flexShrink: 0 }} />
+                <img src={`https://flagcdn.com/w20/${u.countryCode}.png`} alt=""
+                  style={{ width: 18, height: 12, borderRadius: 2, objectFit: 'cover' }} />
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>{u.pseudo}</span>
+                {u.id === currentUser?.id && <span style={{ fontSize: 10, color: 'var(--text-3)' }}>(toi)</span>}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Messages */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -186,6 +222,23 @@ export default function ChatSheet({
                     color: mine ? '#0D0800' : 'var(--text-1)', border: mine ? 'none' : '1px solid var(--border)',
                     fontSize: 14, lineHeight: 1.35, wordBreak: 'break-word', boxShadow: 'var(--shadow-sm)',
                   }}>{renderBody(m.body, mine)}</div>
+
+                  {/* Accusés de lecture (« vu par ») sous mes messages */}
+                  {mine && (() => {
+                    const seen = reads.filter(r => r.userId !== currentUser?.id && r.lastRead >= m.createdAt)
+                    if (seen.length === 0) return null
+                    const shown = seen.slice(0, 5)
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 3 }}>
+                        <span style={{ fontSize: 9, color: 'var(--text-3)', marginRight: 1 }}>vu</span>
+                        {shown.map(r => (
+                          <img key={r.userId} src={`https://flagcdn.com/w20/${r.countryCode}.png`} alt="" title={r.pseudo}
+                            style={{ width: 15, height: 10, borderRadius: 2, objectFit: 'cover', border: '1px solid var(--bg)' }} />
+                        ))}
+                        {seen.length > 5 && <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-3)' }}>5+</span>}
+                      </div>
+                    )
+                  })()}
                 </div>
               )
             })
