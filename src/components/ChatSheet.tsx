@@ -128,20 +128,17 @@ export default function ChatSheet({ open, onClose, currentUser, onOpenAuth, onOp
                       style={{
                         position: 'relative', overflow: 'hidden',
                         display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
-                        padding: '4px 12px', borderRadius: 999,
-                        background: isAdminAuthor ? 'linear-gradient(135deg,#C89B3C,#E8D080)' : 'var(--bg-fill)',
-                        border: `1px solid ${isAdminAuthor ? GOLD : 'var(--border)'}`,
+                        padding: '4px 12px', borderRadius: 999, background: 'var(--bg-fill)',
+                        // Touche dorée discrète pour les admins, sinon bordure neutre
+                        border: isAdminAuthor ? `1.5px solid ${GOLD}` : '1px solid var(--border)',
+                        boxShadow: isAdminAuthor ? `0 0 0 1px ${GOLD}33` : 'none',
                       }}>
-                      {/* Le drapeau remplit la pastille (transparent) ; doré pour les admins */}
-                      {!isAdminAuthor && (
-                        <img src={`https://flagcdn.com/w80/${m.countryCode}.png`} alt="" aria-hidden
-                          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%',
-                            objectFit: 'cover', opacity: 0.4 }} />
-                      )}
+                      {/* Le drapeau du pays remplit la pastille, en transparence */}
+                      <img src={`https://flagcdn.com/w80/${m.countryCode}.png`} alt="" aria-hidden
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%',
+                          objectFit: 'cover', opacity: 0.4 }} />
                       <span style={{ position: 'relative', fontSize: 13, fontWeight: 800,
-                        color: isAdminAuthor ? '#0D0800' : 'var(--text-1)',
-                        textShadow: isAdminAuthor ? 'none' : '0 1px 2px rgba(0,0,0,0.22)' }}>{m.pseudo}</span>
-                      {isAdminAuthor && <span style={{ position: 'relative', fontSize: 11 }}>👑</span>}
+                        color: 'var(--text-1)', textShadow: '0 1px 2px rgba(0,0,0,0.22)' }}>{m.pseudo}</span>
                     </button>
                     <span style={{ fontSize: 9, color: 'var(--text-3)' }}>{timeLabel(m.createdAt)}</span>
                     {(mine || currentUser?.isAdmin) && (
