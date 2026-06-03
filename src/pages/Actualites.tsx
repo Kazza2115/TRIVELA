@@ -17,22 +17,29 @@ interface Article {
   publishedAt: number
 }
 
-// ── Récupération en direct (Google Actualités RSS via proxy CORS) ─────────────
+// ── Récupération en direct ────────────────────────────────────────────────────
+// 1) En priorité : Edge Function Supabase (côté serveur, fiable, sans CORS).
+// 2) Repli : proxys CORS publics sur le flux Google Actualités.
+// 3) Dernier repli : liste curatée (constante FALLBACK).
+
+const SUPA_URL  = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
+const SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpdmN3dHp6aHJzZGZ6eGlyamt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0MjM2MTMsImV4cCI6MjA5MTk5OTYxM30.BUfzNXfEobrz4CSeyBSj3I8To4F1eR-7AktC_kZfsO8'
 
 const NEWS_QUERY = 'Coupe du Monde 2026 OR Mondial 2026 football'
 const RSS_URL = `https://news.google.com/rss/search?q=${encodeURIComponent(NEWS_QUERY)}&hl=fr&gl=FR&ceid=FR:fr`
-// Proxys CORS essayés dans l'ordre (repli si l'un tombe)
 const PROXIES = [
   (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
   (u: string) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
 ]
+
+interface RawItem { title: string; link: string; source: string; pubDate: string; description: string }
 
 function stripHtml(s: string): string {
   const d = new DOMParser().parseFromString(s, 'text/html')
   return (d.body.textContent ?? '').replace(/\s+/g, ' ').trim()
 }
 
-function pickFlag(text: string): { flag: string; category: string; color: string } {
+function pickMeta(text: string): { flag: string; category: string; color: string } {
   const t = text.toLowerCase()
   if (/\bbleus?\b|france|deschamps|mbapp/.test(t)) return { flag: '🇫🇷', category: 'Équipe de France', color: '#3b82f6' }
   if (/stade|azteca|metlife|enceinte/.test(t))      return { flag: '🏟️', category: 'Stades', color: '#10b981' }
@@ -41,49 +48,65 @@ function pickFlag(text: string): { flag: string; category: string; color: string
   return { flag: '⚽', category: 'Mondial 2026', color: '#C89B3C' }
 }
 
-async function fetchLiveNews(): Promise<Article[]> {
-  let xml = ''
+function mapItems(items: RawItem[]): Article[] {
+  return items.map((it, i): Article => {
+    const title = it.source && it.title.endsWith(` - ${it.source}`)
+      ? it.title.slice(0, -(` - ${it.source}`).length)
+      : it.title.replace(/\s+-\s+[^-]+$/, '')
+    const excerpt = stripHtml(it.description).slice(0, 180)
+    const publishedAt = it.pubDate ? Date.parse(it.pubDate) : Date.now()
+    const meta = pickMeta(`${title} ${excerpt}`)
+    return {
+      id: it.link || String(i), title: title.trim(), excerpt: excerpt || title.trim(),
+      url: it.link, source: it.source || 'Google Actualités', image: null,
+      category: meta.category, categoryColor: meta.color, flag: meta.flag,
+      isNew: Date.now() - publishedAt < 24 * 3600 * 1000, publishedAt,
+    }
+  }).filter(a => a.title && a.url).sort((a, b) => b.publishedAt - a.publishedAt)
+}
+
+function parseRss(xml: string): RawItem[] {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml')
+  return Array.from(doc.querySelectorAll('item')).slice(0, 25).map(it => ({
+    title: it.querySelector('title')?.textContent ?? '',
+    link: it.querySelector('link')?.textContent ?? '',
+    source: it.querySelector('source')?.textContent ?? '',
+    pubDate: it.querySelector('pubDate')?.textContent ?? '',
+    description: it.querySelector('description')?.textContent ?? '',
+  }))
+}
+
+// 1) Edge Function Supabase (fiable, sans CORS tiers)
+async function fromFunction(): Promise<Article[]> {
+  const res = await fetch(`${SUPA_URL}/functions/v1/news`, {
+    headers: { apikey: SUPA_ANON, Authorization: `Bearer ${SUPA_ANON}` }, cache: 'no-store',
+  })
+  if (!res.ok) throw new Error('fn')
+  const data = await res.json()
+  const items: RawItem[] = data.items ?? []
+  if (!items.length) throw new Error('empty')
+  return mapItems(items)
+}
+
+// 2) Proxys CORS publics (repli)
+async function fromProxies(): Promise<Article[]> {
   for (const proxy of PROXIES) {
     try {
       const res = await fetch(proxy(RSS_URL), { cache: 'no-store' })
       if (!res.ok) continue
-      xml = await res.text()
-      if (xml.includes('<item')) break
-    } catch { /* essaie le proxy suivant */ }
+      const xml = await res.text()
+      if (xml.includes('<item')) {
+        const arts = mapItems(parseRss(xml))
+        if (arts.length) return arts
+      }
+    } catch { /* proxy suivant */ }
   }
-  if (!xml) throw new Error('Flux indisponible')
+  throw new Error('proxies')
+}
 
-  const doc = new DOMParser().parseFromString(xml, 'application/xml')
-  const items = Array.from(doc.querySelectorAll('item')).slice(0, 25)
-
-  const articles = items.map((it, i): Article => {
-    const rawTitle = it.querySelector('title')?.textContent ?? ''
-    const link     = it.querySelector('link')?.textContent ?? ''
-    const source   = it.querySelector('source')?.textContent ?? ''
-    const pub      = it.querySelector('pubDate')?.textContent ?? ''
-    const desc     = it.querySelector('description')?.textContent ?? ''
-
-    const title = source && rawTitle.endsWith(` - ${source}`)
-      ? rawTitle.slice(0, -(` - ${source}`).length)
-      : rawTitle.replace(/\s+-\s+[^-]+$/, '')
-    const excerpt = stripHtml(desc).slice(0, 180)
-    const publishedAt = pub ? Date.parse(pub) : Date.now()
-    const meta = pickFlag(`${title} ${excerpt}`)
-
-    return {
-      id: link || String(i),
-      title: title.trim(),
-      excerpt: excerpt || title.trim(),
-      url: link,
-      source: source || 'Google Actualités',
-      image: null,
-      category: meta.category, categoryColor: meta.color, flag: meta.flag,
-      isNew: Date.now() - publishedAt < 24 * 3600 * 1000,
-      publishedAt,
-    }
-  }).filter(a => a.title && a.url)
-
-  return articles.sort((a, b) => b.publishedAt - a.publishedAt)
+async function fetchLiveNews(): Promise<Article[]> {
+  try { return await fromFunction() } catch { /* tente les proxys */ }
+  return fromProxies()
 }
 
 // ── Repli (si la récupération en direct échoue) ───────────────────────────────
