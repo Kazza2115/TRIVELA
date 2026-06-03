@@ -6,6 +6,7 @@
 // MODE=cleanup  → supprime tous les joueurs DEMO sociaux + leurs interactions
 //
 // Tout est préfixé : comptes @trivela-social.invalid, matchs "social-…".
+// (relance v2 — après correctif du trigger d'inscription)
 // Le nettoyage (cleanup) retire AUSSI les notes/commentaires/réactions que les
 // comptes DEMO ont posés sur les vrais pronostics (cascade via les FK).
 
