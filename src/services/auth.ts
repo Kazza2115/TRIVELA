@@ -593,7 +593,9 @@ export async function sendChatMessage(
   const res = await authFetch('POST', 'chat_messages', {
     user_id: userId, pseudo, country_code: countryCode, body: text,
   })
-  return res.ok ? {} : { error: 'Impossible d\'envoyer le message.' }
+  if (res.ok) return {}
+  const detail = await res.text().catch(() => '')
+  return { error: `Envoi refusé (${res.status}). ${detail}`.trim() }
 }
 
 export async function deleteChatMessage(id: string): Promise<void> {

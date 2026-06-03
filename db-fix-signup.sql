@@ -43,3 +43,15 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
+
+-- ── Rattrapage : crée les profils manquants ─────────────────────────────────
+-- Les comptes inscrits pendant que le trigger plantait n'ont pas de ligne
+-- profiles, ce qui empêche d'envoyer des messages / d'être noté (clé étrangère).
+insert into public.profiles (id, pseudo, country_code, country_name)
+select u.id,
+  coalesce(u.raw_user_meta_data->>'pseudo', 'Joueur'),
+  coalesce(u.raw_user_meta_data->>'country_code', 'un'),
+  coalesce(u.raw_user_meta_data->>'country_name', '—')
+from auth.users u
+left join public.profiles p on p.id = u.id
+where p.id is null;

@@ -25,6 +25,7 @@ export default function ChatSheet({ open, onClose, currentUser, onOpenAuth }: Ch
   const [draft, setDraft]       = useState('')
   const [busy, setBusy]         = useState(false)
   const [loading, setLoading]   = useState(true)
+  const [err, setErr]           = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const load = useCallback(async () => { setMessages(await getChatMessages()) }, [])
@@ -42,9 +43,10 @@ export default function ChatSheet({ open, onClose, currentUser, onOpenAuth }: Ch
 
   const send = async () => {
     if (!currentUser || !draft.trim() || busy) return
-    setBusy(true)
+    setBusy(true); setErr('')
     const { error } = await sendChatMessage(currentUser.id, currentUser.pseudo, currentUser.countryCode, draft)
-    if (!error) { setDraft(''); await load() }
+    if (error) setErr(error)
+    else { setDraft(''); await load() }
     setBusy(false)
   }
   const remove = async (id: string) => { setBusy(true); await deleteChatMessage(id); await load(); setBusy(false) }
@@ -128,6 +130,9 @@ export default function ChatSheet({ open, onClose, currentUser, onOpenAuth }: Ch
 
         {/* Saisie */}
         <div style={{ flexShrink: 0, padding: '10px 16px 16px', borderTop: '1px solid var(--border)' }}>
+          {err && (
+            <div style={{ fontSize: 11, color: '#dc2626', marginBottom: 8, wordBreak: 'break-word' }}>{err}</div>
+          )}
           {currentUser ? (
             <div style={{ display: 'flex', gap: 6 }}>
               <input
