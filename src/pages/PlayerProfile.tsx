@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import PageLayout from './PageLayout'
 import { ALL_MATCHES } from '../data/wc2026Matches'
 import type { Match } from '../data/wc2026Matches'
@@ -131,6 +131,15 @@ export default function PlayerProfile({ player, rank, currentUser, onBack }: Pla
     for (const sec of arr) sec.bets.sort((x, y) => md(x.matchId) - md(y.matchId) || kt(x.matchId) - kt(y.matchId))
     return arr
   }, [bets])
+
+  // À l'arrivée sur la page, toutes les sections sont repliées (une seule fois).
+  const initCollapsed = useRef(false)
+  useEffect(() => {
+    if (!loading && !initCollapsed.current && sections.length) {
+      setCollapsed(new Set(sections.map(s => s.label)))
+      initCollapsed.current = true
+    }
+  }, [loading, sections])
 
   const toggleSection = (label: string) => setCollapsed(prev => {
     const next = new Set(prev)
