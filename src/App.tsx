@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import Globe        from './components/Globe'
 import Paris        from './pages/Paris'
 import Classement   from './pages/Classement'
@@ -7,7 +7,6 @@ import Actualites   from './pages/Actualites'
 import ChatSheet    from './components/ChatSheet'
 import ErrorBoundary from './components/ErrorBoundary'
 import ChatPreview  from './components/ChatPreview'
-import type { ChatPreviewVariant } from './components/ChatPreview'
 import AuthModal    from './components/AuthModal'
 import ProfileModal from './components/ProfileModal'
 import MenuDrawer   from './components/MenuDrawer'
@@ -58,38 +57,8 @@ export default function App() {
     })
   }
 
-  // ── Parier banner — smooth swipe-to-dismiss ────────────────────────────────
-  const [bannerShown,  setBannerShown]  = useState(true)
-  const [dragOffset,   setDragOffset]   = useState(0)
-  const swipeRef = useRef({ active: false, startY: 0 })
-
-  const handleBannerTouchStart = (e: React.TouchEvent) => {
-    if (!bannerShown) return
-    swipeRef.current = { active: true, startY: e.touches[0].clientY }
-  }
-  const handleBannerTouchMove = (e: React.TouchEvent) => {
-    if (!swipeRef.current.active) return
-    const dy = Math.max(0, e.touches[0].clientY - swipeRef.current.startY)
-    setDragOffset(Math.min(dy * 0.8, 120))
-  }
-  const handleBannerTouchEnd = (e: React.TouchEvent) => {
-    if (!swipeRef.current.active) return
-    swipeRef.current.active = false
-    const dy = e.changedTouches[0].clientY - swipeRef.current.startY
-    setDragOffset(0)
-    if (dy > 52) setBannerShown(false)
-  }
-
   const [activeNav, setActiveNav] = useState<SectionId>('globe')
   const [viewedPlayer, setViewedPlayer] = useState<{ player: UserProfile; rank: number } | null>(null)
-  const [chatPreview, setChatPreview] = useState<ChatPreviewVariant | 'off'>(() => {
-    try { return (localStorage.getItem('trivela-chat-preview') as ChatPreviewVariant | 'off') || 'card' }
-    catch { return 'card' }
-  })
-  const setPreview = (v: ChatPreviewVariant | 'off') => {
-    setChatPreview(v)
-    try { localStorage.setItem('trivela-chat-preview', v) } catch {}
-  }
   const [chatOpen, setChatOpen] = useState(false)
 
   const back       = () => { setViewedPlayer(null); setSection('globe'); setActiveNav('globe') }
@@ -104,12 +73,6 @@ export default function App() {
 
   const gold   = '#C89B3C'
   const dimCol = '#AEAEB2'
-
-  const bannerTranslate  = bannerShown ? dragOffset : 130
-  const bannerOpacity    = bannerShown ? Math.max(0, 1 - dragOffset / 100) : 0
-  const bannerTransition = dragOffset > 0
-    ? 'none'
-    : 'transform 0.44s cubic-bezier(0.34,1.15,0.64,1), opacity 0.36s ease'
 
   return (
     <div style={{
@@ -265,93 +228,8 @@ export default function App() {
             Touchez un pays · Faites pivoter
           </p>
 
-          {/* Sélecteur d'aperçu du chat (test des styles) */}
-          <div style={{
-            position: 'absolute', top: 36, left: 0, right: 0, zIndex: 9,
-            display: 'flex', justifyContent: 'center', gap: 6,
-          }}>
-            {([['ticker', 'Ticker'], ['card', 'Carte'], ['bubble', 'Bulle'], ['off', 'Aucun']] as const)
-              .map(([v, label]) => (
-                <button key={v} onClick={() => setPreview(v)} style={{
-                  padding: '4px 10px', borderRadius: 999, fontSize: 10, fontWeight: 700, cursor: 'pointer',
-                  border: chatPreview === v ? `1px solid ${gold}` : '1px solid var(--border)',
-                  background: chatPreview === v ? 'rgba(200,155,60,0.15)' : 'var(--bg-card)',
-                  color: chatPreview === v ? gold : 'var(--text-3)',
-                }}>{label}</button>
-              ))}
-          </div>
-
-          {/* Aperçu du chat */}
-          {chatPreview !== 'off' && (
-            <ChatPreview variant={chatPreview} onOpen={() => setChatOpen(true)} />
-          )}
-
-          {/* Parier banner */}
-          <div
-            onTouchStart={handleBannerTouchStart}
-            onTouchMove={handleBannerTouchMove}
-            onTouchEnd={handleBannerTouchEnd}
-            style={{
-              position: 'absolute', bottom: 16, left: 16, right: 16,
-              padding: '20px 18px 16px',
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)', borderRadius: 20,
-              boxShadow: 'var(--shadow-lg)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-              touchAction: 'none',
-              transition: bannerTransition,
-              transform: `translateY(${bannerTranslate}px)`,
-              opacity: bannerOpacity,
-              pointerEvents: bannerShown ? 'auto' : 'none',
-            }}
-          >
-            <div style={{
-              position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
-              width: 36, height: 4, borderRadius: 2, background: 'rgba(0,0,0,0.10)',
-              pointerEvents: 'none',
-            }} />
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, color: gold,
-                textTransform: 'uppercase', marginBottom: 3 }}>
-                Coupe du Monde 2026
-              </div>
-              <div style={{ fontSize: 13, color: 'var(--text-1)', fontWeight: 500 }}>
-                72 matchs · Faites vos pronostics
-              </div>
-            </div>
-            <button onClick={() => navigateTo('paris')} style={{
-              padding: '10px 18px',
-              background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
-              border: 'none', borderRadius: 12, color: '#0D0800', fontSize: 13, fontWeight: 700,
-              cursor: 'pointer', flexShrink: 0,
-              boxShadow: '0 4px 14px rgba(200,155,60,0.4)',
-              transition: 'transform 0.12s, box-shadow 0.12s',
-            }}
-              onPointerDown={e => { e.currentTarget.style.transform = 'scale(0.96)'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(200,155,60,0.25)' }}
-              onPointerUp={e   => { e.currentTarget.style.transform = 'scale(1)';    e.currentTarget.style.boxShadow = '0 4px 14px rgba(200,155,60,0.4)' }}
-            >
-              Parier →
-            </button>
-          </div>
-
-          {/* Restore pill */}
-          <button
-            onClick={() => setBannerShown(true)}
-            style={{
-              position: 'absolute', bottom: 16, right: 16,
-              padding: '9px 18px',
-              background: 'linear-gradient(135deg,#C89B3C,#E8D080)',
-              border: 'none', borderRadius: 20,
-              color: '#0D0800', fontSize: 12, fontWeight: 700,
-              cursor: 'pointer', boxShadow: '0 4px 14px rgba(200,155,60,0.4)',
-              transition: 'opacity 0.36s ease, transform 0.44s cubic-bezier(0.34,1.15,0.64,1)',
-              opacity: bannerShown ? 0 : 1,
-              transform: bannerShown ? 'translateY(50px)' : 'translateY(0)',
-              pointerEvents: bannerShown ? 'none' : 'auto',
-            }}
-          >
-            ⚡ Parier
-          </button>
+          {/* Aperçu du chat (carte) — seul élément flottant de l'accueil */}
+          <ChatPreview variant="card" onOpen={() => setChatOpen(true)} />
         </div>
 
         {section === 'actualites' && <Actualites  onBack={back} />}

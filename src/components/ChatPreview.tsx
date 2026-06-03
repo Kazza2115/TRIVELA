@@ -16,7 +16,7 @@ export default function ChatPreview({
 
   const latest = msgs.slice(-3)
   const last   = latest[latest.length - 1]
-  const base: React.CSSProperties = { position: 'absolute', bottom: 108, zIndex: 8, cursor: 'pointer' }
+  const base: React.CSSProperties = { position: 'absolute', bottom: 16, zIndex: 8, cursor: 'pointer' }
 
   // ── Bandeau défilant ───────────────────────────────────────────────────────
   if (variant === 'ticker') {
