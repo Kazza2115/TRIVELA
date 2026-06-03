@@ -1,9 +1,10 @@
 // Récupère les actualités "Coupe du Monde 2026" (Google Actualités RSS) côté
 // serveur et les écrit dans la table Supabase `news`. Lancé par GitHub Actions.
+// Tolérant aux pannes : journalise et sort en succès (pas de run rouge) si le
+// flux est indisponible ou si la table n'existe pas encore.
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
-if (!SERVICE) { console.error('SUPABASE_SERVICE_ROLE_KEY absent'); process.exit(1) }
 
 const QUERY = 'Coupe du Monde 2026 OR Mondial 2026 football'
 const RSS = `https://news.google.com/rss/search?q=${encodeURIComponent(QUERY)}&hl=fr&gl=FR&ceid=FR:fr`
@@ -28,38 +29,57 @@ function meta(text) {
   return ['⚽', 'Mondial 2026', '#C89B3C']
 }
 
-const res = await fetch(RSS, { headers: { 'User-Agent': 'Mozilla/5.0 (TRIVELA news bot)' } })
-if (!res.ok) { console.error('RSS', res.status); process.exit(1) }
-const xml = await res.text()
+async function main() {
+  if (!SERVICE) { console.error('⚠️  SUPABASE_SERVICE_ROLE_KEY absent — arrêt.'); return }
 
-const rows = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 30).map(m => {
-  const b = m[1]
-  const rawTitle = tag(b, 'title'); const link = tag(b, 'link'); const source = tag(b, 'source')
-  const pub = tag(b, 'pubDate'); const desc = tag(b, 'description')
-  const title = source && rawTitle.endsWith(` - ${source}`)
-    ? rawTitle.slice(0, -(` - ${source}`).length)
-    : rawTitle.replace(/\s+-\s+[^-]+$/, '')
-  const excerpt = stripHtml(desc).slice(0, 220)
-  const [flag, category, color] = meta(`${title} ${excerpt}`)
-  return {
-    id: link, title: title.trim(), excerpt: excerpt || title.trim(), url: link,
-    source: source || 'Google Actualités', category, category_color: color, flag,
-    published_at: pub ? new Date(pub).toISOString() : new Date().toISOString(),
+  let xml = ''
+  try {
+    const res = await fetch(RSS, { headers: { 'User-Agent': 'Mozilla/5.0 (TRIVELA news bot)' } })
+    if (!res.ok) { console.warn(`⚠️  Flux RSS indisponible (HTTP ${res.status}).`); return }
+    xml = await res.text()
+  } catch (e) {
+    console.warn('⚠️  Flux RSS injoignable :', String(e)); return
   }
-}).filter(r => r.id && r.title)
 
-console.log(`Articles récupérés : ${rows.length}`)
-if (rows.length === 0) { console.error('Aucun article (flux vide ?)'); process.exit(1) }
+  const rows = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 30).map(m => {
+    const b = m[1]
+    const rawTitle = tag(b, 'title'); const link = tag(b, 'link'); const source = tag(b, 'source')
+    const pub = tag(b, 'pubDate'); const desc = tag(b, 'description')
+    const title = source && rawTitle.endsWith(` - ${source}`)
+      ? rawTitle.slice(0, -(` - ${source}`).length)
+      : rawTitle.replace(/\s+-\s+[^-]+$/, '')
+    const excerpt = stripHtml(desc).slice(0, 220)
+    const [flag, category, color] = meta(`${title} ${excerpt}`)
+    return {
+      id: link, title: title.trim(), excerpt: excerpt || title.trim(), url: link,
+      source: source || 'Google Actualités', category, category_color: color, flag,
+      published_at: pub ? new Date(pub).toISOString() : new Date().toISOString(),
+    }
+  }).filter(r => r.id && r.title)
 
-const up = await sb('news?on_conflict=id', {
-  method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-  body: JSON.stringify(rows),
-})
-console.log('Upsert news :', up.status)
-if (!up.ok) { console.error(await up.text().catch(() => '')); process.exit(1) }
+  console.log(`Articles récupérés : ${rows.length}`)
+  if (rows.length === 0) { console.warn('⚠️  Aucun article (flux vide).'); return }
 
-// Purge des articles de plus de 21 jours
-const cutoff = new Date(Date.now() - 21 * 864e5).toISOString()
-const del = await sb(`news?published_at=lt.${cutoff}`, { method: 'DELETE' })
-console.log('Purge anciens :', del.status)
-console.log('✅ Terminé')
+  const up = await sb('news?on_conflict=id', {
+    method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(rows),
+  })
+  console.log('Upsert news :', up.status)
+  if (!up.ok) {
+    const detail = await up.text().catch(() => '')
+    if (detail.includes('PGRST205')) {
+      console.warn('⚠️  La table `news` n\'existe pas encore — exécute db-news.sql dans Supabase. (Pas d\'échec : on réessaiera au prochain passage.)')
+    } else {
+      console.warn('⚠️  Échec de l\'upsert :', detail)
+    }
+    return
+  }
+
+  // Purge des articles de plus de 21 jours
+  const cutoff = new Date(Date.now() - 21 * 864e5).toISOString()
+  const del = await sb(`news?published_at=lt.${cutoff}`, { method: 'DELETE' })
+  console.log('Purge anciens :', del.status)
+  console.log('✅ Terminé')
+}
+
+main().catch(e => { console.error('Erreur inattendue (ignorée) :', e); process.exit(0) })
