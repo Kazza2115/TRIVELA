@@ -55,13 +55,13 @@ export default function ChatSheet({ open, onClose, currentUser, onOpenAuth }: Ch
     <>
       {/* Fond */}
       <div onClick={onClose} style={{
-        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 60,
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 400,
         animation: 'fadeIn 0.2s ease',
       }} />
 
       {/* Panneau */}
       <div style={{
-        position: 'fixed', left: 0, right: 0, bottom: 0, height: '80vh', zIndex: 61,
+        position: 'fixed', left: 0, right: 0, bottom: 0, height: '80vh', zIndex: 401,
         background: 'var(--bg)', borderTopLeftRadius: 22, borderTopRightRadius: 22,
         boxShadow: '0 -8px 30px rgba(0,0,0,0.25)', display: 'flex', flexDirection: 'column',
         animation: 'fadeSlideUp 0.28s cubic-bezier(0.34,1.15,0.64,1)',

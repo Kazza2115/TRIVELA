@@ -5,6 +5,7 @@ import Classement   from './pages/Classement'
 import PlayerProfile from './pages/PlayerProfile'
 import Actualites   from './pages/Actualites'
 import ChatSheet    from './components/ChatSheet'
+import ErrorBoundary from './components/ErrorBoundary'
 import ChatPreview  from './components/ChatPreview'
 import type { ChatPreviewVariant } from './components/ChatPreview'
 import AuthModal    from './components/AuthModal'
@@ -424,12 +425,14 @@ export default function App() {
       />
 
       {/* ── Chat (panneau sur l'accueil) ──────────────────────── */}
-      <ChatSheet
-        open={chatOpen}
-        onClose={() => setChatOpen(false)}
-        currentUser={currentUser}
-        onOpenAuth={openAuth}
-      />
+      <ErrorBoundary>
+        <ChatSheet
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          currentUser={currentUser}
+          onOpenAuth={openAuth}
+        />
+      </ErrorBoundary>
 
       {/* ── Auth modal ────────────────────────────────────────── */}
       {showAuth && (
