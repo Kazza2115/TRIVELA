@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  getChatMessages, sendChatMessage, deleteChatMessage, subscribeToChat,
+  getChatMessages, sendChatMessage, deleteChatMessage, subscribeToChat, clearChat,
 } from '../services/auth'
 import type { ChatMessage, UserProfile } from '../services/auth'
 
@@ -50,6 +50,13 @@ export default function ChatSheet({ open, onClose, currentUser, onOpenAuth }: Ch
     setBusy(false)
   }
   const remove = async (id: string) => { setBusy(true); await deleteChatMessage(id); await load(); setBusy(false) }
+  const clearAll = async () => {
+    if (busy || !window.confirm('Vider TOUT le chat ? Cette action est irréversible.')) return
+    setBusy(true); setErr('')
+    const { error } = await clearChat()
+    if (error) setErr(error)
+    await load(); setBusy(false)
+  }
 
   if (!open) return null
 
@@ -78,6 +85,13 @@ export default function ChatSheet({ open, onClose, currentUser, onOpenAuth }: Ch
               <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-1)' }}>Chat en direct</div>
               <div style={{ fontSize: 10, color: 'var(--text-3)' }}>Discussion entre joueurs</div>
             </div>
+            {currentUser?.isAdmin && (
+              <button onClick={clearAll} disabled={busy} title="Vider le chat" style={{
+                background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
+                borderRadius: 10, cursor: 'pointer', color: '#dc2626', fontSize: 11, fontWeight: 700,
+                padding: '6px 10px',
+              }}>🗑️ Vider</button>
+            )}
             <button onClick={onClose} style={{
               background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)',
               fontSize: 20, lineHeight: 1, padding: 4,
@@ -107,8 +121,9 @@ export default function ChatSheet({ open, onClose, currentUser, onOpenAuth }: Ch
                       style={{ width: 16, height: 11, borderRadius: 2, objectFit: 'cover' }} />
                     <span style={{ fontSize: 11, fontWeight: 700, color: GOLD }}>{m.pseudo}</span>
                     <span style={{ fontSize: 9, color: 'var(--text-3)' }}>{timeLabel(m.createdAt)}</span>
-                    {mine && (
-                      <button onClick={() => remove(m.id)} disabled={busy} title="Supprimer"
+                    {(mine || currentUser?.isAdmin) && (
+                      <button onClick={() => remove(m.id)} disabled={busy}
+                        title={mine ? 'Supprimer' : 'Supprimer (admin)'}
                         style={{ background: 'none', border: 'none', cursor: 'pointer',
                           color: 'var(--text-3)', fontSize: 11, padding: 0 }}>✕</button>
                     )}

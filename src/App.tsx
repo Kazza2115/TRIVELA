@@ -323,6 +323,7 @@ export default function App() {
           currentUser={currentUser}
           onClose={() => setShowProfile(false)}
           onLogout={handleLogout}
+          onUpdated={setCurrentUser}
         />
       )}
     </div>

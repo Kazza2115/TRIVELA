@@ -11,6 +11,7 @@ export interface UserProfile {
   score: number
   createdAt: number
   favorites: string[]
+  isAdmin: boolean
 }
 
 export interface BetRecord {
@@ -86,6 +87,7 @@ async function fetchProfile(userId: string): Promise<UserProfile | null> {
     score:       p.score,
     createdAt:   new Date(p.created_at as string).getTime(),
     favorites:   (p.favorites as string[]) ?? [],
+    isAdmin:     (p.is_admin as boolean) ?? false,
   }
 }
 
@@ -103,7 +105,7 @@ function weakHash(s: string) {
   return btoa(unescape(encodeURIComponent(s + '::trivela2026')))
 }
 function toProfile({ _pwKey: _, ...p }: StoredUser): UserProfile {
-  return { ...p, favorites: (p as any).favorites ?? [] }
+  return { ...p, favorites: (p as any).favorites ?? [], isAdmin: (p as any).isAdmin ?? false }
 }
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -146,7 +148,7 @@ export async function register(
         id: body.user.id, email,
         pseudo, countryCode, countryName,
         score: 0, createdAt: Date.now(),
-        favorites: [],
+        favorites: [], isAdmin: false,
       },
     }
   }
@@ -160,7 +162,7 @@ export async function register(
 
   const user: StoredUser = {
     id: crypto.randomUUID(), email, pseudo, countryCode, countryName,
-    score: 0, createdAt: Date.now(), favorites: [], _pwKey: weakHash(password),
+    score: 0, createdAt: Date.now(), favorites: [], isAdmin: false, _pwKey: weakHash(password),
   }
   localStorage.setItem(LS_USERS, JSON.stringify([...users, user]))
   const profile = toProfile(user)
@@ -196,7 +198,7 @@ export async function login(
           pseudo: (body.user?.user_metadata?.pseudo as string) ?? '',
           countryCode: (body.user?.user_metadata?.country_code as string) ?? '',
           countryName: (body.user?.user_metadata?.country_name as string) ?? '',
-          score: 0, createdAt: Date.now(), favorites: [],
+          score: 0, createdAt: Date.now(), favorites: [], isAdmin: false,
         },
       }
     } catch (e: unknown) {
@@ -293,6 +295,7 @@ export async function getLeaderboard(): Promise<UserProfile[]> {
       score: p.score as number,
       createdAt: new Date(p.created_at as string).getTime(),
       favorites: (p.favorites as string[]) ?? [],
+      isAdmin: (p.is_admin as boolean) ?? false,
     }))
   }
   return lsUsers().map(toProfile).sort((a, b) => b.score - a.score)
@@ -613,4 +616,88 @@ export function subscribeToChat(cb: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, cb)
     .subscribe()
   return () => { supabase!.removeChannel(channel) }
+}
+
+// ── Édition du profil (pseudo / pays / e-mail / mot de passe) ─────────────────
+
+// Fetch sur l'endpoint GoTrue (compte), distinct du REST PostgREST.
+async function authUserFetch(method: string, body?: object): Promise<Response> {
+  return fetch(`${SUPA_URL}/auth/v1/user`, {
+    method,
+    headers: {
+      'apikey': SUPA_ANON,
+      'Authorization': `Bearer ${_jwt ?? SUPA_ANON}`,
+      'Content-Type': 'application/json',
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  })
+}
+
+/** Récupère l'e-mail réel du compte connecté (non stocké dans profiles). */
+export async function getAuthEmail(): Promise<string> {
+  if (!supabaseConfigured) {
+    try { return (JSON.parse(localStorage.getItem(LS_SESSION) ?? '{}').email as string) ?? '' } catch { return '' }
+  }
+  const res = await authUserFetch('GET')
+  if (!res.ok) return ''
+  const u = await res.json().catch(() => ({}))
+  return (u?.email as string) ?? ''
+}
+
+/** Met à jour pseudo + pays (vérifie l'unicité du pseudo, hors soi-même). */
+export async function updateProfileInfo(
+  userId: string, pseudo: string, countryCode: string, countryName: string,
+): Promise<{ error?: string }> {
+  const name = pseudo.trim()
+  if (name.length < 2 || name.length > 20) return { error: 'Le pseudo doit faire entre 2 et 20 caractères.' }
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+
+  const check = await authFetch('GET',
+    `profiles?pseudo=ilike.${encodeURIComponent(name)}&id=neq.${userId}&select=id&limit=1`)
+  const existing = await check.json().catch(() => [])
+  if (Array.isArray(existing) && existing.length > 0) return { error: 'Ce pseudo est déjà pris.' }
+
+  const res = await authFetch('PATCH', `profiles?id=eq.${userId}`, {
+    pseudo: name, country_code: countryCode, country_name: countryName,
+  })
+  return res.ok ? {} : { error: 'Échec de la mise à jour du profil.' }
+}
+
+/** Change l'adresse e-mail du compte (peut nécessiter une confirmation par mail). */
+export async function updateEmail(email: string): Promise<{ error?: string }> {
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+  const res = await authUserFetch('PUT', { email: email.trim() })
+  if (res.ok) return {}
+  const b = await res.json().catch(() => ({}))
+  return { error: b.error_description || b.msg || b.message || 'Échec de la mise à jour de l\'e-mail.' }
+}
+
+/** Change le mot de passe du compte. */
+export async function updatePassword(password: string): Promise<{ error?: string }> {
+  if (password.length < 6) return { error: 'Le mot de passe doit faire au moins 6 caractères.' }
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+  const res = await authUserFetch('PUT', { password })
+  if (res.ok) return {}
+  const b = await res.json().catch(() => ({}))
+  return { error: b.error_description || b.msg || b.message || 'Échec de la mise à jour du mot de passe.' }
+}
+
+// ── Administration ───────────────────────────────────────────────────────────
+
+/** Promeut (true) ou rétrograde (false) un joueur en admin. Réservé aux admins. */
+export async function setUserAdmin(targetId: string, value: boolean): Promise<{ error?: string }> {
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+  const res = await authFetch('POST', 'rpc/admin_set_admin', { p_target: targetId, p_value: value })
+  if (res.ok) return {}
+  const detail = await res.text().catch(() => '')
+  return { error: `Action refusée (${res.status}). ${detail}`.trim() }
+}
+
+/** Supprime tous les messages du chat. Réservé aux admins. */
+export async function clearChat(): Promise<{ error?: string }> {
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+  const res = await authFetch('POST', 'rpc/admin_clear_chat', {})
+  if (res.ok) return {}
+  const detail = await res.text().catch(() => '')
+  return { error: `Action refusée (${res.status}). ${detail}`.trim() }
 }

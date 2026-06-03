@@ -5,7 +5,7 @@ import type { Match } from '../data/wc2026Matches'
 import {
   getPublicBets, getResults, getRatings, getComments, getCommentReactions,
   rateBet, addComment, deleteComment, reactToComment, unreactToComment,
-  subscribeToPlayerSocial,
+  subscribeToPlayerSocial, setUserAdmin,
 } from '../services/auth'
 import type {
   UserProfile, PublicBet, MatchResult, BetRating, BetComment, CommentReaction,
@@ -54,8 +54,18 @@ export default function PlayerProfile({ player, rank, currentUser, onBack }: Pla
   const [reactions, setReactions] = useState<CommentReaction[]>([])
   const [loading,  setLoading]  = useState(true)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [targetAdmin, setTargetAdmin] = useState(player.isAdmin)
+  const [adminBusy, setAdminBusy] = useState(false)
 
   const isSelf = currentUser?.id === player.id
+
+  const toggleAdmin = async () => {
+    if (adminBusy) return
+    setAdminBusy(true)
+    const { error } = await setUserAdmin(player.id, !targetAdmin)
+    if (error) alert(error); else setTargetAdmin(v => !v)
+    setAdminBusy(false)
+  }
 
   const loadSocial = useCallback(async () => {
     const [r, c] = await Promise.all([getRatings(player.id), getComments(player.id)])
@@ -155,6 +165,26 @@ export default function PlayerProfile({ player, rank, currentUser, onBack }: Pla
         style={{ width: 26, height: 18, borderRadius: 3, objectFit: 'cover', border: '1px solid var(--border)' }} />}
       title={player.pseudo}
       subtitle={`${rank ? `#${rank} · ` : ''}${player.score.toLocaleString()} pts · ${player.countryName}`}>
+
+      {/* ── Barre admin (visible par les admins, sur les autres joueurs) ── */}
+      {currentUser?.isAdmin && !isSelf && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12,
+          padding: '10px 14px', borderRadius: 12,
+          background: 'rgba(200,155,60,0.07)', border: '1px solid rgba(200,155,60,0.25)',
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)' }}>
+            {targetAdmin ? '👑 Administrateur' : 'Joueur standard'}
+          </span>
+          <button onClick={toggleAdmin} disabled={adminBusy} style={{
+            marginLeft: 'auto', padding: '7px 12px', borderRadius: 10, cursor: 'pointer',
+            border: targetAdmin ? '1px solid rgba(239,68,68,0.3)' : 'none',
+            background: targetAdmin ? 'rgba(239,68,68,0.08)' : 'linear-gradient(135deg,#C89B3C,#E8D080)',
+            color: targetAdmin ? '#dc2626' : '#0D0800', fontSize: 12, fontWeight: 700,
+            opacity: adminBusy ? 0.6 : 1,
+          }}>{targetAdmin ? 'Retirer admin' : 'Promouvoir admin'}</button>
+        </div>
+      )}
 
       {/* ── Stats band ──────────────────────────────────────────── */}
       <div style={{
