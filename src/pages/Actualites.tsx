@@ -76,19 +76,30 @@ function parseRss(xml: string): RawItem[] {
   }))
 }
 
-// 1) Edge Function Supabase (fiable, sans CORS tiers)
-async function fromFunction(): Promise<Article[]> {
-  const res = await fetch(`${SUPA_URL}/functions/v1/news`, {
+// 1) Table Supabase `news` (alimentée par GitHub Actions — fiable, sans CORS)
+async function fromTable(): Promise<Article[]> {
+  const res = await fetch(`${SUPA_URL}/rest/v1/news?select=*&order=published_at.desc&limit=40`, {
     headers: { apikey: SUPA_ANON, Authorization: `Bearer ${SUPA_ANON}` }, cache: 'no-store',
   })
-  if (!res.ok) throw new Error('fn')
-  const data = await res.json()
-  const items: RawItem[] = data.items ?? []
-  if (!items.length) throw new Error('empty')
-  return mapItems(items)
+  if (!res.ok) throw new Error('table')
+  const rows = await res.json()
+  if (!Array.isArray(rows) || rows.length === 0) throw new Error('empty')
+  return rows.map((r: any, i: number): Article => ({
+    id: (r.id as string) || String(i),
+    title: r.title as string,
+    excerpt: (r.excerpt as string) || (r.title as string),
+    url: r.url as string,
+    source: (r.source as string) || 'Actualités',
+    image: null,
+    category: (r.category as string) || 'Mondial 2026',
+    categoryColor: (r.category_color as string) || '#C89B3C',
+    flag: (r.flag as string) || '⚽',
+    isNew: r.published_at ? (Date.now() - Date.parse(r.published_at) < 24 * 3600 * 1000) : false,
+    publishedAt: r.published_at ? Date.parse(r.published_at) : Date.now(),
+  })).filter(a => a.title && a.url)
 }
 
-// 2) Proxys CORS publics (repli)
+// 2) Proxys CORS publics sur le flux Google Actualités (repli)
 async function fromProxies(): Promise<Article[]> {
   for (const proxy of PROXIES) {
     try {
@@ -105,7 +116,7 @@ async function fromProxies(): Promise<Article[]> {
 }
 
 async function fetchLiveNews(): Promise<Article[]> {
-  try { return await fromFunction() } catch { /* tente les proxys */ }
+  try { return await fromTable() } catch { /* tente les proxys */ }
   return fromProxies()
 }
 
