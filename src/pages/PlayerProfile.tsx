@@ -53,6 +53,7 @@ export default function PlayerProfile({ player, rank, currentUser, onBack }: Pla
   const [comments, setComments] = useState<BetComment[]>([])
   const [reactions, setReactions] = useState<CommentReaction[]>([])
   const [loading,  setLoading]  = useState(true)
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const isSelf = currentUser?.id === player.id
 
@@ -102,6 +103,40 @@ export default function PlayerProfile({ player, rank, currentUser, onBack }: Pla
     }
     return shared ? { shared, me, them } : null
   }, [bets, myBets, isSelf, currentUser])
+
+  // ── Paris regroupés par phase / groupe ────────────────────────────────────
+  const sections = useMemo(() => {
+    const roundOrder: Record<string, number> = { r32: 100, r16: 101, qf: 102, sf: 103, '3rd': 104, final: 105 }
+    const roundLabel: Record<string, string> = {
+      r32: '16es de finale', r16: '8es de finale', qf: 'Quarts de finale',
+      sf: 'Demi-finales', '3rd': 'Petite finale', final: 'Finale',
+    }
+    const sectionOf = (m: Match) =>
+      m.round === 'group'
+        ? { label: `Groupe ${m.group}`, order: m.group.charCodeAt(0) - 65 }
+        : { label: roundLabel[m.round] ?? 'Phase finale', order: roundOrder[m.round] ?? 899 }
+
+    const map = new Map<string, { label: string; order: number; bets: PublicBet[]; pts: number }>()
+    for (const bet of bets) {
+      const m = MATCH_BY_ID.get(bet.matchId)
+      const { label, order } = m ? sectionOf(m) : { label: bet.stage || 'Autres', order: 900 }
+      let sec = map.get(label)
+      if (!sec) { sec = { label, order, bets: [], pts: 0 }; map.set(label, sec) }
+      sec.bets.push(bet)
+      sec.pts += bet.points ?? 0
+    }
+    const arr = [...map.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
+    const kt = (id: string) => { const m = MATCH_BY_ID.get(id); return parseUTC(m?.date, m?.time) ?? 0 }
+    const md = (id: string) => MATCH_BY_ID.get(id)?.matchday ?? 0
+    for (const sec of arr) sec.bets.sort((x, y) => md(x.matchId) - md(y.matchId) || kt(x.matchId) - kt(y.matchId))
+    return arr
+  }, [bets])
+
+  const toggleSection = (label: string) => setCollapsed(prev => {
+    const next = new Set(prev)
+    if (next.has(label)) next.delete(label); else next.add(label)
+    return next
+  })
 
   const flagUrl = `https://flagcdn.com/w40/${player.countryCode}.png`
 
@@ -164,22 +199,50 @@ export default function PlayerProfile({ player, rank, currentUser, onBack }: Pla
           <div style={{ fontSize: 13 }}>{player.pseudo} n'a pas encore de pronostic.</div>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {bets.map(bet => (
-            <BetSocialCard
-              key={bet.id}
-              bet={bet}
-              match={MATCH_BY_ID.get(bet.matchId)}
-              result={results.get(bet.matchId)}
-              ratings={ratings.filter(r => r.matchId === bet.matchId)}
-              comments={comments.filter(c => c.matchId === bet.matchId)}
-              reactions={reactions}
-              currentUser={currentUser}
-              isSelf={isSelf}
-              targetUserId={player.id}
-              onChanged={loadSocial}
-            />
-          ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {sections.map(sec => {
+            const isCollapsed = collapsed.has(sec.label)
+            return (
+              <div key={sec.label}>
+                <button onClick={() => toggleSection(sec.label)} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                  padding: '8px 12px', marginBottom: 8, cursor: 'pointer',
+                  background: 'linear-gradient(135deg, rgba(200,155,60,0.12), rgba(200,155,60,0.03))',
+                  border: '1px solid rgba(200,155,60,0.3)', borderRadius: 10,
+                }}>
+                  <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 16, letterSpacing: 0.5, color: GOLD }}>
+                    {sec.label}
+                  </span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-3)' }}>
+                    {sec.bets.length} prono{sec.bets.length > 1 ? 's' : ''}
+                  </span>
+                  {sec.pts > 0 && (
+                    <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a' }}>+{sec.pts} pts</span>
+                  )}
+                  <span style={{ marginLeft: 'auto', color: GOLD, fontSize: 11 }}>{isCollapsed ? '▼' : '▲'}</span>
+                </button>
+                {!isCollapsed && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {sec.bets.map(bet => (
+                      <BetSocialCard
+                        key={bet.id}
+                        bet={bet}
+                        match={MATCH_BY_ID.get(bet.matchId)}
+                        result={results.get(bet.matchId)}
+                        ratings={ratings.filter(r => r.matchId === bet.matchId)}
+                        comments={comments.filter(c => c.matchId === bet.matchId)}
+                        reactions={reactions}
+                        currentUser={currentUser}
+                        isSelf={isSelf}
+                        targetUserId={player.id}
+                        onChanged={loadSocial}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
     </PageLayout>
