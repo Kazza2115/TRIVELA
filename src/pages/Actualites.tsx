@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import PageLayout from './PageLayout'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -17,188 +17,171 @@ interface Article {
   publishedAt: number
 }
 
-// ── Curated articles — updated April 2026 ─────────────────────────────────────
+// ── Récupération en direct (Google Actualités RSS via proxy CORS) ─────────────
 
-const ARTICLES: Article[] = [
+const NEWS_QUERY = 'Coupe du Monde 2026 OR Mondial 2026 football'
+const RSS_URL = `https://news.google.com/rss/search?q=${encodeURIComponent(NEWS_QUERY)}&hl=fr&gl=FR&ceid=FR:fr`
+// Proxys CORS essayés dans l'ordre (repli si l'un tombe)
+const PROXIES = [
+  (u: string) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  (u: string) => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
+]
+
+function stripHtml(s: string): string {
+  const d = new DOMParser().parseFromString(s, 'text/html')
+  return (d.body.textContent ?? '').replace(/\s+/g, ' ').trim()
+}
+
+function pickFlag(text: string): { flag: string; category: string; color: string } {
+  const t = text.toLowerCase()
+  if (/\bbleus?\b|france|deschamps|mbapp/.test(t)) return { flag: '🇫🇷', category: 'Équipe de France', color: '#3b82f6' }
+  if (/stade|azteca|metlife|enceinte/.test(t))      return { flag: '🏟️', category: 'Stades', color: '#10b981' }
+  if (/billet|billetterie|ticket/.test(t))          return { flag: '🎫', category: 'Billetterie', color: '#f59e0b' }
+  if (/fifa|var|règl|officiel|arbitr/.test(t))      return { flag: '⚽', category: 'Officiel', color: '#6366f1' }
+  return { flag: '⚽', category: 'Mondial 2026', color: '#C89B3C' }
+}
+
+async function fetchLiveNews(): Promise<Article[]> {
+  let xml = ''
+  for (const proxy of PROXIES) {
+    try {
+      const res = await fetch(proxy(RSS_URL), { cache: 'no-store' })
+      if (!res.ok) continue
+      xml = await res.text()
+      if (xml.includes('<item')) break
+    } catch { /* essaie le proxy suivant */ }
+  }
+  if (!xml) throw new Error('Flux indisponible')
+
+  const doc = new DOMParser().parseFromString(xml, 'application/xml')
+  const items = Array.from(doc.querySelectorAll('item')).slice(0, 25)
+
+  const articles = items.map((it, i): Article => {
+    const rawTitle = it.querySelector('title')?.textContent ?? ''
+    const link     = it.querySelector('link')?.textContent ?? ''
+    const source   = it.querySelector('source')?.textContent ?? ''
+    const pub      = it.querySelector('pubDate')?.textContent ?? ''
+    const desc     = it.querySelector('description')?.textContent ?? ''
+
+    const title = source && rawTitle.endsWith(` - ${source}`)
+      ? rawTitle.slice(0, -(` - ${source}`).length)
+      : rawTitle.replace(/\s+-\s+[^-]+$/, '')
+    const excerpt = stripHtml(desc).slice(0, 180)
+    const publishedAt = pub ? Date.parse(pub) : Date.now()
+    const meta = pickFlag(`${title} ${excerpt}`)
+
+    return {
+      id: link || String(i),
+      title: title.trim(),
+      excerpt: excerpt || title.trim(),
+      url: link,
+      source: source || 'Google Actualités',
+      image: null,
+      category: meta.category, categoryColor: meta.color, flag: meta.flag,
+      isNew: Date.now() - publishedAt < 24 * 3600 * 1000,
+      publishedAt,
+    }
+  }).filter(a => a.title && a.url)
+
+  return articles.sort((a, b) => b.publishedAt - a.publishedAt)
+}
+
+// ── Repli (si la récupération en direct échoue) ───────────────────────────────
+
+const FALLBACK: Article[] = [
   {
-    id: '1',
-    title: 'J-51 : la planète football en compte à rebours',
-    excerpt: 'Dans 51 jours, le coup d\'envoi du Mondial 2026 sera donné au stade Azteca de Mexico City. Un événement inédit avec 48 nations réparties sur trois pays hôtes.',
-    url: 'https://www.eurosport.fr/football/',
-    source: 'Eurosport',
-    image: null,
-    category: 'Mondial 2026',
-    categoryColor: '#C89B3C',
-    flag: '⚽',
-    isNew: true,
-    publishedAt: Date.UTC(2026, 3, 21),
-  },
-  {
-    id: '2',
-    title: 'Deschamps dévoile sa liste des 26 pour le Mondial',
-    excerpt: 'Le sélectionneur a officialisé le groupe des Bleus pour la Coupe du Monde. Mbappé capitaine, quelques surprises dans les choix défensifs.',
-    url: 'https://www.lequipe.fr/Football/',
-    source: "L'Équipe",
-    image: null,
-    category: 'Équipe de France',
-    categoryColor: '#3b82f6',
-    flag: '🇫🇷',
-    isNew: true,
-    publishedAt: Date.UTC(2026, 3, 20),
-  },
-  {
-    id: '3',
-    title: 'Mbappé : "Gagner le Mondial serait le couronnement de ma carrière"',
-    excerpt: 'En conférence de presse, Kylian Mbappé a affiché sa détermination avant d\'embarquer pour les États-Unis avec les Bleus.',
-    url: 'https://rmcsport.bfmtv.com/football/',
-    source: 'RMC Sport',
-    image: null,
-    category: 'Équipe de France',
-    categoryColor: '#3b82f6',
-    flag: '🇫🇷',
-    isNew: true,
-    publishedAt: Date.UTC(2026, 3, 19),
-  },
-  {
-    id: '4',
-    title: 'MetLife Stadium : le temple accueillera la grande finale le 19 juillet',
-    excerpt: 'L\'enceinte de 82 000 places du New Jersey sera le théâtre de la finale du Mondial 2026. Un stade mythique au cœur de la région new-yorkaise.',
-    url: 'https://www.eurosport.fr/football/',
-    source: 'Eurosport',
-    image: null,
-    category: 'Stades',
-    categoryColor: '#10b981',
-    flag: '🏟️',
-    isNew: false,
-    publishedAt: Date.UTC(2026, 3, 18),
-  },
-  {
-    id: '5',
-    title: '48 équipes, format inédit : tout comprendre sur le Mondial 2026',
+    id: 'f1', title: '48 équipes, format inédit : tout comprendre sur le Mondial 2026',
     excerpt: 'Pour la première fois, 48 sélections participeront à une Coupe du Monde. Douze groupes de quatre, puis un tableau à élimination directe élargi à 32 équipes.',
-    url: 'https://www.lequipe.fr/Football/',
-    source: "L'Équipe",
-    image: null,
-    category: 'Officiel',
-    categoryColor: '#6366f1',
-    flag: '⚽',
-    isNew: false,
-    publishedAt: Date.UTC(2026, 3, 17),
+    url: 'https://www.lequipe.fr/Football/', source: "L'Équipe", image: null,
+    category: 'Officiel', categoryColor: '#6366f1', flag: '⚽', isNew: false, publishedAt: Date.UTC(2026, 3, 17),
   },
   {
-    id: '6',
-    title: 'L\'Azteca ressuscité pour l\'ouverture du Mondial',
-    excerpt: 'Le stade Azteca de Mexico City, rénové pour l\'occasion, accueillera le match d\'ouverture le 11 juin. Le Mexique, co-hôte, sera sur scène dès le premier jour.',
-    url: 'https://www.eurosport.fr/football/',
-    source: 'Eurosport',
-    image: null,
-    category: 'Stades',
-    categoryColor: '#10b981',
-    flag: '🏟️',
-    isNew: false,
-    publishedAt: Date.UTC(2026, 3, 16),
+    id: 'f2', title: 'Brésil, Argentine, France : le grand livre des favoris',
+    excerpt: 'Qui pour succéder à l\'Argentine championne du monde en titre ? Notre analyse des nations les plus armées pour soulever le trophée.',
+    url: 'https://rmcsport.bfmtv.com/football/', source: 'RMC Sport', image: null,
+    category: 'Mondial 2026', categoryColor: '#C89B3C', flag: '⚽', isNew: false, publishedAt: Date.UTC(2026, 3, 14),
   },
   {
-    id: '7',
-    title: 'Billetterie : les dernières places s\'arrachent à prix d\'or',
-    excerpt: 'La FIFA a ouvert une dernière phase de vente de billets. La demande explose pour les matchs aux États-Unis, notamment à Los Angeles et New York.',
-    url: 'https://www.lequipe.fr/Football/',
-    source: "L'Équipe",
-    image: null,
-    category: 'Billetterie',
-    categoryColor: '#f59e0b',
-    flag: '🎫',
-    isNew: false,
-    publishedAt: Date.UTC(2026, 3, 15),
-  },
-  {
-    id: '8',
-    title: 'Brésil, Argentine, France : le grand livre des favoris',
-    excerpt: 'Qui pour succéder à l\'Argentine championne du monde en titre ? Notre analyse des nations les plus armées pour soulever le trophée le 19 juillet.',
-    url: 'https://rmcsport.bfmtv.com/football/',
-    source: 'RMC Sport',
-    image: null,
-    category: 'Mondial 2026',
-    categoryColor: '#C89B3C',
-    flag: '⚽',
-    isNew: false,
-    publishedAt: Date.UTC(2026, 3, 14),
-  },
-  {
-    id: '9',
-    title: 'Vancouver, Toronto, New York : les villes hôtes en effervescence',
-    excerpt: 'Les seize villes hôtes réparties entre États-Unis, Canada et Mexique vivent au rythme du Mondial. Immersion dans une organisation colossale à quelques semaines du coup d\'envoi.',
-    url: 'https://www.lequipe.fr/Football/',
-    source: "L'Équipe",
-    image: null,
-    category: 'Stades',
-    categoryColor: '#10b981',
-    flag: '🏟️',
-    isNew: false,
-    publishedAt: Date.UTC(2026, 3, 13),
-  },
-  {
-    id: '10',
-    title: 'Le groupe des Bleus : adversaires, calendrier et pronostics',
-    excerpt: 'L\'Équipe de France connaît son chemin potentiel jusqu\'à la finale. Analyse des matchs de poule et du tableau de la phase à élimination directe.',
-    url: 'https://www.eurosport.fr/football/',
-    source: 'Eurosport',
-    image: null,
-    category: 'Équipe de France',
-    categoryColor: '#3b82f6',
-    flag: '🇫🇷',
-    isNew: false,
-    publishedAt: Date.UTC(2026, 3, 12),
-  },
-  {
-    id: '11',
-    title: 'La FIFA confirme les règles de la VAR pour le Mondial 2026',
-    excerpt: 'La technologie semi-automatique du hors-jeu sera déployée dans tous les stades. La FIFA a également précisé les protocoles de chaleur pour les matchs en journée.',
-    url: 'https://rmcsport.bfmtv.com/football/',
-    source: 'RMC Sport',
-    image: null,
-    category: 'Officiel',
-    categoryColor: '#6366f1',
-    flag: '⚽',
-    isNew: false,
-    publishedAt: Date.UTC(2026, 3, 11),
-  },
-  {
-    id: '12',
-    title: 'Maroc, Portugal, Espagne : les outsiders qui font peur',
-    excerpt: 'Au-delà des favoris traditionnels, plusieurs nations pourraient créer la surprise. Le Maroc, finaliste en 2022, et le Portugal de Cristiano Ronaldo figurent parmi les grandes menaces.',
-    url: 'https://www.eurosport.fr/football/',
-    source: 'Eurosport',
-    image: null,
-    category: 'Mondial 2026',
-    categoryColor: '#C89B3C',
-    flag: '⚽',
-    isNew: false,
-    publishedAt: Date.UTC(2026, 3, 10),
+    id: 'f3', title: 'MetLife Stadium : le temple accueillera la grande finale le 19 juillet',
+    excerpt: 'L\'enceinte de 82 000 places du New Jersey sera le théâtre de la finale du Mondial 2026.',
+    url: 'https://www.eurosport.fr/football/', source: 'Eurosport', image: null,
+    category: 'Stades', categoryColor: '#10b981', flag: '🏟️', isNew: false, publishedAt: Date.UTC(2026, 3, 18),
   },
 ]
+
+const REFRESH_MS = 3 * 60 * 1000  // rafraîchissement auto toutes les 3 min
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatDate(ts: number): string {
   return new Date(ts).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
 }
+function formatTime(ts: number): string {
+  return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function Actualites({ onBack }: { onBack: () => void }) {
+  const [articles, setArticles] = useState<Article[]>(FALLBACK)
+  const [updatedAt, setUpdatedAt] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
+  const hasLive = useRef(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const live = await fetchLiveNews()
+      if (live.length) {
+        setArticles(live); setUpdatedAt(Date.now()); setFailed(false); hasLive.current = true
+      } else if (!hasLive.current) {
+        setFailed(true)
+      }
+    } catch {
+      if (!hasLive.current) setFailed(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+    const interval = setInterval(load, REFRESH_MS)
+    const onFocus = () => { if (!document.hidden) load() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
+  }, [load])
+
   return (
     <PageLayout onBack={onBack} accentColor="#C89B3C" flag="📰" title="ACTUALITÉS" subtitle="Coupe du Monde 2026">
 
       <div style={{
-        fontSize: 10, color: 'var(--text-3)', letterSpacing: 0.4,
-        marginBottom: 16,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 16,
       }}>
-        Mis à jour · Avril 2026
+        <span style={{ fontSize: 10, color: 'var(--text-3)', letterSpacing: 0.4 }}>
+          {loading ? 'Actualisation…'
+            : failed ? 'Hors-ligne · actus de secours'
+            : updatedAt ? `Mis à jour à ${formatTime(updatedAt)}` : 'En direct'}
+        </span>
+        <button onClick={load} disabled={loading} style={{
+          display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 999,
+          background: 'rgba(200,155,60,0.10)', border: '1px solid rgba(200,155,60,0.3)',
+          color: '#A07828', fontSize: 11, fontWeight: 700, cursor: loading ? 'default' : 'pointer',
+          opacity: loading ? 0.6 : 1,
+        }}>
+          <span style={{ display: 'inline-block', animation: loading ? 'spin 0.8s linear infinite' : 'none' }}>↻</span>
+          Actualiser
+        </button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {ARTICLES.map(a => <ArticleCard key={a.id} article={a} />)}
+        {articles.map(a => <ArticleCard key={a.id} article={a} />)}
       </div>
 
     </PageLayout>
