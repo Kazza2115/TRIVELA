@@ -747,3 +747,20 @@ export async function getMentionables(): Promise<{ id: string; pseudo: string; c
     id: p.id as string, pseudo: p.pseudo as string, countryCode: (p.country_code as string) ?? 'un',
   }))
 }
+
+/** Reçoit chaque NOUVEAU message du chat (pour détecter les mentions). */
+export function subscribeToNewMessages(cb: (m: ChatMessage) => void): () => void {
+  if (!supabase) return () => {}
+  const channel = supabase
+    .channel(`chat-new-${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, payload => {
+      const r = payload.new as any
+      cb({
+        id: r.id as string, userId: r.user_id as string, pseudo: r.pseudo as string,
+        countryCode: (r.country_code as string) ?? 'un', body: r.body as string,
+        createdAt: new Date(r.created_at as string).getTime(),
+      })
+    })
+    .subscribe()
+  return () => { supabase!.removeChannel(channel) }
+}

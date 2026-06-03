@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Globe        from './components/Globe'
 import Paris        from './pages/Paris'
 import Classement   from './pages/Classement'
@@ -10,8 +10,9 @@ import AuthModal    from './components/AuthModal'
 import ProfileModal from './components/ProfileModal'
 import MenuDrawer   from './components/MenuDrawer'
 import TrivelaLogo  from './components/TrivelaLogo'
-import { subscribeToAuth, getLeaderboard, subscribeToPresence } from './services/auth'
+import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages } from './services/auth'
 import type { UserProfile, PresenceUser } from './services/auth'
+import { playMentionSound } from './utils/sound'
 import {
   IconGlobe, IconTrophy, IconBolt,
 } from './components/NavIcons'
@@ -60,6 +61,17 @@ export default function App() {
   const [viewedPlayer, setViewedPlayer] = useState<{ player: UserProfile; rank: number } | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
   const [online, setOnline] = useState<PresenceUser[]>([])
+  const [mentionToast, setMentionToast] = useState<{ pseudo: string; body: string } | null>(null)
+  const chatOpenRef = useRef(chatOpen)
+  useEffect(() => { chatOpenRef.current = chatOpen }, [chatOpen])
+
+  // Ouvre le chat (et demande une fois l'autorisation de notification)
+  const openChat = () => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {})
+    }
+    setChatOpen(true)
+  }
 
   useEffect(() => {
     const me = currentUser
@@ -68,13 +80,31 @@ export default function App() {
     return subscribeToPresence(me, setOnline)
   }, [currentUser])
 
+  // Notification quand on est mentionné (@pseudo) dans le chat
+  useEffect(() => {
+    if (!currentUser) return
+    const esc = currentUser.pseudo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp(`@${esc}(?![\\p{L}0-9_])`, 'iu')
+    return subscribeToNewMessages(m => {
+      if (m.userId === currentUser.id || !re.test(m.body)) return
+      playMentionSound()
+      if (!chatOpenRef.current) {
+        setMentionToast({ pseudo: m.pseudo, body: m.body })
+        setTimeout(() => setMentionToast(null), 6000)
+        if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+          try { new Notification(`${m.pseudo} t'a mentionné`, { body: m.body }) } catch { /* ignore */ }
+        }
+      }
+    })
+  }, [currentUser])
+
   const back       = () => { setViewedPlayer(null); setSection('globe'); setActiveNav('globe') }
   const openAuth   = () => setShowAuth(true)
   const handleAuth = (user: UserProfile) => { setCurrentUser(user); setShowAuth(false) }
   const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
   const navigateTo   = (s: string) => { setViewedPlayer(null); setSection(s as SectionId); setActiveNav(s as SectionId) }
   const navigateMenu = (s: SectionId) => {
-    if (s === 'chat') { setChatOpen(true); return }   // chat = panneau sur l'accueil, pas une page
+    if (s === 'chat') { openChat(); return }   // chat = panneau sur l'accueil, pas une page
     setViewedPlayer(null); setSection(s)
   }
   const openProfileFromChat = async (userId: string) => {
@@ -244,7 +274,7 @@ export default function App() {
           </p>
 
           {/* Aperçu du chat (carte) — seul élément flottant de l'accueil */}
-          <ChatPreview onOpen={() => setChatOpen(true)} />
+          <ChatPreview onOpen={openChat} />
         </div>
 
         {section === 'actualites' && <Actualites  onBack={back} />}
@@ -316,6 +346,29 @@ export default function App() {
         onNavigate={navigateMenu}
         activeSection={section}
       />
+
+      {/* ── Bandeau de mention ────────────────────────────────── */}
+      {mentionToast && (
+        <div
+          onClick={() => { setMentionToast(null); openChat() }}
+          style={{
+            position: 'fixed', top: 'calc(var(--sat) + 10px)', left: 12, right: 12, zIndex: 500,
+            display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+            padding: '12px 14px', borderRadius: 14,
+            background: 'linear-gradient(135deg,#C89B3C,#E8D080)', color: '#0D0800',
+            boxShadow: '0 6px 24px rgba(0,0,0,0.25)', animation: 'fadeSlideUp 0.25s ease',
+          }}
+        >
+          <span style={{ fontSize: 18 }}>💬</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 800 }}>{mentionToast.pseudo} t'a mentionné</div>
+            <div style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {mentionToast.body}
+            </div>
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.8 }}>Ouvrir ›</span>
+        </div>
+      )}
 
       {/* ── Chat (panneau sur l'accueil) ──────────────────────── */}
       <ChatSheet
