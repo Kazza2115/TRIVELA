@@ -5,6 +5,8 @@ import Classement   from './pages/Classement'
 import PlayerProfile from './pages/PlayerProfile'
 import Actualites   from './pages/Actualites'
 import Chat         from './pages/Chat'
+import ChatPreview  from './components/ChatPreview'
+import type { ChatPreviewVariant } from './components/ChatPreview'
 import AuthModal    from './components/AuthModal'
 import ProfileModal from './components/ProfileModal'
 import MenuDrawer   from './components/MenuDrawer'
@@ -79,6 +81,14 @@ export default function App() {
 
   const [activeNav, setActiveNav] = useState<SectionId>('globe')
   const [viewedPlayer, setViewedPlayer] = useState<{ player: UserProfile; rank: number } | null>(null)
+  const [chatPreview, setChatPreview] = useState<ChatPreviewVariant | 'off'>(() => {
+    try { return (localStorage.getItem('trivela-chat-preview') as ChatPreviewVariant | 'off') || 'card' }
+    catch { return 'card' }
+  })
+  const setPreview = (v: ChatPreviewVariant | 'off') => {
+    setChatPreview(v)
+    try { localStorage.setItem('trivela-chat-preview', v) } catch {}
+  }
 
   const back       = () => { setViewedPlayer(null); setSection('globe'); setActiveNav('globe') }
   const openAuth   = () => setShowAuth(true)
@@ -249,6 +259,27 @@ export default function App() {
           }}>
             Touchez un pays · Faites pivoter
           </p>
+
+          {/* Sélecteur d'aperçu du chat (test des styles) */}
+          <div style={{
+            position: 'absolute', top: 36, left: 0, right: 0, zIndex: 9,
+            display: 'flex', justifyContent: 'center', gap: 6,
+          }}>
+            {([['ticker', 'Ticker'], ['card', 'Carte'], ['bubble', 'Bulle'], ['off', 'Aucun']] as const)
+              .map(([v, label]) => (
+                <button key={v} onClick={() => setPreview(v)} style={{
+                  padding: '4px 10px', borderRadius: 999, fontSize: 10, fontWeight: 700, cursor: 'pointer',
+                  border: chatPreview === v ? `1px solid ${gold}` : '1px solid var(--border)',
+                  background: chatPreview === v ? 'rgba(200,155,60,0.15)' : 'var(--bg-card)',
+                  color: chatPreview === v ? gold : 'var(--text-3)',
+                }}>{label}</button>
+              ))}
+          </div>
+
+          {/* Aperçu du chat */}
+          {chatPreview !== 'off' && (
+            <ChatPreview variant={chatPreview} onOpen={() => navigateTo('chat')} />
+          )}
 
           {/* Parier banner */}
           <div
