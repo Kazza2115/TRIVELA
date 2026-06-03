@@ -11,7 +11,7 @@ import AuthModal    from './components/AuthModal'
 import ProfileModal from './components/ProfileModal'
 import MenuDrawer   from './components/MenuDrawer'
 import TrivelaLogo  from './components/TrivelaLogo'
-import { subscribeToAuth } from './services/auth'
+import { subscribeToAuth, getLeaderboard } from './services/auth'
 import type { UserProfile } from './services/auth'
 import {
   IconGlobe, IconTrophy, IconBolt,
@@ -69,6 +69,14 @@ export default function App() {
   const navigateMenu = (s: SectionId) => {
     if (s === 'chat') { setChatOpen(true); return }   // chat = panneau sur l'accueil, pas une page
     setViewedPlayer(null); setSection(s)
+  }
+  const openProfileFromChat = async (userId: string) => {
+    const board = await getLeaderboard()
+    const idx = board.findIndex(p => p.id === userId)
+    if (idx === -1) return
+    setChatOpen(false)
+    setViewedPlayer({ player: board[idx], rank: idx + 1 })
+    setSection('classement'); setActiveNav('classement')
   }
 
   const gold   = '#C89B3C'
@@ -309,6 +317,7 @@ export default function App() {
           onClose={() => setChatOpen(false)}
           currentUser={currentUser}
           onOpenAuth={openAuth}
+          onOpenProfile={openProfileFromChat}
         />
       </ErrorBoundary>
 

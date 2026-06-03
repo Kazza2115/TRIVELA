@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  getChatMessages, sendChatMessage, deleteChatMessage, subscribeToChat, clearChat,
+  getChatMessages, sendChatMessage, deleteChatMessage, subscribeToChat, clearChat, getAdminIds,
 } from '../services/auth'
 import type { ChatMessage, UserProfile } from '../services/auth'
 
@@ -12,16 +12,25 @@ function timeLabel(ts: number): string {
   })
 }
 
+// Couleur stable propre à chaque pays (dérivée du code pays).
+function countryHue(code: string): number {
+  let h = 0
+  for (let i = 0; i < code.length; i++) h = (h * 31 + code.charCodeAt(i)) % 360
+  return h
+}
+
 interface ChatSheetProps {
   open: boolean
   onClose: () => void
   currentUser: UserProfile | null
   onOpenAuth: () => void
+  onOpenProfile: (userId: string) => void
 }
 
 /** Panneau de chat qui glisse par-dessus la page d'accueil (sans changer de page). */
-export default function ChatSheet({ open, onClose, currentUser, onOpenAuth }: ChatSheetProps) {
+export default function ChatSheet({ open, onClose, currentUser, onOpenAuth, onOpenProfile }: ChatSheetProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [admins, setAdmins]     = useState<Set<string>>(new Set())
   const [draft, setDraft]       = useState('')
   const [busy, setBusy]         = useState(false)
   const [loading, setLoading]   = useState(true)
@@ -34,7 +43,11 @@ export default function ChatSheet({ open, onClose, currentUser, onOpenAuth }: Ch
     if (!open) return
     let alive = true
     setLoading(true)
-    ;(async () => { await load(); if (alive) setLoading(false) })()
+    ;(async () => {
+      await load()
+      const ids = await getAdminIds()
+      if (alive) { setAdmins(new Set(ids)); setLoading(false) }
+    })()
     const unsub = subscribeToChat(load)
     return () => { alive = false; unsub() }
   }, [open, load])
@@ -111,15 +124,29 @@ export default function ChatSheet({ open, onClose, currentUser, onOpenAuth }: Ch
             </div>
           ) : (
             messages.map(m => {
-              const mine = currentUser?.id === m.userId
+              const mine    = currentUser?.id === m.userId
+              const isAdminAuthor = admins.has(m.userId)
+              const hue     = countryHue(m.countryCode || 'un')
+              const nameColor = isAdminAuthor ? '#8a6a1e' : `hsl(${hue}, 70%, 40%)`
+              const chipBg    = isAdminAuthor ? 'linear-gradient(135deg,#C89B3C,#E8D080)' : `hsla(${hue}, 70%, 50%, 0.14)`
+              const chipBorder = isAdminAuthor ? GOLD : `hsla(${hue}, 60%, 45%, 0.45)`
               return (
                 <div key={m.id} style={{ display: 'flex', flexDirection: 'column',
                   alignItems: mine ? 'flex-end' : 'flex-start' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2,
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3,
                     flexDirection: mine ? 'row-reverse' : 'row' }}>
-                    <img src={`https://flagcdn.com/w20/${m.countryCode}.png`} alt=""
-                      style={{ width: 16, height: 11, borderRadius: 2, objectFit: 'cover' }} />
-                    <span style={{ fontSize: 11, fontWeight: 700, color: GOLD }}>{m.pseudo}</span>
+                    <button onClick={() => onOpenProfile(m.userId)} title="Voir le profil"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer',
+                        padding: '4px 10px', borderRadius: 999,
+                        background: chipBg, border: `1px solid ${chipBorder}`,
+                      }}>
+                      <img src={`https://flagcdn.com/w20/${m.countryCode}.png`} alt=""
+                        style={{ width: 18, height: 12, borderRadius: 2, objectFit: 'cover' }} />
+                      <span style={{ fontSize: 13, fontWeight: 800,
+                        color: isAdminAuthor ? '#0D0800' : nameColor }}>{m.pseudo}</span>
+                      {isAdminAuthor && <span style={{ fontSize: 11 }}>👑</span>}
+                    </button>
                     <span style={{ fontSize: 9, color: 'var(--text-3)' }}>{timeLabel(m.createdAt)}</span>
                     {(mine || currentUser?.isAdmin) && (
                       <button onClick={() => remove(m.id)} disabled={busy}

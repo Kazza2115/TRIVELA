@@ -701,3 +701,11 @@ export async function clearChat(): Promise<{ error?: string }> {
   const detail = await res.text().catch(() => '')
   return { error: `Action refusée (${res.status}). ${detail}`.trim() }
 }
+
+/** Liste des identifiants des joueurs admin (pour styliser le chat). */
+export async function getAdminIds(): Promise<string[]> {
+  if (!supabaseConfigured) return []
+  const res = await authFetch('GET', 'profiles?is_admin=eq.true&select=id')
+  if (!res.ok) return []
+  return (await res.json() as any[]).map(r => r.id as string)
+}
