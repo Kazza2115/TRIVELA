@@ -45,15 +45,21 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.profiles (id, pseudo, country_code, country_name, favorites)
-  values (
-    new.id,
-    coalesce(new.raw_user_meta_data->>'pseudo', 'Joueur'),
-    coalesce(new.raw_user_meta_data->>'country_code', 'un'),
-    coalesce(new.raw_user_meta_data->>'country_name', '—'),
-    '[]'::jsonb
-  )
-  on conflict (id) do nothing;
+  -- On n'insère PAS "favorites" : sa valeur par défaut s'applique. Cela évite
+  -- tout conflit de type si la colonne existante est text[] plutôt que jsonb.
+  begin
+    insert into public.profiles (id, pseudo, country_code, country_name)
+    values (
+      new.id,
+      coalesce(new.raw_user_meta_data->>'pseudo', 'Joueur'),
+      coalesce(new.raw_user_meta_data->>'country_code', 'un'),
+      coalesce(new.raw_user_meta_data->>'country_name', '—')
+    )
+    on conflict (id) do nothing;
+  exception when others then
+    -- Ne jamais bloquer la création du compte en cas d'erreur inattendue.
+    null;
+  end;
   return new;
 end;
 $$;

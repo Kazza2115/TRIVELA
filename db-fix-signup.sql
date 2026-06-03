@@ -21,13 +21,14 @@ set search_path = public
 as $$
 begin
   begin
-    insert into public.profiles (id, pseudo, country_code, country_name, favorites)
+    -- On n'insère PAS "favorites" : sa valeur par défaut s'applique, ce qui
+    -- évite tout conflit de type (la colonne est text[], pas jsonb).
+    insert into public.profiles (id, pseudo, country_code, country_name)
     values (
       new.id,
       coalesce(new.raw_user_meta_data->>'pseudo', 'Joueur'),
       coalesce(new.raw_user_meta_data->>'country_code', 'un'),
-      coalesce(new.raw_user_meta_data->>'country_name', '—'),
-      '[]'::jsonb
+      coalesce(new.raw_user_meta_data->>'country_name', '—')
     )
     on conflict (id) do nothing;
   exception when others then
