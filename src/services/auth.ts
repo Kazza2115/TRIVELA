@@ -709,3 +709,41 @@ export async function getAdminIds(): Promise<string[]> {
   if (!res.ok) return []
   return (await res.json() as any[]).map(r => r.id as string)
 }
+
+// ── Présence en ligne (Realtime Presence) ────────────────────────────────────
+export interface PresenceUser { id: string; pseudo: string; countryCode: string }
+
+export function subscribeToPresence(
+  me: { id: string; pseudo: string; countryCode: string } | null,
+  cb: (users: PresenceUser[]) => void,
+): () => void {
+  if (!supabase) return () => {}
+  const key = me?.id ?? `anon-${Math.random().toString(36).slice(2)}`
+  const channel = supabase.channel('online', { config: { presence: { key } } })
+  channel.on('presence', { event: 'sync' }, () => {
+    const state = channel.presenceState() as Record<string, any[]>
+    const seen = new Map<string, PresenceUser>()
+    for (const arr of Object.values(state)) {
+      for (const p of arr) {
+        if (p?.id) seen.set(p.id, { id: p.id, pseudo: p.pseudo ?? '', countryCode: p.countryCode ?? 'un' })
+      }
+    }
+    cb([...seen.values()])
+  })
+  channel.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED' && me) {
+      await channel.track({ id: me.id, pseudo: me.pseudo, countryCode: me.countryCode })
+    }
+  })
+  return () => { supabase!.removeChannel(channel) }
+}
+
+/** Liste des joueurs (pseudo + drapeau) pour l'autocomplétion des mentions @. */
+export async function getMentionables(): Promise<{ id: string; pseudo: string; countryCode: string }[]> {
+  if (!supabaseConfigured) return []
+  const res = await authFetch('GET', 'profiles?select=id,pseudo,country_code&order=pseudo.asc&limit=300')
+  if (!res.ok) return []
+  return (await res.json() as any[]).map(p => ({
+    id: p.id as string, pseudo: p.pseudo as string, countryCode: (p.country_code as string) ?? 'un',
+  }))
+}

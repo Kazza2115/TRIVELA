@@ -5,14 +5,13 @@ import Classement   from './pages/Classement'
 import PlayerProfile from './pages/PlayerProfile'
 import Actualites   from './pages/Actualites'
 import ChatSheet    from './components/ChatSheet'
-import ErrorBoundary from './components/ErrorBoundary'
 import ChatPreview  from './components/ChatPreview'
 import AuthModal    from './components/AuthModal'
 import ProfileModal from './components/ProfileModal'
 import MenuDrawer   from './components/MenuDrawer'
 import TrivelaLogo  from './components/TrivelaLogo'
-import { subscribeToAuth, getLeaderboard } from './services/auth'
-import type { UserProfile } from './services/auth'
+import { subscribeToAuth, getLeaderboard, subscribeToPresence } from './services/auth'
+import type { UserProfile, PresenceUser } from './services/auth'
 import {
   IconGlobe, IconTrophy, IconBolt,
 } from './components/NavIcons'
@@ -60,6 +59,14 @@ export default function App() {
   const [activeNav, setActiveNav] = useState<SectionId>('globe')
   const [viewedPlayer, setViewedPlayer] = useState<{ player: UserProfile; rank: number } | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
+  const [online, setOnline] = useState<PresenceUser[]>([])
+
+  useEffect(() => {
+    const me = currentUser
+      ? { id: currentUser.id, pseudo: currentUser.pseudo, countryCode: currentUser.countryCode }
+      : null
+    return subscribeToPresence(me, setOnline)
+  }, [currentUser])
 
   const back       = () => { setViewedPlayer(null); setSection('globe'); setActiveNav('globe') }
   const openAuth   = () => setShowAuth(true)
@@ -237,7 +244,7 @@ export default function App() {
           </p>
 
           {/* Aperçu du chat (carte) — seul élément flottant de l'accueil */}
-          <ChatPreview variant="card" onOpen={() => setChatOpen(true)} />
+          <ChatPreview onOpen={() => setChatOpen(true)} />
         </div>
 
         {section === 'actualites' && <Actualites  onBack={back} />}
@@ -311,15 +318,14 @@ export default function App() {
       />
 
       {/* ── Chat (panneau sur l'accueil) ──────────────────────── */}
-      <ErrorBoundary>
-        <ChatSheet
-          open={chatOpen}
-          onClose={() => setChatOpen(false)}
-          currentUser={currentUser}
-          onOpenAuth={openAuth}
-          onOpenProfile={openProfileFromChat}
-        />
-      </ErrorBoundary>
+      <ChatSheet
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        currentUser={currentUser}
+        onOpenAuth={openAuth}
+        onOpenProfile={openProfileFromChat}
+        online={online}
+      />
 
       {/* ── Auth modal ────────────────────────────────────────── */}
       {showAuth && (
