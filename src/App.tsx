@@ -4,7 +4,7 @@ import Paris        from './pages/Paris'
 import Classement   from './pages/Classement'
 import PlayerProfile from './pages/PlayerProfile'
 import Actualites   from './pages/Actualites'
-import Chat         from './pages/Chat'
+import ChatSheet    from './components/ChatSheet'
 import ChatPreview  from './components/ChatPreview'
 import type { ChatPreviewVariant } from './components/ChatPreview'
 import AuthModal    from './components/AuthModal'
@@ -89,13 +89,17 @@ export default function App() {
     setChatPreview(v)
     try { localStorage.setItem('trivela-chat-preview', v) } catch {}
   }
+  const [chatOpen, setChatOpen] = useState(false)
 
   const back       = () => { setViewedPlayer(null); setSection('globe'); setActiveNav('globe') }
   const openAuth   = () => setShowAuth(true)
   const handleAuth = (user: UserProfile) => { setCurrentUser(user); setShowAuth(false) }
   const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
   const navigateTo   = (s: string) => { setViewedPlayer(null); setSection(s as SectionId); setActiveNav(s as SectionId) }
-  const navigateMenu = (s: SectionId) => { setViewedPlayer(null); setSection(s) }
+  const navigateMenu = (s: SectionId) => {
+    if (s === 'chat') { setChatOpen(true); return }   // chat = panneau sur l'accueil, pas une page
+    setViewedPlayer(null); setSection(s)
+  }
 
   const gold   = '#C89B3C'
   const dimCol = '#AEAEB2'
@@ -278,7 +282,7 @@ export default function App() {
 
           {/* Aperçu du chat */}
           {chatPreview !== 'off' && (
-            <ChatPreview variant={chatPreview} onOpen={() => navigateTo('chat')} />
+            <ChatPreview variant={chatPreview} onOpen={() => setChatOpen(true)} />
           )}
 
           {/* Parier banner */}
@@ -350,7 +354,6 @@ export default function App() {
         </div>
 
         {section === 'actualites' && <Actualites  onBack={back} />}
-        {section === 'chat'       && <Chat         onBack={back} currentUser={currentUser} onOpenAuth={openAuth} />}
         {section === 'paris'      && <Paris        onBack={back} currentUser={currentUser} onOpenAuth={openAuth} />}
         {section === 'classement' && (
           viewedPlayer
@@ -418,6 +421,14 @@ export default function App() {
         onClose={() => setShowMenu(false)}
         onNavigate={navigateMenu}
         activeSection={section}
+      />
+
+      {/* ── Chat (panneau sur l'accueil) ──────────────────────── */}
+      <ChatSheet
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        currentUser={currentUser}
+        onOpenAuth={openAuth}
       />
 
       {/* ── Auth modal ────────────────────────────────────────── */}
