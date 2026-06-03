@@ -566,3 +566,47 @@ export function subscribeToPlayerSocial(targetUserId: string, cb: () => void): (
     .subscribe()
   return () => { supabase!.removeChannel(channel) }
 }
+
+// ── Chat global en direct ────────────────────────────────────────────────────
+export interface ChatMessage {
+  id: string; userId: string; pseudo: string; countryCode: string; body: string; createdAt: number
+}
+
+export async function getChatMessages(limit = 100): Promise<ChatMessage[]> {
+  if (!supabaseConfigured) return []
+  const res = await authFetch('GET', `chat_messages?order=created_at.desc&limit=${limit}&select=*`)
+  if (!res.ok) return []
+  const rows = (await res.json() as any[]).map(m => ({
+    id: m.id as string, userId: m.user_id as string, pseudo: m.pseudo as string,
+    countryCode: (m.country_code as string) ?? 'un', body: m.body as string,
+    createdAt: new Date(m.created_at as string).getTime(),
+  }))
+  return rows.reverse() // ordre chronologique (plus ancien → plus récent)
+}
+
+export async function sendChatMessage(
+  userId: string, pseudo: string, countryCode: string, body: string,
+): Promise<{ error?: string }> {
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+  const text = body.trim()
+  if (text.length < 1 || text.length > 500) return { error: 'Message vide ou trop long (500 max).' }
+  const res = await authFetch('POST', 'chat_messages', {
+    user_id: userId, pseudo, country_code: countryCode, body: text,
+  })
+  return res.ok ? {} : { error: 'Impossible d\'envoyer le message.' }
+}
+
+export async function deleteChatMessage(id: string): Promise<void> {
+  if (!supabaseConfigured) return
+  await authFetch('DELETE', `chat_messages?id=eq.${id}`)
+}
+
+/** Notifie à chaque nouveau message (ou suppression) du chat global. */
+export function subscribeToChat(cb: () => void): () => void {
+  if (!supabase) return () => {}
+  const channel = supabase
+    .channel('chat-rt')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, cb)
+    .subscribe()
+  return () => { supabase!.removeChannel(channel) }
+}

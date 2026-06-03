@@ -4,6 +4,7 @@ import Paris        from './pages/Paris'
 import Classement   from './pages/Classement'
 import PlayerProfile from './pages/PlayerProfile'
 import Actualites   from './pages/Actualites'
+import Chat         from './pages/Chat'
 import AuthModal    from './components/AuthModal'
 import ProfileModal from './components/ProfileModal'
 import MenuDrawer   from './components/MenuDrawer'
@@ -15,7 +16,7 @@ import {
 } from './components/NavIcons'
 import './index.css'
 
-export type SectionId = 'globe' | 'paris' | 'classement' | 'actualites'
+export type SectionId = 'globe' | 'paris' | 'classement' | 'actualites' | 'chat'
 
 const NAV_ITEMS: {
   id: SectionId; Icon: React.FC<{ size?: number; color?: string }>
@@ -318,6 +319,7 @@ export default function App() {
         </div>
 
         {section === 'actualites' && <Actualites  onBack={back} />}
+        {section === 'chat'       && <Chat         onBack={back} currentUser={currentUser} onOpenAuth={openAuth} />}
         {section === 'paris'      && <Paris        onBack={back} currentUser={currentUser} onOpenAuth={openAuth} />}
         {section === 'classement' && (
           viewedPlayer
