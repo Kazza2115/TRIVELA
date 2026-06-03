@@ -478,9 +478,12 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
     gVig.append('circle').attr('cx', W / 2).attr('cy', H / 2).attr('r', R)
       .attr('fill', 'url(#vig-grad)').attr('pointer-events', 'none')
 
-    // ── Load world data ──────────────────────────────────────────────
-    fetch('https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json')
-      .then(r => r.json())
+    // ── Load world data (fichier local embarqué, repli CDN) ──────────
+    const MAP_LOCAL = `${import.meta.env.BASE_URL}countries-110m.json`
+    const MAP_CDN = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json'
+    fetch(MAP_LOCAL)
+      .then(r => { if (!r.ok) throw new Error('local map'); return r.json() })
+      .catch(() => fetch(MAP_CDN).then(r => r.json()))
       .then((world: Topology) => {
         const countries = feature(world, (world as any).objects.countries) as any
         if (!countries.features) return
@@ -781,6 +784,7 @@ setIsLoaded(true)
         }
         rafRef.current = requestAnimationFrame(animate)
       })
+      .catch(err => console.error('Carte du monde indisponible :', err))
 
     // ── Click-outside-to-close — click on ocean/non-featured area ──
     svg.on('click', (event: MouseEvent) => {
