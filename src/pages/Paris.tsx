@@ -300,17 +300,26 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
                 </div>
 
                 {byDate.map(({ date, matches }, di) => (
-                  <div key={date} style={{ marginBottom: 14 }}>
-                    {/* Sous-titre par date */}
+                  <div key={date} style={{ marginBottom: 16 }}>
+                    {/* Séparateur de date — bien visible */}
                     <div style={{
                       display: 'flex', alignItems: 'center', gap: 8,
-                      margin: di === 0 ? '0 2px 8px' : '14px 2px 8px',
+                      margin: di === 0 ? '2px 0 12px' : '20px 0 12px',
+                      padding: '9px 14px', borderRadius: 12,
+                      background: 'var(--bg-fill)',
+                      border: '1px solid var(--border)',
+                      borderLeft: '4px solid #5B8DEF',
                     }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', letterSpacing: 0.3 }}>
-                        📅 {date}
+                      <span style={{ fontSize: 16, lineHeight: 1 }}>📅</span>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-1)', letterSpacing: 0.4 }}>
+                        {date}
                       </span>
-                      <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-                      <span style={{ fontSize: 9, color: 'var(--text-3)', fontWeight: 600 }}>
+                      <div style={{ flex: 1 }} />
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, color: 'var(--text-2)',
+                        background: 'var(--bg-card)', border: '1px solid var(--border)',
+                        borderRadius: 999, padding: '3px 9px',
+                      }}>
                         {matches.length} match{matches.length > 1 ? 's' : ''}
                       </span>
                     </div>
