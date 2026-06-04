@@ -1,0 +1,23 @@
+name: API-Football live
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'   # chaque exécution boucle ~5 min en interrogeant toutes les 30 s
+  push:
+    branches: [claude/resume-codebase-work-i3uAg]
+    paths: ['scripts/api-football-live.mjs', 'scripts/wc-map.mjs', '.github/workflows/api-football-live.yml']
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/api-football-live.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}

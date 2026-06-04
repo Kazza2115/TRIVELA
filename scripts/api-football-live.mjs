@@ -1,0 +1,61 @@
+// Scores en direct : interroge l'API toutes les 30 s pendant ~5 min (le cron
+// relance toutes les 5 min) et écrit l'état des matchs en cours dans match_live.
+// S'arrête tôt s'il n'y a aucun match en direct (économise le quota).
+import { fixtureToMatchId } from './wc-map.mjs'
+
+const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
+const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
+const KEY      = process.env.API_FOOTBALL_KEY
+const API      = 'https://v3.football.api-sports.io'
+if (!SERVICE || !KEY) { console.error('❌ Secret manquant'); process.exit(1) }
+
+const sb  = (path, init = {}) => fetch(`${SUPA_URL}/rest/v1/${path}`, {
+  ...init, headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json', ...(init.headers || {}) },
+})
+const api   = path => fetch(`${API}${path}`, { headers: { 'x-apisports-key': KEY } }).then(r => r.json())
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+let validIds = new Set()
+
+async function tick() {
+  const data = await api('/fixtures?league=1&season=2026&live=all')
+  const fixtures = data.response || []
+  const rows = []
+  for (const f of fixtures) {
+    const id = fixtureToMatchId(f, validIds)
+    if (!id) continue
+    rows.push({
+      match_id: id, status: f.fixture?.status?.short || 'LIVE',
+      elapsed: f.fixture?.status?.elapsed ?? null,
+      home_score: f.goals?.home ?? 0, away_score: f.goals?.away ?? 0,
+      updated_at: new Date().toISOString(),
+    })
+  }
+  const ids = rows.map(r => r.match_id)
+  // Retire de match_live les matchs qui ne sont plus en direct
+  if (ids.length) await sb(`match_live?match_id=not.in.(${ids.join(',')})`, { method: 'DELETE' })
+  else await sb('match_live?match_id=not.is.null', { method: 'DELETE' })
+  if (rows.length) {
+    await sb('match_live?on_conflict=match_id', {
+      method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(rows),
+    })
+  }
+  const t = new Date().toISOString().slice(11, 19)
+  console.log(`[${t}] en direct : ${rows.length}${rows.length ? ' → ' + ids.join(', ') : ''}`)
+  return rows.length
+}
+
+async function main() {
+  const sched = await sb('match_schedule?select=match_id')
+  if (sched.ok) validIds = new Set((await sched.json()).map(r => r.match_id))
+
+  const ITER = 9, GAP = 30000
+  for (let i = 0; i < ITER; i++) {
+    let n = 0
+    try { n = await tick() } catch (e) { console.warn('tick erreur:', String(e)) }
+    if (i === 0 && n === 0) { console.log('Aucun match en direct — arrêt anticipé.'); break }
+    if (i < ITER - 1) await sleep(GAP)
+  }
+}
+main().catch(e => { console.error(e); process.exit(0) })
