@@ -611,8 +611,9 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
   const reallyLive = !!liveData && INPLAY.has(liveData.status)
   const live       = reallyLive || (!finished && isMatchLive(match, nowTs))
   const showCol    = finished || reallyLive || confirmed
-  const homeWin    = (finished && result!.homeScore > result!.awayScore) || (reallyLive && goalSide === 'home')
-  const awayWin    = (finished && result!.awayScore > result!.homeScore) || (reallyLive && goalSide === 'away')
+  // Flamme uniquement en direct, sur l'équipe qui vient de marquer (jamais sur un match terminé)
+  const homeFlame  = reallyLive && goalSide === 'home'
+  const awayFlame  = reallyLive && goalSide === 'away'
   const entry      = `fadeSlideUp .3s cubic-bezier(0.4,0,0.2,1) ${delay}ms both`
 
   return (
@@ -685,7 +686,7 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
         display: 'grid', gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center', padding: '0 14px 14px', gap: 8,
       }}>
-        <TeamBlock team={match.home} align="left" fire={homeWin} />
+        <TeamBlock team={match.home} align="left" fire={homeFlame} />
         {showCol ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 88 }}>
             {/* Score — grand et centré (final, en direct, ou en attente) */}
@@ -738,7 +739,7 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
               onUp={() => onIncrement('away', 1)} onDown={() => onIncrement('away', -1)} />
           </div>
         )}
-        <TeamBlock team={match.away} align="right" fire={awayWin} />
+        <TeamBlock team={match.away} align="right" fire={awayFlame} />
       </div>
 
       {/* Footer */}
