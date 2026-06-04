@@ -273,16 +273,9 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {liveList.map(m => (
-              <MatchCard key={`live-${m.id}`} match={m} domId={`match-${m.id}`}
-                prediction={predictions[m.id]} confirmed={confirmed.has(m.id)}
-                lockError={lockErrors[m.id]}
-                result={results[m.id]} now={now}
-                liveData={live[m.id]} goalSide={goalFlash[m.id]}
-                delay={0}
-                onIncrement={(s, d) => setPrediction(m.id, s, d)}
-                onConfirm={() => confirm(m.id)}
-                onEdit={() => edit(m.id)}
-              />
+              <LiveHeroCard key={`live-${m.id}`} match={m} domId={`match-${m.id}`}
+                live={live[m.id]} goalSide={goalFlash[m.id]}
+                prediction={predictions[m.id]} confirmed={confirmed.has(m.id)} />
             ))}
           </div>
         </div>
@@ -831,6 +824,73 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
 }
 
 // ─── TeamBlock ────────────────────────────────────────────────────────────
+// ─── LiveHeroCard — grande carte du match en direct (mise en avant) ──────────
+function HeroTeam({ team, align, fire }: { team: Team; align: 'left' | 'right'; fire?: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+      order: align === 'left' ? 0 : 2 }}>
+      <div style={{ position: 'relative' }}>
+        <img src={`https://flagcdn.com/w80/${team.code}.png`} alt={team.name}
+          style={{ width: 56, height: 38, objectFit: 'cover', borderRadius: 6,
+            border: `${fire ? 2 : 1}px solid ${fire ? 'rgba(245,130,30,0.95)' : 'var(--border)'}`,
+            boxShadow: fire ? '0 0 22px 4px rgba(245,130,30,0.85)' : '0 2px 8px rgba(0,0,0,0.18)' }} />
+        {fire && (
+          <span style={{ position: 'absolute', top: -22, left: '50%', marginLeft: -17, fontSize: 34, lineHeight: 1,
+            filter: 'drop-shadow(0 0 7px rgba(245,130,30,1)) drop-shadow(0 0 14px rgba(245,90,10,0.7))',
+            animation: 'flameFlicker 0.55s ease-in-out infinite', pointerEvents: 'none' }}>🔥</span>
+        )}
+      </div>
+      <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 18, letterSpacing: 1, color: 'var(--text-1)' }}>
+        {team.short}
+      </span>
+    </div>
+  )
+}
+
+function LiveHeroCard({ match, live, goalSide, prediction, confirmed, domId }: {
+  match: Match; live: LiveScore; goalSide?: 'home' | 'away'
+  prediction?: { home: number; away: number }; confirmed: boolean; domId?: string
+}) {
+  const pred = prediction ?? { home: 0, away: 0 }
+  const stage = match.round === 'group'
+    ? `Groupe ${match.group} · J${match.matchday}`
+    : KO_LABELS[match.round as string] ?? match.group
+  return (
+    <div id={domId} style={{
+      position: 'relative', overflow: 'hidden', borderRadius: 18, padding: '12px 16px 16px',
+      background: 'linear-gradient(160deg, rgba(220,38,38,0.14), var(--bg-card) 70%)',
+      border: '1.5px solid rgba(220,38,38,0.55)',
+      boxShadow: '0 10px 34px rgba(220,38,38,0.28)',
+      animation: 'livePulse 1.6s ease-in-out infinite',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 6,
+        fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#dc2626' }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc2626',
+          animation: 'liveDot 1s ease-in-out infinite' }} />
+        EN DIRECT{live.elapsed != null ? ` · ${live.elapsed}'` : ` · ${live.status}`}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, margin: '6px 0 8px' }}>
+        <HeroTeam team={match.home} align="left" fire={goalSide === 'home'} />
+        <div style={{ order: 1, fontFamily: "'Bebas Neue', cursive", fontSize: 48, lineHeight: 1, color: '#dc2626',
+          animation: 'fadeIn 0.3s ease' }}>
+          {live.homeScore}<span style={{ color: 'var(--text-3)', margin: '0 6px' }}>:</span>{live.awayScore}
+        </div>
+        <HeroTeam team={match.away} align="right" fire={goalSide === 'away'} />
+      </div>
+
+      <div style={{ textAlign: 'center', fontSize: 9, color: 'var(--text-3)', letterSpacing: 0.4 }}>
+        {stage} · {match.venue} · {match.city}
+      </div>
+      {confirmed && (
+        <div style={{ textAlign: 'center', marginTop: 6, fontSize: 11, fontWeight: 700, color: 'var(--text-3)' }}>
+          Ton prono <span style={{ color: 'var(--text-2)' }}>{pred.home}–{pred.away}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TeamBlock({ team, align, fire }: { team: Team; align: 'left' | 'right'; fire?: boolean }) {
   const isTBD = team.code === 'un'
   return (

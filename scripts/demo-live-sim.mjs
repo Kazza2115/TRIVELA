@@ -42,3 +42,5 @@ async function main() {
 main().catch(e => { console.error(e); process.exit(0) })
 
 // relance 1780606429
+
+// relance hero 1780607261
