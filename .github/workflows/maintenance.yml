@@ -1,0 +1,21 @@
+name: Maintenance (purge)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/resume-codebase-work-i3uAg]
+    paths: ['scripts/maintenance.mjs', '.github/workflows/maintenance.yml']
+
+jobs:
+  maint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/maintenance.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          MAINT_CONFIRM: 'YES'
