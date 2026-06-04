@@ -122,6 +122,12 @@ html, body {
   0%, 100% { transform: scale(1) rotate(-5deg); opacity: 0.92; }
   50%      { transform: scale(1.2) rotate(5deg); opacity: 1; }
 }
+/* Le prono confirmé glisse vers le bas en rétrécissant pour laisser place au vrai score */
+@keyframes predShrinkDown {
+  0%   { transform: translateY(-24px) scale(1.8); opacity: 0; }
+  55%  { opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
 
 /* Country flag flash overlay — enter, hold, fade out */
 @keyframes flagEnter {

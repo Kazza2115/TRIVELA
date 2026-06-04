@@ -587,16 +587,47 @@ function MatchCard({ match, prediction, confirmed, lockError, result, now, delay
         alignItems: 'center', padding: '0 14px 14px', gap: 8,
       }}>
         <TeamBlock team={match.home} align="left" fire={homeWin} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <ScoreControl value={pred.home} disabled={isTBD || locked || confirmed}
-            onUp={() => onIncrement('home', 1)} onDown={() => onIncrement('home', -1)} />
-          <span style={{
-            fontFamily: "'Bebas Neue', cursive",
-            fontSize: 24, color: 'var(--text-3)', letterSpacing: 2, userSelect: 'none',
-          }}>:</span>
-          <ScoreControl value={pred.away} disabled={isTBD || locked || confirmed}
-            onUp={() => onIncrement('away', 1)} onDown={() => onIncrement('away', -1)} />
-        </div>
+        {(confirmed || finished) ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 88 }}>
+            {/* Vrai score — grand et centré */}
+            <div style={{
+              fontFamily: "'Bebas Neue', cursive", fontSize: 30, letterSpacing: 2, lineHeight: 1,
+              color: result ? 'var(--text-1)' : 'var(--text-3)',
+              animation: result ? 'fadeIn 0.3s ease' : 'none',
+            }}>
+              {result ? result.homeScore : '–'}
+              <span style={{ color: 'var(--text-3)', margin: '0 4px' }}>:</span>
+              {result ? result.awayScore : '–'}
+            </div>
+            {/* Prono — petit, décalé sous le vrai score */}
+            {confirmed && (
+              <div style={{
+                marginTop: 5, fontSize: 11, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text-3)',
+                animation: 'predShrinkDown 0.42s cubic-bezier(0.34,1.15,0.64,1)',
+              }}>
+                Prono <span style={{ color: 'var(--text-2)' }}>{pred.home}</span>
+                <span style={{ opacity: 0.5 }}>–</span>
+                <span style={{ color: 'var(--text-2)' }}>{pred.away}</span>
+              </div>
+            )}
+            {confirmed && !result && (
+              <div style={{ marginTop: 2, fontSize: 8, color: 'var(--text-3)', opacity: 0.7, letterSpacing: 0.3 }}>
+                en attente du résultat
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <ScoreControl value={pred.home} disabled={isTBD || locked}
+              onUp={() => onIncrement('home', 1)} onDown={() => onIncrement('home', -1)} />
+            <span style={{
+              fontFamily: "'Bebas Neue', cursive",
+              fontSize: 24, color: 'var(--text-3)', letterSpacing: 2, userSelect: 'none',
+            }}>:</span>
+            <ScoreControl value={pred.away} disabled={isTBD || locked}
+              onUp={() => onIncrement('away', 1)} onDown={() => onIncrement('away', -1)} />
+          </div>
+        )}
         <TeamBlock team={match.away} align="right" fire={awayWin} />
       </div>
 
