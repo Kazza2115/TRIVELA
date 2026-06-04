@@ -5,7 +5,7 @@ import type { Match, Team } from '../data/wc2026Matches'
 import { saveBet, saveFavorites, getBets, subscribeToResults } from '../services/auth'
 import type { UserProfile, MatchResult } from '../services/auth'
 
-type Tab = 'groupes' | 'eliminatoires'
+type Tab = 'poules' | 'phase' | 'eliminatoires'
 type Predictions = Record<string, { home: number; away: number }>
 
 const KO_ROUNDS = [
@@ -56,15 +56,34 @@ function isMatchLocked(match: Match): boolean {
   return Date.now() >= utc - 90 * 60 * 1000
 }
 
-// ─── Static lookups ────────────────────────────────────────────────────────
-const TEAM_TO_GROUP: Record<string, string> = {}
-const SHORT_TO_TEAM: Record<string, Team>   = {}
-Object.entries(GROUPS).forEach(([g, teams]) => {
-  teams.forEach(t => {
-    TEAM_TO_GROUP[t.short] = g
-    SHORT_TO_TEAM[t.short] = t
+// ─── Classement d'un groupe (calculé à partir des résultats) ─────────────────
+interface StandRow {
+  team: Team; played: number; win: number; draw: number; loss: number
+  gf: number; ga: number; pts: number
+}
+function computeStandings(group: string, results: Record<string, MatchResult>): StandRow[] {
+  const teams = GROUPS[group] ?? []
+  const map = new Map<string, StandRow>()
+  teams.forEach(t => map.set(t.short, { team: t, played: 0, win: 0, draw: 0, loss: 0, gf: 0, ga: 0, pts: 0 }))
+  GROUP_MATCHES.filter(m => m.group === group).forEach(m => {
+    const r = results[m.id]
+    if (!r) return
+    const h = map.get(m.home.short), a = map.get(m.away.short)
+    if (!h || !a) return
+    h.played++; a.played++
+    h.gf += r.homeScore; h.ga += r.awayScore
+    a.gf += r.awayScore; a.ga += r.homeScore
+    if (r.homeScore > r.awayScore)      { h.win++;  h.pts += 3; a.loss++ }
+    else if (r.homeScore < r.awayScore) { a.win++;  a.pts += 3; h.loss++ }
+    else                                { h.draw++; a.draw++;   h.pts++; a.pts++ }
   })
-})
+  return [...map.values()].sort((x, y) =>
+    y.pts - x.pts ||
+    (y.gf - y.ga) - (x.gf - x.ga) ||
+    y.gf - x.gf ||
+    x.team.name.localeCompare(y.team.name),
+  )
+}
 
 // ─── Component ─────────────────────────────────────────────────────────────
 export default function Paris({ onBack, currentUser, onOpenAuth }: {
@@ -72,8 +91,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
   currentUser: UserProfile | null
   onOpenAuth: () => void
 }) {
-  const [tab,         setTab]         = useState<Tab>('groupes')
-  const [activeGroup, setActiveGroup] = useState('A')
+  const [tab,         setTab]         = useState<Tab>('phase')
   const [koRound,     setKoRound]     = useState<string>('r32')
   const [predictions, setPredictions] = useState<Predictions>({})
   const [confirmed,   setConfirmed]   = useState<Set<string>>(new Set())
@@ -155,8 +173,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
     }
   }
 
-  const allGroupMatches = GROUP_MATCHES.filter(m => m.group === activeGroup)
-  const koMatches       = KNOCKOUT_MATCHES.filter(m => m.round === koRound)
+  const koMatches = KNOCKOUT_MATCHES.filter(m => m.round === koRound)
 
   return (
     <PageLayout onBack={onBack} accentColor="#C89B3C" flag="🎯" title="PARIS"
@@ -200,91 +217,48 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
         display: 'flex', background: 'var(--bg-fill)',
         borderRadius: 12, padding: 3, marginBottom: 20,
       }}>
-        {(['groupes', 'eliminatoires'] as Tab[]).map(t => (
+        {([['poules', 'Poules'], ['phase', 'Phase de groupe'], ['eliminatoires', 'Éliminatoires']] as [Tab, string][]).map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)} style={{
-            flex: 1, padding: '9px 0', borderRadius: 10, border: 'none',
-            fontSize: 12, fontWeight: 600, letterSpacing: 0.3, cursor: 'pointer',
+            flex: 1, padding: '9px 2px', borderRadius: 10, border: 'none',
+            fontSize: 11, fontWeight: 600, letterSpacing: 0.2, cursor: 'pointer',
             transition: 'all 0.2s cubic-bezier(0.4,0,0.2,1)',
             background: tab === t ? 'var(--bg-card)' : 'transparent',
             color: tab === t ? 'var(--text-1)' : 'var(--text-3)',
             boxShadow: tab === t ? 'var(--shadow-sm)' : 'none',
           }}>
-            {t === 'groupes' ? 'Phase de Groupes' : 'Éliminatoires'}
+            {label}
           </button>
         ))}
       </div>
 
-      {/* ══ GROUP STAGE ══════════════════════════════════════════ */}
-      {tab === 'groupes' && (
-        <>
-          {/* Favorites bar */}
-          {favorites.length > 0 && (
-            <div style={{
-              marginBottom: 14, padding: '10px 12px',
-              background: 'rgba(200,155,60,0.06)',
-              border: '1px solid rgba(200,155,60,0.2)',
-              borderRadius: 12,
-            }}>
-              <div style={{
-                fontSize: 9, fontWeight: 700, letterSpacing: 1.2,
-                color: '#A07828', textTransform: 'uppercase', marginBottom: 8,
-              }}>
-                ⭐ Équipes épinglées
-              </div>
-              <div style={{ display: 'flex', gap: 6, overflowX: 'auto', scrollbarWidth: 'none' }}>
-                {favorites.map(short => {
-                  const team  = SHORT_TO_TEAM[short]
-                  const group = TEAM_TO_GROUP[short]
-                  if (!team) return null
-                  const isActive = activeGroup === group
-                  return (
-                    <button key={short} onClick={() => setActiveGroup(group)} style={{
-                      flexShrink: 0,
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      padding: '5px 10px', borderRadius: 20, cursor: 'pointer',
-                      border: `1px solid ${isActive ? '#C89B3C' : 'var(--border)'}`,
-                      background: isActive ? 'rgba(200,155,60,0.12)' : 'var(--bg-card)',
-                      transition: 'all 0.15s',
-                      boxShadow: 'var(--shadow-sm)',
-                    }}>
-                      <img src={`https://flagcdn.com/w40/${team.code}.png`} alt={team.name}
-                        style={{ width: 18, height: 12, borderRadius: 2, objectFit: 'cover' }} />
-                      <span style={{ fontSize: 11, fontWeight: 700, color: isActive ? '#A07828' : 'var(--text-1)' }}>
-                        {short}
-                      </span>
-                      <span style={{
-                        fontSize: 9, fontWeight: 600, letterSpacing: 0.5,
-                        color: isActive ? 'rgba(160,120,40,0.7)' : 'var(--text-3)',
-                      }}>
-                        Grp {group}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Group pills */}
-          <div style={{
-            display: 'flex', gap: 5, overflowX: 'auto',
-            paddingBottom: 4, marginBottom: 14, scrollbarWidth: 'none',
-          }}>
-            {Object.keys(GROUPS).map(g => (
-              <GroupPill key={g} label={g} active={activeGroup === g}
-                onClick={() => setActiveGroup(g)} />
-            ))}
+      {/* ══ POULES — classements par groupe ══════════════════════ */}
+      {tab === 'poules' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5 }}>
+            Classement mis à jour après chaque match.
+            <span style={{ color: '#16a34a', fontWeight: 700 }}> V</span> victoires ·
+            <span style={{ color: '#CA8A04', fontWeight: 700 }}> N</span> nuls ·
+            <span style={{ color: '#dc2626', fontWeight: 700 }}> D</span> défaites.
+            Les 2 premiers (or) sont qualifiés.
           </div>
+          {Object.keys(GROUPS).map(g => (
+            <StandingsTable key={g} group={g} results={results}
+              favorites={favorites} onToggleFavorite={toggleFavorite} />
+          ))}
+        </div>
+      )}
 
-          <GroupBanner group={activeGroup} favorites={favorites} onToggleFavorite={toggleFavorite} />
-
-          {/* All 3 matchdays */}
+      {/* ══ PHASE DE GROUPE — paris triés par journée ════════════ */}
+      {tab === 'phase' && (
+        <>
           {([1, 2, 3] as const).map(md => {
-            const mdMatches = allGroupMatches.filter(m => m.matchday === md)
-            const dates = [...new Set(mdMatches.map(m => m.date))].join(' – ')
+            const mdMatches = GROUP_MATCHES
+              .filter(m => m.matchday === md)
+              .sort((a, b) => (parseUTC(a.date, a.time) ?? 0) - (parseUTC(b.date, b.time) ?? 0))
+            const dates = [...new Set(mdMatches.map(m => m.date))]
+            const dateRange = dates.length > 1 ? `${dates[0]} – ${dates[dates.length - 1]}` : dates[0] ?? ''
             return (
               <div key={md} style={{ marginBottom: 26 }}>
-                {/* Journée header — gold accent, clear section break */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   marginBottom: 12, marginTop: md === 1 ? 0 : 6,
@@ -293,20 +267,13 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
                   borderLeft: '3px solid #C89B3C',
                   borderRadius: '0 10px 10px 0',
                 }}>
-                  <span style={{
-                    fontFamily: "'Bebas Neue', cursive",
-                    fontSize: 16, letterSpacing: 2,
-                    color: '#A07828',
-                  }}>
+                  <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 16, letterSpacing: 2, color: '#A07828' }}>
                     Journée {md}
                   </span>
                   <div style={{ flex: 1, height: 1, background: 'rgba(200,155,60,0.25)' }} />
-                  {dates && (
-                    <span style={{
-                      fontSize: 10, fontWeight: 600, color: 'var(--text-2)',
-                      letterSpacing: 0.4, whiteSpace: 'nowrap',
-                    }}>
-                      {dates}
+                  {dateRange && (
+                    <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-2)', letterSpacing: 0.4, whiteSpace: 'nowrap' }}>
+                      {dateRange}
                     </span>
                   )}
                 </div>
@@ -316,7 +283,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
                       prediction={predictions[m.id]} confirmed={confirmed.has(m.id)}
                       lockError={lockErrors[m.id]}
                       result={results[m.id]}
-                      delay={i * 55}
+                      delay={i * 30}
                       onIncrement={(s, d) => setPrediction(m.id, s, d)}
                       onConfirm={() => confirm(m.id)}
                       onEdit={() => edit(m.id)}
@@ -380,75 +347,87 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
   )
 }
 
-// ─── GroupPill ────────────────────────────────────────────────────────────
-function GroupPill({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button onClick={onClick} style={{
-      flexShrink: 0, width: 34, height: 34, borderRadius: 9,
-      border: `1px solid ${active ? '#C89B3C' : 'var(--border)'}`,
-      background: active ? 'rgba(200,155,60,0.1)' : 'var(--bg-card)',
-      color: active ? '#A07828' : 'var(--text-2)',
-      fontFamily: "'Bebas Neue', cursive",
-      fontSize: 16, letterSpacing: 1,
-      cursor: 'pointer', transition: 'all 0.15s',
-      boxShadow: active ? 'none' : 'var(--shadow-sm)',
-    }}>
-      {label}
-    </button>
-  )
-}
+// ─── StandingsTable — classement d'un groupe ────────────────────────────────
+const STAND_COLS = '20px minmax(96px,1fr) 22px 22px 22px 22px 26px 26px 32px 30px'
 
-// ─── GroupBanner ──────────────────────────────────────────────────────────
-function GroupBanner({ group, favorites, onToggleFavorite }: {
+function StandingsTable({ group, results, favorites, onToggleFavorite }: {
   group: string
+  results: Record<string, MatchResult>
   favorites: string[]
   onToggleFavorite: (short: string) => void
 }) {
-  const teams = GROUPS[group]
-  if (!teams) return null
+  const rows = computeStandings(group, results)
+  const cell: React.CSSProperties = { fontSize: 11, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }
+  const head: React.CSSProperties = { fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textAlign: 'center', letterSpacing: 0.3 }
+
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 8,
-      padding: '10px 14px', marginBottom: 16,
-      background: 'var(--bg-card)',
-      border: '1px solid var(--border)',
-      borderRadius: 12, boxShadow: 'var(--shadow-sm)',
-      overflowX: 'auto', scrollbarWidth: 'none',
+      background: 'var(--bg-card)', border: '1px solid var(--border)',
+      borderRadius: 14, boxShadow: 'var(--shadow-sm)', overflow: 'hidden',
     }}>
-      <span style={{
-        fontFamily: "'Bebas Neue', cursive",
-        fontSize: 13, letterSpacing: 2, color: '#A07828', flexShrink: 0,
+      <div style={{
+        padding: '10px 14px', borderBottom: '1px solid var(--border)',
+        fontFamily: "'Bebas Neue', cursive", fontSize: 18, letterSpacing: 2, color: '#A07828',
       }}>
-        GRP {group}
-      </span>
-      <div style={{ width: 1, height: 16, background: 'var(--border)', flexShrink: 0 }} />
-      {teams.map((team, i) => {
-        const isFav = favorites.includes(team.short)
-        return (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-            <img src={`https://flagcdn.com/w40/${team.code}.png`} alt={team.name}
-              style={{ width: 22, height: 15, borderRadius: 2, objectFit: 'cover',
-                border: '1px solid var(--border)' }} />
-            <span style={{ fontSize: 10, color: 'var(--text-2)', fontWeight: 600, letterSpacing: 0.4 }}>
-              {team.short}
-            </span>
-            <button
-              onClick={() => onToggleFavorite(team.short)}
-              style={{
-                background: 'none', border: 'none', padding: '2px 1px',
-                cursor: 'pointer', fontSize: 11, lineHeight: 1,
-                opacity: isFav ? 1 : 0.25,
-                transition: 'opacity 0.15s, transform 0.15s',
-              }}
-              onPointerDown={e => (e.currentTarget.style.transform = 'scale(0.75)')}
-              onPointerUp={e   => (e.currentTarget.style.transform = 'scale(1)')}
-            >
-              ⭐
-            </button>
-            {i < 3 && <span style={{ color: 'var(--text-3)', fontSize: 10, marginLeft: 2 }}>·</span>}
+        Groupe {group}
+      </div>
+
+      <div style={{ overflowX: 'auto', scrollbarWidth: 'none' }}>
+        <div style={{ minWidth: 326 }}>
+          {/* En-tête */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: STAND_COLS, gap: 4, alignItems: 'center',
+            padding: '6px 12px', borderBottom: '1px solid var(--border)',
+          }}>
+            <span style={head}>#</span>
+            <span style={{ ...head, textAlign: 'left' }}>Équipe</span>
+            <span style={head}>J</span>
+            <span style={{ ...head, color: '#16a34a' }}>V</span>
+            <span style={{ ...head, color: '#CA8A04' }}>N</span>
+            <span style={{ ...head, color: '#dc2626' }}>D</span>
+            <span style={head}>BP</span>
+            <span style={head}>BC</span>
+            <span style={head}>+/-</span>
+            <span style={head}>Pts</span>
           </div>
-        )
-      })}
+
+          {/* Lignes */}
+          {rows.map((r, i) => {
+            const qualified = i < 2
+            const diff = r.gf - r.ga
+            const isFav = favorites.includes(r.team.short)
+            return (
+              <div key={r.team.short} style={{
+                display: 'grid', gridTemplateColumns: STAND_COLS, gap: 4, alignItems: 'center',
+                padding: '8px 12px',
+                borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none',
+                borderLeft: qualified ? '3px solid #C89B3C' : '3px solid transparent',
+                background: qualified ? 'rgba(200,155,60,0.05)' : 'transparent',
+              }}>
+                <span style={{ ...cell, fontWeight: 700, color: qualified ? '#A07828' : 'var(--text-3)' }}>{i + 1}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                  <button onClick={() => onToggleFavorite(r.team.short)} title="Épingler"
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+                      fontSize: 11, lineHeight: 1, opacity: isFav ? 1 : 0.22, flexShrink: 0 }}>⭐</button>
+                  <img src={`https://flagcdn.com/w40/${r.team.code}.png`} alt={r.team.name}
+                    style={{ width: 20, height: 14, borderRadius: 2, objectFit: 'cover', flexShrink: 0,
+                      border: '1px solid var(--border)' }} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.team.short}</span>
+                </div>
+                <span style={{ ...cell, color: 'var(--text-2)' }}>{r.played}</span>
+                <span style={{ ...cell, fontWeight: 700, color: '#16a34a' }}>{r.win}</span>
+                <span style={{ ...cell, fontWeight: 700, color: '#CA8A04' }}>{r.draw}</span>
+                <span style={{ ...cell, fontWeight: 700, color: '#dc2626' }}>{r.loss}</span>
+                <span style={{ ...cell, color: 'var(--text-2)' }}>{r.gf}</span>
+                <span style={{ ...cell, color: 'var(--text-2)' }}>{r.ga}</span>
+                <span style={{ ...cell, color: 'var(--text-2)' }}>{diff > 0 ? `+${diff}` : diff}</span>
+                <span style={{ ...cell, fontFamily: "'Bebas Neue', cursive", fontSize: 16, color: '#C89B3C' }}>{r.pts}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
