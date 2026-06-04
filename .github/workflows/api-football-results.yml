@@ -1,0 +1,23 @@
+name: API-Football results
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/10 * * * *'   # règle les matchs terminés toutes les 10 min
+  push:
+    branches: [claude/resume-codebase-work-i3uAg]
+    paths: ['scripts/api-football-results.mjs', '.github/workflows/api-football-results.yml']
+
+jobs:
+  results:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/api-football-results.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
