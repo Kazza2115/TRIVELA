@@ -92,6 +92,23 @@ function computeStandings(group: string, results: Record<string, MatchResult>): 
   )
 }
 
+/** Les 8 meilleurs 3es (parmi les 12 groupes) qualifiés. Ignore les équipes
+ *  n'ayant pas encore joué pour ne pas afficher de faux qualifiés avant le tournoi. */
+function bestThirds(results: Record<string, MatchResult>): Set<string> {
+  const thirds: StandRow[] = []
+  Object.keys(GROUPS).forEach(g => {
+    const row = computeStandings(g, results)[2]
+    if (row && row.played > 0) thirds.push(row)
+  })
+  thirds.sort((a, b) =>
+    b.pts - a.pts ||
+    (b.gf - b.ga) - (a.gf - a.ga) ||
+    b.gf - a.gf ||
+    a.team.name.localeCompare(b.team.name),
+  )
+  return new Set(thirds.slice(0, 8).map(r => r.team.short))
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────
 export default function Paris({ onBack, currentUser, onOpenAuth }: {
   onBack: () => void
@@ -188,6 +205,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
   }
 
   const koMatches = KNOCKOUT_MATCHES.filter(m => m.round === koRound)
+  const thirdsQualified = bestThirds(results)
 
   return (
     <PageLayout onBack={onBack} accentColor="#C89B3C" flag="🎯" title="PARIS"
@@ -248,16 +266,17 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
       {/* ══ POULES — classements par groupe ══════════════════════ */}
       {tab === 'poules' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5 }}>
-            Classement mis à jour après chaque match.
-            <span style={{ color: '#16a34a', fontWeight: 700 }}> V</span> victoires ·
-            <span style={{ color: '#CA8A04', fontWeight: 700 }}> N</span> nuls ·
-            <span style={{ color: '#dc2626', fontWeight: 700 }}> D</span> défaites.
-            Les 2 premiers (or) sont qualifiés.
+          <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.6 }}>
+            <span style={{ color: '#16a34a', fontWeight: 700 }}>V</span> victoires ·
+            <span style={{ color: '#CA8A04', fontWeight: 700 }}>N</span> nuls ·
+            <span style={{ color: '#dc2626', fontWeight: 700 }}>D</span> défaites.<br />
+            Qualifiés : les <span style={{ color: '#A07828', fontWeight: 700 }}>2 premiers</span> de chaque groupe (or)
+            + les <span style={{ color: '#5B8DEF', fontWeight: 700 }}>8 meilleurs 3es</span> (bleu).
           </div>
           {Object.keys(GROUPS).map(g => (
             <StandingsTable key={g} group={g} results={results}
-              favorites={favorites} onToggleFavorite={toggleFavorite} />
+              favorites={favorites} onToggleFavorite={toggleFavorite}
+              thirdsQualified={thirdsQualified} />
           ))}
         </div>
       )}
@@ -398,11 +417,12 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
 // ─── StandingsTable — classement d'un groupe ────────────────────────────────
 const STAND_COLS = '20px minmax(96px,1fr) 22px 22px 22px 22px 26px 26px 32px 30px'
 
-function StandingsTable({ group, results, favorites, onToggleFavorite }: {
+function StandingsTable({ group, results, favorites, onToggleFavorite, thirdsQualified }: {
   group: string
   results: Record<string, MatchResult>
   favorites: string[]
   onToggleFavorite: (short: string) => void
+  thirdsQualified: Set<string>
 }) {
   const rows = computeStandings(group, results)
   const cell: React.CSSProperties = { fontSize: 11, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }
@@ -441,7 +461,9 @@ function StandingsTable({ group, results, favorites, onToggleFavorite }: {
 
           {/* Lignes */}
           {rows.map((r, i) => {
-            const qualified = i < 2
+            const top2 = i < 2
+            const thirdQual = i === 2 && thirdsQualified.has(r.team.short)
+            const accent = top2 ? '#C89B3C' : thirdQual ? '#5B8DEF' : null
             const diff = r.gf - r.ga
             const isFav = favorites.includes(r.team.short)
             return (
@@ -449,10 +471,11 @@ function StandingsTable({ group, results, favorites, onToggleFavorite }: {
                 display: 'grid', gridTemplateColumns: STAND_COLS, gap: 4, alignItems: 'center',
                 padding: '8px 12px',
                 borderBottom: i < rows.length - 1 ? '1px solid var(--border)' : 'none',
-                borderLeft: qualified ? '3px solid #C89B3C' : '3px solid transparent',
-                background: qualified ? 'rgba(200,155,60,0.05)' : 'transparent',
+                borderLeft: `3px solid ${accent ?? 'transparent'}`,
+                background: top2 ? 'rgba(200,155,60,0.05)' : thirdQual ? 'rgba(91,141,239,0.06)' : 'transparent',
               }}>
-                <span style={{ ...cell, fontWeight: 700, color: qualified ? '#A07828' : 'var(--text-3)' }}>{i + 1}</span>
+                <span style={{ ...cell, fontWeight: 700,
+                  color: top2 ? '#A07828' : thirdQual ? '#5B8DEF' : 'var(--text-3)' }}>{i + 1}</span>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                   <button onClick={() => onToggleFavorite(r.team.short)} title="Épingler"
                     style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer',
