@@ -1,0 +1,7 @@
+name = "trivela-live"
+main = "cloudflare/live-worker.js"
+compatibility_date = "2024-10-01"
+
+# Cron : toutes les minutes (le Worker s'arrête vite s'il n'y a aucun match en direct)
+[triggers]
+crons = ["* * * * *"]
