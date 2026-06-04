@@ -250,9 +250,43 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
   const koMatches = KNOCKOUT_MATCHES.filter(m => m.round === koRound)
   const thirdsQualified = bestThirds(results)
 
+  const liveList = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES].filter(m => live[m.id])
+
   return (
     <PageLayout onBack={onBack} accentColor="#C89B3C" flag="🎯" title="PARIS"
       subtitle="Coupe du Monde 2026 · Pronostics">
+
+      {/* ── Matchs EN DIRECT mis en avant ─────────────────────── */}
+      {liveList.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
+            padding: '8px 14px', borderRadius: 12,
+            background: 'linear-gradient(90deg, rgba(220,38,38,0.14) 0%, rgba(220,38,38,0.03) 100%)',
+            border: '1px solid rgba(220,38,38,0.35)', borderLeft: '4px solid #dc2626',
+          }}>
+            <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#dc2626',
+              animation: 'liveDot 1s ease-in-out infinite' }} />
+            <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 17, letterSpacing: 2, color: '#dc2626' }}>
+              EN DIRECT
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {liveList.map(m => (
+              <MatchCard key={`live-${m.id}`} match={m} domId={`match-${m.id}`}
+                prediction={predictions[m.id]} confirmed={confirmed.has(m.id)}
+                lockError={lockErrors[m.id]}
+                result={results[m.id]} now={now}
+                liveData={live[m.id]} goalSide={goalFlash[m.id]}
+                delay={0}
+                onIncrement={(s, d) => setPrediction(m.id, s, d)}
+                onConfirm={() => confirm(m.id)}
+                onEdit={() => edit(m.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Auth gate banner ──────────────────────────────────── */}
       {!currentUser && (
@@ -329,7 +363,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
         <>
           {([1, 2, 3] as const).map(md => {
             const mdMatches = GROUP_MATCHES
-              .filter(m => m.matchday === md)
+              .filter(m => m.matchday === md && !live[m.id])
               .sort((a, b) => (parseUTC(a.date, a.time) ?? 0) - (parseUTC(b.date, b.time) ?? 0))
             const dates = [...new Set(mdMatches.map(m => m.date))]
             const dateRange = dates.length > 1 ? `${dates[0]} – ${dates[dates.length - 1]}` : dates[0] ?? ''
