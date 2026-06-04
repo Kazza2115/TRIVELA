@@ -56,6 +56,13 @@ function isMatchLocked(match: Match): boolean {
   return Date.now() >= utc - 90 * 60 * 1000
 }
 
+/** Fenêtre « en direct » : du coup d'envoi à +2h15 (tant qu'aucun résultat final). */
+const LIVE_MS = 135 * 60 * 1000
+function isMatchLive(match: Match, now: number): boolean {
+  const utc = parseUTC(match.date, match.time)
+  return utc !== null && now >= utc && now < utc + LIVE_MS
+}
+
 // ─── Classement d'un groupe (calculé à partir des résultats) ─────────────────
 interface StandRow {
   team: Team; played: number; win: number; draw: number; loss: number
@@ -124,6 +131,13 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
     arr.forEach(r => { map[r.matchId] = r })
     setResults(map)
   }), [])
+
+  // Horloge — rafraîchit l'état "en direct / terminé" des matchs
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30000)
+    return () => clearInterval(id)
+  }, [])
 
   const toggleFavorite = (short: string) => {
     if (!currentUser) { onOpenAuth(); return }
@@ -257,6 +271,13 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
               .sort((a, b) => (parseUTC(a.date, a.time) ?? 0) - (parseUTC(b.date, b.time) ?? 0))
             const dates = [...new Set(mdMatches.map(m => m.date))]
             const dateRange = dates.length > 1 ? `${dates[0]} – ${dates[dates.length - 1]}` : dates[0] ?? ''
+            // Regroupe par date (en conservant l'ordre chronologique)
+            const byDate: { date: string; matches: Match[] }[] = []
+            mdMatches.forEach(m => {
+              const last = byDate[byDate.length - 1]
+              if (last && last.date === m.date) last.matches.push(m)
+              else byDate.push({ date: m.date, matches: [m] })
+            })
             return (
               <div key={md} style={{ marginBottom: 26 }}>
                 <div style={{
@@ -277,19 +298,37 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
                     </span>
                   )}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {mdMatches.map((m, i) => (
-                    <MatchCard key={m.id} match={m}
-                      prediction={predictions[m.id]} confirmed={confirmed.has(m.id)}
-                      lockError={lockErrors[m.id]}
-                      result={results[m.id]}
-                      delay={i * 30}
-                      onIncrement={(s, d) => setPrediction(m.id, s, d)}
-                      onConfirm={() => confirm(m.id)}
-                      onEdit={() => edit(m.id)}
-                    />
-                  ))}
-                </div>
+
+                {byDate.map(({ date, matches }, di) => (
+                  <div key={date} style={{ marginBottom: 14 }}>
+                    {/* Sous-titre par date */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 8,
+                      margin: di === 0 ? '0 2px 8px' : '14px 2px 8px',
+                    }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', letterSpacing: 0.3 }}>
+                        📅 {date}
+                      </span>
+                      <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                      <span style={{ fontSize: 9, color: 'var(--text-3)', fontWeight: 600 }}>
+                        {matches.length} match{matches.length > 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {matches.map((m, i) => (
+                        <MatchCard key={m.id} match={m}
+                          prediction={predictions[m.id]} confirmed={confirmed.has(m.id)}
+                          lockError={lockErrors[m.id]}
+                          result={results[m.id]} now={now}
+                          delay={i * 30}
+                          onIncrement={(s, d) => setPrediction(m.id, s, d)}
+                          onConfirm={() => confirm(m.id)}
+                          onEdit={() => edit(m.id)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             )
           })}
@@ -449,26 +488,39 @@ interface MatchCardProps {
   confirmed: boolean
   lockError?: string
   result?: MatchResult
+  now?: number
   delay: number
   onIncrement: (side: 'home' | 'away', delta: number) => void
   onConfirm: () => void
   onEdit: () => void
 }
 
-function MatchCard({ match, prediction, confirmed, lockError, result, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
+function MatchCard({ match, prediction, confirmed, lockError, result, now, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
   const pred   = prediction ?? { home: 0, away: 0 }
   const isTBD  = match.home.code === 'un'
   const locked = isMatchLocked(match)
 
+  const nowTs    = now ?? Date.now()
+  const finished = !!result
+  const live     = !finished && isMatchLive(match, nowTs)
+  const homeWin  = finished && result!.homeScore > result!.awayScore
+  const awayWin  = finished && result!.awayScore > result!.homeScore
+  const entry    = `fadeSlideUp .3s cubic-bezier(0.4,0,0.2,1) ${delay}ms both`
+
   return (
     <div style={{
       borderRadius: 16, overflow: 'hidden',
-      background: 'var(--bg-card)',
-      border: confirmed ? '1px solid rgba(200,155,60,0.5)' : '1px solid var(--border)',
-      boxShadow: confirmed ? '0 4px 20px rgba(200,155,60,0.12), var(--shadow)' : 'var(--shadow)',
-      animation: `fadeSlideUp .3s cubic-bezier(0.4,0,0.2,1) ${delay}ms both`,
-      transition: 'border-color 0.22s, box-shadow 0.22s',
-      opacity: locked ? 0.75 : 1,
+      background: finished ? 'var(--bg-fill)' : 'var(--bg-card)',
+      border: live ? '1px solid rgba(220,38,38,0.6)'
+        : confirmed && !finished ? '1px solid rgba(200,155,60,0.5)'
+        : '1px solid var(--border)',
+      boxShadow: live ? 'none'
+        : confirmed && !finished ? '0 4px 20px rgba(200,155,60,0.12), var(--shadow)'
+        : 'var(--shadow)',
+      animation: live ? `${entry}, livePulse 1.6s ease-in-out infinite` : entry,
+      transition: 'border-color 0.22s, box-shadow 0.22s, opacity 0.3s, filter 0.3s',
+      opacity: finished ? 0.6 : locked ? 0.8 : 1,
+      filter: finished ? 'grayscale(0.55)' : 'none',
     }}>
       {confirmed && !locked && (
         <div style={{ height: 3, background: 'linear-gradient(90deg,transparent,#C89B3C 20%,#E8D080 50%,#C89B3C 80%,transparent)' }} />
@@ -490,6 +542,14 @@ function MatchCard({ match, prediction, confirmed, lockError, result, delay, onI
             : KO_LABELS[match.round as string] ?? match.group}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {live && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
+              color: '#dc2626', fontWeight: 800, fontSize: 9, letterSpacing: 0.5 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#dc2626',
+                animation: 'liveDot 1s ease-in-out infinite' }} />
+              EN DIRECT
+            </span>
+          )}
           <span>{match.date}</span>
           <span style={{
             background: locked ? 'rgba(110,110,115,0.1)' : 'rgba(200,155,60,0.12)',
@@ -517,7 +577,7 @@ function MatchCard({ match, prediction, confirmed, lockError, result, delay, onI
         display: 'grid', gridTemplateColumns: '1fr auto 1fr',
         alignItems: 'center', padding: '0 14px 14px', gap: 8,
       }}>
-        <TeamBlock team={match.home} align="left" />
+        <TeamBlock team={match.home} align="left" fire={homeWin} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <ScoreControl value={pred.home} disabled={isTBD || locked || confirmed}
             onUp={() => onIncrement('home', 1)} onDown={() => onIncrement('home', -1)} />
@@ -528,7 +588,7 @@ function MatchCard({ match, prediction, confirmed, lockError, result, delay, onI
           <ScoreControl value={pred.away} disabled={isTBD || locked || confirmed}
             onUp={() => onIncrement('away', 1)} onDown={() => onIncrement('away', -1)} />
         </div>
-        <TeamBlock team={match.away} align="right" />
+        <TeamBlock team={match.away} align="right" fire={awayWin} />
       </div>
 
       {/* Footer */}
@@ -614,7 +674,7 @@ function MatchCard({ match, prediction, confirmed, lockError, result, delay, onI
 }
 
 // ─── TeamBlock ────────────────────────────────────────────────────────────
-function TeamBlock({ team, align }: { team: Team; align: 'left' | 'right' }) {
+function TeamBlock({ team, align, fire }: { team: Team; align: 'left' | 'right'; fire?: boolean }) {
   const isTBD = team.code === 'un'
   return (
     <div style={{
@@ -630,12 +690,21 @@ function TeamBlock({ team, align }: { team: Team; align: 'left' | 'right' }) {
           fontSize: 8, color: 'var(--text-3)', fontWeight: 700,
         }}>TBD</div>
       ) : (
-        <img src={`https://flagcdn.com/w40/${team.code}.png`} alt={team.name}
-          style={{
-            width: 34, height: 23, objectFit: 'cover',
-            borderRadius: 4, border: '1px solid var(--border)',
-            boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
-          }} />
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <img src={`https://flagcdn.com/w40/${team.code}.png`} alt={team.name}
+            style={{
+              width: 34, height: 23, objectFit: 'cover',
+              borderRadius: 4, border: `1px solid ${fire ? 'rgba(245,130,30,0.8)' : 'var(--border)'}`,
+              boxShadow: fire ? '0 0 10px rgba(245,130,30,0.6)' : '0 1px 4px rgba(0,0,0,0.1)',
+            }} />
+          {fire && (
+            <span style={{
+              position: 'absolute', top: -10, right: -7, fontSize: 15, lineHeight: 1,
+              filter: 'drop-shadow(0 0 3px rgba(245,130,30,0.7))',
+              animation: 'flameFlicker 0.7s ease-in-out infinite',
+            }}>🔥</span>
+          )}
+        </div>
       )}
       <div style={{ textAlign: align }}>
         <div style={{
