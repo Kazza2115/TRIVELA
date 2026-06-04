@@ -795,3 +795,29 @@ export function subscribeToChatReads(cb: () => void): () => void {
     .subscribe()
   return () => { supabase!.removeChannel(channel) }
 }
+
+// ── Scores en direct (table match_live, alimentée par API-Football) ──────────
+export interface LiveScore {
+  matchId: string; status: string; elapsed: number | null
+  homeScore: number; awayScore: number
+}
+
+export async function getLive(): Promise<LiveScore[]> {
+  if (!supabaseConfigured) return []
+  const res = await authFetch('GET', 'match_live?select=*')
+  if (!res.ok) return []
+  return (await res.json() as any[]).map(r => ({
+    matchId: r.match_id as string, status: r.status as string,
+    elapsed: (r.elapsed as number) ?? null,
+    homeScore: (r.home_score as number) ?? 0, awayScore: (r.away_score as number) ?? 0,
+  }))
+}
+
+export function subscribeToLive(cb: () => void): () => void {
+  if (!supabase) return () => {}
+  const channel = supabase
+    .channel(`live-${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'match_live' }, cb)
+    .subscribe()
+  return () => { supabase!.removeChannel(channel) }
+}

@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import PageLayout from './PageLayout'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { saveBet, saveFavorites, getBets, subscribeToResults } from '../services/auth'
-import type { UserProfile, MatchResult } from '../services/auth'
+import { saveBet, saveFavorites, getBets, subscribeToResults, getLive, subscribeToLive } from '../services/auth'
+import type { UserProfile, MatchResult, LiveScore } from '../services/auth'
+
+const INPLAY = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP'])
 
 type Tab = 'poules' | 'phase' | 'eliminatoires'
 type Predictions = Record<string, { home: number; away: number }>
@@ -155,6 +157,36 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
     const id = setInterval(() => setNow(Date.now()), 30000)
     return () => clearInterval(id)
   }, [])
+
+  // Scores en direct + détection des buts (→ flamme sur l'équipe qui marque)
+  const [live, setLive] = useState<Record<string, LiveScore>>({})
+  const [goalFlash, setGoalFlash] = useState<Record<string, 'home' | 'away'>>({})
+  const prevLive = useRef<Record<string, LiveScore>>({})
+
+  const loadLive = useCallback(async () => {
+    const arr = await getLive()
+    const map: Record<string, LiveScore> = {}
+    arr.forEach(l => { map[l.matchId] = l })
+    const prev = prevLive.current
+    for (const l of arr) {
+      const p = prev[l.matchId]
+      if (!p) continue
+      const side: 'home' | 'away' | null =
+        l.homeScore > p.homeScore ? 'home' : l.awayScore > p.awayScore ? 'away' : null
+      if (side) {
+        setGoalFlash(g => ({ ...g, [l.matchId]: side }))
+        setTimeout(() => setGoalFlash(g => { const n = { ...g }; delete n[l.matchId]; return n }), 8000)
+      }
+    }
+    prevLive.current = map
+    setLive(map)
+  }, [])
+
+  useEffect(() => {
+    loadLive()
+    const unsub = subscribeToLive(loadLive)
+    return unsub
+  }, [loadLive])
 
   const toggleFavorite = (short: string) => {
     if (!currentUser) { onOpenAuth(); return }
@@ -348,6 +380,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
                           prediction={predictions[m.id]} confirmed={confirmed.has(m.id)}
                           lockError={lockErrors[m.id]}
                           result={results[m.id]} now={now}
+                          liveData={live[m.id]} goalSide={goalFlash[m.id]}
                           delay={i * 30}
                           onIncrement={(s, d) => setPrediction(m.id, s, d)}
                           onConfirm={() => confirm(m.id)}
@@ -520,6 +553,8 @@ interface MatchCardProps {
   confirmed: boolean
   lockError?: string
   result?: MatchResult
+  liveData?: LiveScore
+  goalSide?: 'home' | 'away'
   now?: number
   delay: number
   onIncrement: (side: 'home' | 'away', delta: number) => void
@@ -527,17 +562,19 @@ interface MatchCardProps {
   onEdit: () => void
 }
 
-function MatchCard({ match, prediction, confirmed, lockError, result, now, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
+function MatchCard({ match, prediction, confirmed, lockError, result, liveData, goalSide, now, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
   const pred   = prediction ?? { home: 0, away: 0 }
   const isTBD  = match.home.code === 'un'
   const locked = isMatchLocked(match)
 
-  const nowTs    = now ?? Date.now()
-  const finished = !!result
-  const live     = !finished && isMatchLive(match, nowTs)
-  const homeWin  = finished && result!.homeScore > result!.awayScore
-  const awayWin  = finished && result!.awayScore > result!.homeScore
-  const entry    = `fadeSlideUp .3s cubic-bezier(0.4,0,0.2,1) ${delay}ms both`
+  const nowTs      = now ?? Date.now()
+  const finished   = !!result
+  const reallyLive = !!liveData && INPLAY.has(liveData.status)
+  const live       = reallyLive || (!finished && isMatchLive(match, nowTs))
+  const showCol    = finished || reallyLive || confirmed
+  const homeWin    = (finished && result!.homeScore > result!.awayScore) || (reallyLive && goalSide === 'home')
+  const awayWin    = (finished && result!.awayScore > result!.homeScore) || (reallyLive && goalSide === 'away')
+  const entry      = `fadeSlideUp .3s cubic-bezier(0.4,0,0.2,1) ${delay}ms both`
 
   return (
     <div style={{
@@ -610,19 +647,30 @@ function MatchCard({ match, prediction, confirmed, lockError, result, now, delay
         alignItems: 'center', padding: '0 14px 14px', gap: 8,
       }}>
         <TeamBlock team={match.home} align="left" fire={homeWin} />
-        {(confirmed || finished) ? (
+        {showCol ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 88 }}>
-            {/* Vrai score — grand et centré */}
+            {/* Score — grand et centré (final, en direct, ou en attente) */}
             <div style={{
               fontFamily: "'Bebas Neue', cursive", fontSize: 30, letterSpacing: 2, lineHeight: 1,
-              color: result ? 'var(--text-1)' : 'var(--text-3)',
-              animation: result ? 'fadeIn 0.3s ease' : 'none',
+              color: reallyLive ? '#dc2626' : finished ? 'var(--text-1)' : 'var(--text-3)',
+              animation: (result || reallyLive) ? 'fadeIn 0.3s ease' : 'none',
             }}>
-              {result ? result.homeScore : '–'}
+              {finished ? result!.homeScore : reallyLive ? liveData!.homeScore : '–'}
               <span style={{ color: 'var(--text-3)', margin: '0 4px' }}>:</span>
-              {result ? result.awayScore : '–'}
+              {finished ? result!.awayScore : reallyLive ? liveData!.awayScore : '–'}
             </div>
-            {/* Prono — petit, décalé sous le vrai score */}
+            {/* Minute / EN DIRECT */}
+            {reallyLive && (
+              <div style={{
+                marginTop: 4, fontSize: 9, fontWeight: 800, letterSpacing: 0.5, color: '#dc2626',
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#dc2626',
+                  animation: 'liveDot 1s ease-in-out infinite' }} />
+                {liveData!.elapsed != null ? `${liveData!.elapsed}'` : 'EN DIRECT'}
+              </div>
+            )}
+            {/* Prono — petit, décalé sous le score */}
             {confirmed && (
               <div style={{
                 marginTop: 5, fontSize: 11, fontWeight: 700, letterSpacing: 0.3, color: 'var(--text-3)',
@@ -633,7 +681,7 @@ function MatchCard({ match, prediction, confirmed, lockError, result, now, delay
                 <span style={{ color: 'var(--text-2)' }}>{pred.away}</span>
               </div>
             )}
-            {confirmed && !result && (
+            {confirmed && !result && !reallyLive && (
               <div style={{ marginTop: 2, fontSize: 8, color: 'var(--text-3)', opacity: 0.7, letterSpacing: 0.3 }}>
                 en attente du résultat
               </div>
