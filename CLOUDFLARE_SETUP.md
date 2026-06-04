@@ -36,3 +36,5 @@ Le cron `* * * * *` est déjà configuré → le live se met à jour chaque minu
 ## 4) Après vérification
 - Désactiver l'ancien poller GitHub (`api-football-live.yml`) pour ne pas doubler.
 - (Option) garder GitHub Pages comme miroir, ou le retirer.
+
+<!-- deploy trigger 1780608437 -->
