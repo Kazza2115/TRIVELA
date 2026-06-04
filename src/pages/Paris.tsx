@@ -176,7 +176,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
         l.homeScore > p.homeScore ? 'home' : l.awayScore > p.awayScore ? 'away' : null
       if (side) {
         setGoalFlash(g => ({ ...g, [l.matchId]: side }))
-        setTimeout(() => setGoalFlash(g => { const n = { ...g }; delete n[l.matchId]; return n }), 8000)
+        setTimeout(() => setGoalFlash(g => { const n = { ...g }; delete n[l.matchId]; return n }), 30000)
       }
     }
     prevLive.current = map
@@ -817,14 +817,14 @@ function TeamBlock({ team, align, fire }: { team: Team; align: 'left' | 'right';
           <img src={`https://flagcdn.com/w40/${team.code}.png`} alt={team.name}
             style={{
               width: 34, height: 23, objectFit: 'cover',
-              borderRadius: 4, border: `1px solid ${fire ? 'rgba(245,130,30,0.8)' : 'var(--border)'}`,
-              boxShadow: fire ? '0 0 10px rgba(245,130,30,0.6)' : '0 1px 4px rgba(0,0,0,0.1)',
+              borderRadius: 4, border: `${fire ? 2 : 1}px solid ${fire ? 'rgba(245,130,30,0.95)' : 'var(--border)'}`,
+              boxShadow: fire ? '0 0 18px 3px rgba(245,130,30,0.85)' : '0 1px 4px rgba(0,0,0,0.1)',
             }} />
           {fire && (
             <span style={{
-              position: 'absolute', top: -10, right: -7, fontSize: 15, lineHeight: 1,
-              filter: 'drop-shadow(0 0 3px rgba(245,130,30,0.7))',
-              animation: 'flameFlicker 0.7s ease-in-out infinite',
+              position: 'absolute', top: -16, left: '50%', marginLeft: -13, fontSize: 26, lineHeight: 1,
+              filter: 'drop-shadow(0 0 6px rgba(245,130,30,1)) drop-shadow(0 0 12px rgba(245,90,10,0.7))',
+              animation: 'flameFlicker 0.55s ease-in-out infinite', pointerEvents: 'none',
             }}>🔥</span>
           )}
         </div>

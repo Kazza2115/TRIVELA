@@ -119,8 +119,8 @@ html, body {
 }
 @keyframes liveDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 @keyframes flameFlicker {
-  0%, 100% { transform: scale(1) rotate(-5deg); opacity: 0.92; }
-  50%      { transform: scale(1.2) rotate(5deg); opacity: 1; }
+  0%, 100% { transform: scale(1) rotate(-7deg) translateY(0); opacity: 0.9; }
+  50%      { transform: scale(1.4) rotate(7deg) translateY(-2px); opacity: 1; }
 }
 /* Le prono confirmé glisse vers le bas en rétrécissant pour laisser place au vrai score */
 @keyframes predShrinkDown {
