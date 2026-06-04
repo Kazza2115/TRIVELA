@@ -112,10 +112,11 @@ function bestThirds(results: Record<string, MatchResult>): Set<string> {
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────
-export default function Paris({ onBack, currentUser, onOpenAuth }: {
+export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
   onBack: () => void
   currentUser: UserProfile | null
   onOpenAuth: () => void
+  focus?: { id: string; nonce: number } | null
 }) {
   const [tab,         setTab]         = useState<Tab>('phase')
   const [koRound,     setKoRound]     = useState<string>('r32')
@@ -187,6 +188,16 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
     const unsub = subscribeToLive(loadLive)
     return unsub
   }, [loadLive])
+
+  // Saut vers un match (bouton "EN DIRECT")
+  useEffect(() => {
+    if (!focus) return
+    setTab('phase')
+    const t = setTimeout(() => {
+      document.getElementById(`match-${focus.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 300)
+    return () => clearTimeout(t)
+  }, [focus])
 
   const toggleFavorite = (short: string) => {
     if (!currentUser) { onOpenAuth(); return }
@@ -376,7 +387,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth }: {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                       {matches.map((m, i) => (
-                        <MatchCard key={m.id} match={m}
+                        <MatchCard key={m.id} match={m} domId={`match-${m.id}`}
                           prediction={predictions[m.id]} confirmed={confirmed.has(m.id)}
                           lockError={lockErrors[m.id]}
                           result={results[m.id]} now={now}
@@ -556,13 +567,14 @@ interface MatchCardProps {
   liveData?: LiveScore
   goalSide?: 'home' | 'away'
   now?: number
+  domId?: string
   delay: number
   onIncrement: (side: 'home' | 'away', delta: number) => void
   onConfirm: () => void
   onEdit: () => void
 }
 
-function MatchCard({ match, prediction, confirmed, lockError, result, liveData, goalSide, now, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
+function MatchCard({ match, prediction, confirmed, lockError, result, liveData, goalSide, now, domId, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
   const pred   = prediction ?? { home: 0, away: 0 }
   const isTBD  = match.home.code === 'un'
   const locked = isMatchLocked(match)
@@ -577,7 +589,7 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
   const entry      = `fadeSlideUp .3s cubic-bezier(0.4,0,0.2,1) ${delay}ms both`
 
   return (
-    <div style={{
+    <div id={domId} style={{
       borderRadius: 16, overflow: 'hidden',
       background: finished ? 'var(--bg-fill)' : 'var(--bg-card)',
       border: live ? '1px solid rgba(220,38,38,0.6)'

@@ -10,7 +10,7 @@ import AuthModal    from './components/AuthModal'
 import ProfileModal from './components/ProfileModal'
 import MenuDrawer   from './components/MenuDrawer'
 import TrivelaLogo  from './components/TrivelaLogo'
-import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages } from './services/auth'
+import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages, getLive, subscribeToLive } from './services/auth'
 import type { UserProfile, PresenceUser } from './services/auth'
 import { playMentionSound } from './utils/sound'
 import {
@@ -61,6 +61,22 @@ export default function App() {
   const [viewedPlayer, setViewedPlayer] = useState<{ player: UserProfile; rank: number } | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
   const [online, setOnline] = useState<PresenceUser[]>([])
+  const [liveIds, setLiveIds] = useState<string[]>([])
+  const [parisFocus, setParisFocus] = useState<{ id: string; nonce: number } | null>(null)
+
+  // Matchs en direct (pour le bouton flottant "EN DIRECT")
+  useEffect(() => {
+    const load = async () => setLiveIds((await getLive()).map(l => l.matchId))
+    load()
+    const unsub = subscribeToLive(load)
+    return unsub
+  }, [])
+
+  const goToLive = () => {
+    setViewedPlayer(null)
+    setSection('paris'); setActiveNav('paris')
+    if (liveIds[0]) setParisFocus({ id: liveIds[0], nonce: Date.now() })
+  }
   const [mentionToast, setMentionToast] = useState<{ pseudo: string; body: string } | null>(null)
   const chatOpenRef = useRef(chatOpen)
   useEffect(() => { chatOpenRef.current = chatOpen }, [chatOpen])
@@ -278,7 +294,7 @@ export default function App() {
         </div>
 
         {section === 'actualites' && <Actualites  onBack={back} />}
-        {section === 'paris'      && <Paris        onBack={back} currentUser={currentUser} onOpenAuth={openAuth} />}
+        {section === 'paris'      && <Paris        onBack={back} currentUser={currentUser} onOpenAuth={openAuth} focus={parisFocus} />}
         {section === 'classement' && (
           viewedPlayer
             ? <PlayerProfile
@@ -348,6 +364,25 @@ export default function App() {
       />
 
       {/* ── Bandeau de mention ────────────────────────────────── */}
+      {/* ── Bouton flottant EN DIRECT ─────────────────────────── */}
+      {liveIds.length > 0 && (
+        <button onClick={goToLive} style={{
+          position: 'fixed', top: 'calc(var(--header-h) + var(--sat) + 8px)', left: '50%',
+          transform: 'translateX(-50%)', zIndex: 50,
+          display: 'flex', alignItems: 'center', gap: 7,
+          padding: '7px 14px', borderRadius: 999, cursor: 'pointer',
+          background: 'linear-gradient(135deg,#e11d48,#dc2626)', border: 'none',
+          color: '#fff', fontSize: 12, fontWeight: 800, letterSpacing: 0.4,
+          boxShadow: '0 6px 20px rgba(220,38,38,0.45)',
+          animation: 'livePulse 1.6s ease-in-out infinite',
+        }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff',
+            animation: 'liveDot 1s ease-in-out infinite' }} />
+          EN DIRECT{liveIds.length > 1 ? ` · ${liveIds.length}` : ''}
+          <span style={{ opacity: 0.85, fontWeight: 700 }}>›</span>
+        </button>
+      )}
+
       {mentionToast && (
         <div
           onClick={() => { setMentionToast(null); openChat() }}
