@@ -100,15 +100,18 @@ function bestThirds(results: Record<string, MatchResult>): Set<string> {
   const thirds: StandRow[] = []
   Object.keys(GROUPS).forEach(g => {
     const row = computeStandings(g, results)[2]
-    if (row && row.played > 0) thirds.push(row)
+    if (row) thirds.push(row)
   })
-  thirds.sort((a, b) =>
+  const played = thirds.filter(r => r.played > 0)
+  // Avant tout match : tous les 3es sont en lice → tous affichés en bleu.
+  if (played.length === 0) return new Set(thirds.map(r => r.team.short))
+  played.sort((a, b) =>
     b.pts - a.pts ||
     (b.gf - b.ga) - (a.gf - a.ga) ||
     b.gf - a.gf ||
     a.team.name.localeCompare(b.team.name),
   )
-  return new Set(thirds.slice(0, 8).map(r => r.team.short))
+  return new Set(played.slice(0, 8).map(r => r.team.short))
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────
