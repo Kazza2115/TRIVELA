@@ -8,3 +8,5 @@ for (const d of (j.result || [])) {
   console.log(`${d.name} → status=${d.status} · cert=${d.validation_data?.status || d.certificate_authority || 'n/a'}`)
 }
 if (!j.result) console.log('Réponse:', JSON.stringify(j).slice(0, 400))
+
+// check 1780662243
