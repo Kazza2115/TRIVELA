@@ -1,0 +1,18 @@
+name: Cloudflare add domain
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/resume-codebase-work-i3uAg]
+    paths: ['scripts/cf-add-domain.mjs', '.github/workflows/cf-add-domain.yml']
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node scripts/cf-add-domain.mjs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
