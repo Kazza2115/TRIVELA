@@ -10,14 +10,6 @@ const INPLAY = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP'
 type Tab = 'poules' | 'phase' | 'eliminatoires'
 type Predictions = Record<string, { home: number; away: number }>
 
-const KO_ROUNDS = [
-  { key: 'r32',   label: 'Tour 32' },
-  { key: 'r16',   label: '8èmes'   },
-  { key: 'qf',    label: 'Quarts'  },
-  { key: 'sf',    label: 'Demies'  },
-  { key: 'final', label: 'Finale'  },
-] as const
-
 const KO_LABELS: Record<string, string> = {
   r32: 'Tour des 32', r16: 'Huitièmes de finale', qf: 'Quarts de finale',
   sf: 'Demi-finales', '3rd': '3e place', final: 'Finale',
@@ -122,7 +114,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
   focus?: { id: string; nonce: number } | null
 }) {
   const [tab,         setTab]         = useState<Tab>('phase')
-  const [koRound,     setKoRound]     = useState<string>('r32')
+  const [selectedKO,  setSelectedKO]  = useState<string>('final')
   const [predictions, setPredictions] = useState<Predictions>({})
   const [confirmed,   setConfirmed]   = useState<Set<string>>(new Set())
   const [lockErrors,  setLockErrors]  = useState<Record<string, string>>({})
@@ -250,7 +242,6 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
     }
   }
 
-  const koMatches = KNOCKOUT_MATCHES.filter(m => m.round === koRound)
   const thirdsQualified = bestThirds(results)
 
   const liveList = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES].filter(m => live[m.id])
@@ -437,53 +428,48 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
         </>
       )}
 
-      {/* ══ KNOCKOUT ═════════════════════════════════════════════ */}
-      {tab === 'eliminatoires' && (
-        <>
-          <div style={{
-            display: 'flex', gap: 5, overflowX: 'auto',
-            paddingBottom: 4, marginBottom: 18, scrollbarWidth: 'none',
-          }}>
-            {KO_ROUNDS.map(r => (
-              <button key={r.key} onClick={() => setKoRound(r.key)} style={{
-                flexShrink: 0, padding: '7px 14px', borderRadius: 20,
-                border: `1px solid ${koRound === r.key ? '#C89B3C' : 'var(--border)'}`,
-                background: koRound === r.key ? 'rgba(200,155,60,0.1)' : 'var(--bg-card)',
-                color: koRound === r.key ? '#A07828' : 'var(--text-2)',
-                fontSize: 12, fontWeight: 600, letterSpacing: 0.3,
-                cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
-                boxShadow: koRound === r.key ? 'none' : 'var(--shadow-sm)',
-              }}>
-                {r.label}
-              </button>
-            ))}
-          </div>
+      {/* ══ KNOCKOUT — tableau de tournoi à double tableau ═══════ */}
+      {tab === 'eliminatoires' && (() => {
+        const selMatch =
+          KNOCKOUT_MATCHES.find(m => m.id === selectedKO) ??
+          KNOCKOUT_MATCHES[KNOCKOUT_MATCHES.length - 1]
+        return (
+          <>
+            <KnockoutBracket
+              results={results} live={live}
+              selectedId={selectedKO} onSelect={setSelectedKO}
+            />
 
-          <div style={{
-            padding: '12px 14px', marginBottom: 18,
-            background: 'rgba(200,155,60,0.07)',
-            border: '1px solid rgba(200,155,60,0.2)',
-            borderRadius: 12, fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6,
-          }}>
-            Les équipes qualifiées seront révélées après la phase de groupes.
-            Vos pronostics seront verrouillés au coup d'envoi.
-          </div>
+            <div style={{
+              padding: '11px 14px', margin: '4px 0 14px',
+              background: 'rgba(200,155,60,0.07)',
+              border: '1px solid rgba(200,155,60,0.2)',
+              borderRadius: 12, fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6,
+            }}>
+              Touchez un match du tableau pour pronostiquer.
+              Les drapeaux des qualifiés apparaîtront après la phase de groupes.
+            </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {koMatches.map((m, i) => (
-              <MatchCard key={m.id} match={m}
-                prediction={predictions[m.id]} confirmed={confirmed.has(m.id)}
-                lockError={lockErrors[m.id]}
-                result={results[m.id]}
-                delay={i * 45}
-                onIncrement={(s, d) => setPrediction(m.id, s, d)}
-                onConfirm={() => confirm(m.id)}
-                onEdit={() => edit(m.id)}
-              />
-            ))}
-          </div>
-        </>
-      )}
+            <div style={{
+              fontFamily: "'Bebas Neue', cursive", fontSize: 16, letterSpacing: 1.5,
+              color: '#A07828', marginBottom: 10,
+            }}>
+              {KO_LABELS[selMatch.round as string] ?? selMatch.group}
+            </div>
+
+            <MatchCard match={selMatch} domId={`match-${selMatch.id}`}
+              prediction={predictions[selMatch.id]} confirmed={confirmed.has(selMatch.id)}
+              lockError={lockErrors[selMatch.id]}
+              result={results[selMatch.id]} now={now}
+              liveData={live[selMatch.id]} goalSide={goalFlash[selMatch.id]}
+              delay={0}
+              onIncrement={(s, d) => setPrediction(selMatch.id, s, d)}
+              onConfirm={() => confirm(selMatch.id)}
+              onEdit={() => edit(selMatch.id)}
+            />
+          </>
+        )
+      })()}
     </PageLayout>
   )
 }
@@ -973,6 +959,158 @@ function ScoreControl({ value, disabled, onUp, onDown }:
         onPointerDown={e => { if (!disabled) e.currentTarget.style.background = 'rgba(200,155,60,0.15)' }}
         onPointerUp={e   => { if (!disabled) e.currentTarget.style.background = 'var(--bg-fill)' }}
       >−</button>
+    </div>
+  )
+}
+
+// ─── Knockout bracket — double tableau de tournoi ──────────────────────────
+function MiniTeam({ team, score, win, dim }: {
+  team: Team; score: number | null; win: boolean; dim: boolean
+}) {
+  const isTBD = team.code === 'un'
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 5, opacity: dim ? 0.45 : 1 }}>
+      {isTBD ? (
+        <div style={{
+          width: 18, height: 12, borderRadius: 2, flexShrink: 0,
+          background: 'var(--bg-fill)', border: '1px solid var(--border)',
+        }} />
+      ) : (
+        <img src={`https://flagcdn.com/w20/${team.code}.png`} alt={team.short}
+          style={{
+            width: 18, height: 12, objectFit: 'cover', borderRadius: 2,
+            border: '1px solid var(--border)', flexShrink: 0,
+          }} />
+      )}
+      <span style={{
+        fontFamily: "'Bebas Neue', cursive", fontSize: 12, letterSpacing: 0.8,
+        fontWeight: win ? 800 : 500,
+        color: isTBD ? 'var(--text-3)' : 'var(--text-1)',
+        flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
+        {isTBD ? '—' : team.short}
+      </span>
+      <span style={{
+        fontSize: 11, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+        color: win ? 'var(--text-1)' : 'var(--text-2)', minWidth: 8, textAlign: 'right',
+      }}>
+        {score != null ? score : ''}
+      </span>
+    </div>
+  )
+}
+
+function BracketCell({ match, result, liveScore, selected, onSelect }: {
+  match: Match; result?: MatchResult; liveScore?: LiveScore
+  selected: boolean; onSelect: (id: string) => void
+}) {
+  const isLive = !!liveScore && INPLAY.has(liveScore.status)
+  const hs = result ? result.homeScore : isLive ? liveScore!.homeScore : null
+  const as = result ? result.awayScore : isLive ? liveScore!.awayScore : null
+  const decided = !!result && hs != null && as != null
+  const homeWin = decided && (hs as number) > (as as number)
+  const awayWin = decided && (as as number) > (hs as number)
+  return (
+    <button onClick={() => onSelect(match.id)} style={{
+      width: '100%', display: 'flex', flexDirection: 'column', gap: 3,
+      padding: '6px 7px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+      background: selected ? 'rgba(200,155,60,0.12)' : 'var(--bg-card)',
+      border: `1px solid ${isLive ? 'rgba(220,38,38,0.85)' : selected ? '#C89B3C' : 'var(--border)'}`,
+      boxShadow: isLive ? '0 0 10px rgba(220,38,38,0.3)' : 'var(--shadow-sm)',
+      animation: isLive ? 'livePulse 1.6s ease-in-out infinite' : undefined,
+      transition: 'all 0.15s',
+    }}>
+      <MiniTeam team={match.home} score={hs} win={homeWin} dim={awayWin} />
+      <div style={{ height: 1, background: 'var(--sep)' }} />
+      <MiniTeam team={match.away} score={as} win={awayWin} dim={homeWin} />
+    </button>
+  )
+}
+
+function BracketCol({ ids, label, width, results, live, selectedId, onSelect }: {
+  ids: string[]; label: string; width: number
+  results: Record<string, MatchResult>; live: Record<string, LiveScore>
+  selectedId: string; onSelect: (id: string) => void
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minWidth: width, width }}>
+      <div style={{
+        fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textAlign: 'center',
+        letterSpacing: 0.5, marginBottom: 6, textTransform: 'uppercase',
+      }}>{label}</div>
+      <div style={{
+        flex: 1, display: 'flex', flexDirection: 'column',
+        justifyContent: 'space-around', gap: 6,
+      }}>
+        {ids.map(id => {
+          const m = KNOCKOUT_MATCHES.find(x => x.id === id)
+          if (!m) return null
+          return (
+            <BracketCell key={id} match={m}
+              result={results[id]} liveScore={live[id]}
+              selected={selectedId === id} onSelect={onSelect} />
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function KnockoutBracket({ results, live, selectedId, onSelect }: {
+  results: Record<string, MatchResult>; live: Record<string, LiveScore>
+  selectedId: string; onSelect: (id: string) => void
+}) {
+  const W = 92
+  const colProps = { results, live, selectedId, onSelect }
+  const finalMatch = KNOCKOUT_MATCHES.find(m => m.id === 'final')!
+  const thirdMatch = KNOCKOUT_MATCHES.find(m => m.id === '3rd')!
+  return (
+    <div style={{ overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 8, marginBottom: 4 }}>
+      <div style={{ display: 'flex', gap: 8, minWidth: 860, height: 440, alignItems: 'stretch' }}>
+        {/* ── Côté gauche ── */}
+        <BracketCol {...colProps} width={W} label="32es"
+          ids={['r32-1', 'r32-2', 'r32-3', 'r32-4', 'r32-5', 'r32-6', 'r32-7', 'r32-8']} />
+        <BracketCol {...colProps} width={W} label="8es"
+          ids={['r16-1', 'r16-2', 'r16-3', 'r16-4']} />
+        <BracketCol {...colProps} width={W} label="Quarts"
+          ids={['qf-1', 'qf-2']} />
+        <BracketCol {...colProps} width={W} label="Demies"
+          ids={['sf-1']} />
+
+        {/* ── Centre : finale + 3e place ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 110, width: 110 }}>
+          <div style={{
+            fontSize: 9, fontWeight: 800, color: '#A07828', textAlign: 'center',
+            letterSpacing: 0.6, marginBottom: 6, textTransform: 'uppercase',
+          }}>Finale</div>
+          <div style={{
+            flex: 1, display: 'flex', flexDirection: 'column',
+            justifyContent: 'center', alignItems: 'stretch', gap: 6,
+          }}>
+            <div style={{ textAlign: 'center', fontSize: 26, lineHeight: 1 }}>🏆</div>
+            <BracketCell match={finalMatch}
+              result={results['final']} liveScore={live['final']}
+              selected={selectedId === 'final'} onSelect={onSelect} />
+            <div style={{
+              fontSize: 8, fontWeight: 700, color: 'var(--text-3)', textAlign: 'center',
+              letterSpacing: 0.5, marginTop: 14, textTransform: 'uppercase',
+            }}>3e place</div>
+            <BracketCell match={thirdMatch}
+              result={results['3rd']} liveScore={live['3rd']}
+              selected={selectedId === '3rd'} onSelect={onSelect} />
+          </div>
+        </div>
+
+        {/* ── Côté droit ── */}
+        <BracketCol {...colProps} width={W} label="Demies"
+          ids={['sf-2']} />
+        <BracketCol {...colProps} width={W} label="Quarts"
+          ids={['qf-3', 'qf-4']} />
+        <BracketCol {...colProps} width={W} label="8es"
+          ids={['r16-5', 'r16-6', 'r16-7', 'r16-8']} />
+        <BracketCol {...colProps} width={W} label="32es"
+          ids={['r32-9', 'r32-10', 'r32-11', 'r32-12', 'r32-13', 'r32-14', 'r32-15', 'r32-16']} />
+      </div>
     </div>
   )
 }
