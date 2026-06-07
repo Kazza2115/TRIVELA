@@ -14,13 +14,29 @@ const sb  = (path, init = {}) => fetch(`${SUPA_URL}/rest/v1/${path}`, {
 const api = path => fetch(`${API}${path}`, { headers: { 'x-apisports-key': KEY } }).then(r => r.json())
 const FINISHED = new Set(['FT', 'AET', 'PEN'])
 
+// Buteurs (type "Goal") d'un fixture, avec côté domicile/extérieur.
+function scorersFrom(events, homeId) {
+  return (events || [])
+    .filter(e => e.type === 'Goal' && e.detail !== 'Missed Penalty')
+    .map(e => {
+      const og = e.detail === 'Own Goal'
+      const playerHome = e.team?.id === homeId
+      const side = og ? (playerHome ? 'away' : 'home') : (playerHome ? 'home' : 'away')
+      return { p: e.player?.name || '?', s: side, t: e.time?.elapsed ?? null, og, pen: e.detail === 'Penalty' }
+    })
+}
+
 async function main() {
   const sched = await sb('match_schedule?select=match_id')
   const validIds = sched.ok ? new Set((await sched.json()).map(r => r.match_id)) : new Set()
 
+  // Matchs dont les buteurs sont déjà enregistrés (pour ne pas les re-télécharger).
+  const gExisting = await sb('match_goals?select=match_id')
+  const haveGoals = gExisting.ok ? new Set((await gExisting.json()).map(r => r.match_id)) : new Set()
+
   const data = await api('/fixtures?league=1&season=2026')
   const fixtures = data.response || []
-  let matched = 0, settled = 0
+  let matched = 0, settled = 0, goalsWritten = 0
   const unmatched = []
   for (const f of fixtures) {
     const id = fixtureToMatchId(f, validIds)
@@ -32,9 +48,21 @@ async function main() {
         body: JSON.stringify({ p_match_id: id, p_home_score: f.goals.home, p_away_score: f.goals.away }) })
       if (r.ok) settled++
       else console.warn(`  ⚠️ settle ${id}: ${r.status} ${await r.text().catch(() => '')}`)
+      // Persiste les buteurs une seule fois par match terminé.
+      if (!haveGoals.has(id) && (f.goals.home + f.goals.away) > 0) {
+        try {
+          const ev = await api(`/fixtures/events?fixture=${f.fixture?.id}`)
+          const scorers = scorersFrom(ev.response, f.teams?.home?.id)
+          const gr = await sb('match_goals?on_conflict=match_id', {
+            method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+            body: JSON.stringify([{ match_id: id, scorers, updated_at: new Date().toISOString() }]),
+          })
+          if (gr.ok) goalsWritten++
+        } catch (e) { console.warn(`  ⚠️ events ${id}:`, String(e)) }
+      }
     }
   }
-  console.log(`✅ Mappés : ${matched}/${fixtures.length} · Réglés (terminés) : ${settled}`)
+  console.log(`✅ Mappés : ${matched}/${fixtures.length} · Réglés : ${settled} · Buteurs écrits : ${goalsWritten}`)
   if (unmatched.length) console.log(`⚠️ Non mappés (${unmatched.length}) :\n - ${unmatched.join('\n - ')}`)
 }
 main().catch(e => { console.error('Erreur :', e); process.exit(1) })

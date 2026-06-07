@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import PageLayout from './PageLayout'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { saveBet, saveFavorites, getBets, subscribeToResults, getLive, subscribeToLive } from '../services/auth'
-import type { UserProfile, MatchResult, LiveScore } from '../services/auth'
+import { saveBet, saveFavorites, getBets, subscribeToResults, getLive, subscribeToLive, getMatchGoals, subscribeToMatchGoals } from '../services/auth'
+import type { UserProfile, MatchResult, LiveScore, Scorer } from '../services/auth'
 
 const INPLAY = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP'])
 
@@ -184,6 +184,15 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
     return unsub
   }, [loadLive])
 
+  // Buteurs (⚽) — live + matchs terminés
+  const [goals, setGoals] = useState<Record<string, Scorer[]>>({})
+  const loadGoals = useCallback(async () => { setGoals(await getMatchGoals()) }, [])
+  useEffect(() => {
+    loadGoals()
+    const unsub = subscribeToMatchGoals(loadGoals)
+    return unsub
+  }, [loadGoals])
+
   // Saut vers un match (bouton "EN DIRECT")
   useEffect(() => {
     if (!focus) return
@@ -268,7 +277,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {liveList.map(m => (
               <LiveHeroCard key={`live-${m.id}`} match={m} domId={`match-${m.id}`}
-                live={live[m.id]} goalSide={goalFlash[m.id]}
+                live={live[m.id]} goalSide={goalFlash[m.id]} scorers={goals[m.id]}
                 prediction={predictions[m.id]} confirmed={confirmed.has(m.id)} />
             ))}
           </div>
@@ -413,6 +422,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
                           lockError={lockErrors[m.id]}
                           result={results[m.id]} now={now}
                           liveData={live[m.id]} goalSide={goalFlash[m.id]}
+                          scorers={goals[m.id]}
                           delay={i * 30}
                           onIncrement={(s, d) => setPrediction(m.id, s, d)}
                           onConfirm={() => confirm(m.id)}
@@ -436,7 +446,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
         return (
           <>
             <KnockoutBracket
-              results={results} live={live}
+              results={results} live={live} goals={goals} goalFlash={goalFlash}
               selectedId={selectedKO} onSelect={setSelectedKO}
             />
 
@@ -462,6 +472,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
               lockError={lockErrors[selMatch.id]}
               result={results[selMatch.id]} now={now}
               liveData={live[selMatch.id]} goalSide={goalFlash[selMatch.id]}
+              scorers={goals[selMatch.id]}
               delay={0}
               onIncrement={(s, d) => setPrediction(selMatch.id, s, d)}
               onConfirm={() => confirm(selMatch.id)}
@@ -582,6 +593,7 @@ interface MatchCardProps {
   result?: MatchResult
   liveData?: LiveScore
   goalSide?: 'home' | 'away'
+  scorers?: Scorer[]
   now?: number
   domId?: string
   delay: number
@@ -590,7 +602,7 @@ interface MatchCardProps {
   onEdit: () => void
 }
 
-function MatchCard({ match, prediction, confirmed, lockError, result, liveData, goalSide, now, domId, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
+function MatchCard({ match, prediction, confirmed, lockError, result, liveData, goalSide, scorers, now, domId, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
   const pred   = prediction ?? { home: 0, away: 0 }
   const isTBD  = match.home.code === 'un'
   const locked = isMatchLocked(match)
@@ -731,6 +743,33 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
         <TeamBlock team={match.away} align="right" fire={awayFlame} />
       </div>
 
+      {/* Buteurs ⚽ */}
+      {scorers && scorers.length > 0 && (
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px',
+          padding: '0 16px 12px', alignItems: 'start',
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {scorers.filter(s => s.side === 'home').map((s, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5,
+                fontSize: 11, color: 'var(--text-2)', fontWeight: 600 }}>
+                <span style={{ fontSize: 12 }}>⚽</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+            {scorers.filter(s => s.side === 'away').map((s, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5,
+                fontSize: 11, color: 'var(--text-2)', fontWeight: 600 }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span>
+                <span style={{ fontSize: 12 }}>⚽</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -837,8 +876,8 @@ function HeroTeam({ team, align, fire }: { team: Team; align: 'left' | 'right'; 
   )
 }
 
-function LiveHeroCard({ match, live, goalSide, prediction, confirmed, domId }: {
-  match: Match; live: LiveScore; goalSide?: 'home' | 'away'
+function LiveHeroCard({ match, live, goalSide, scorers, prediction, confirmed, domId }: {
+  match: Match; live: LiveScore; goalSide?: 'home' | 'away'; scorers?: Scorer[]
   prediction?: { home: number; away: number }; confirmed: boolean; domId?: string
 }) {
   const pred = prediction ?? { home: 0, away: 0 }
@@ -868,6 +907,30 @@ function LiveHeroCard({ match, live, goalSide, prediction, confirmed, domId }: {
         </div>
         <HeroTeam team={match.away} align="right" fire={goalSide === 'away'} />
       </div>
+
+      {scorers && scorers.length > 0 && (
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px',
+          margin: '8px 0 4px', alignItems: 'start',
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {scorers.filter(s => s.side === 'home').map((s, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4,
+                fontSize: 10, color: 'var(--text-2)', fontWeight: 600 }}>
+                <span>⚽</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
+            {scorers.filter(s => s.side === 'away').map((s, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4,
+                fontSize: 10, color: 'var(--text-2)', fontWeight: 600 }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span><span>⚽</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{ textAlign: 'center', fontSize: 9, color: 'var(--text-3)', letterSpacing: 0.4 }}>
         {stage} · {match.venue} · {match.city}
@@ -963,9 +1026,37 @@ function ScoreControl({ value, disabled, onUp, onDown }:
   )
 }
 
+// ─── Buteurs — affichage compact « ⚽ Nom min' » ────────────────────────────
+function scorerShort(s: Scorer): string {
+  const parts = s.player.trim().split(/\s+/)
+  const name = parts.length > 1 ? parts[parts.length - 1] : s.player
+  const tag = s.og ? ' csc' : s.pen ? ' (P)' : ''
+  const min = s.minute != null ? ` ${s.minute}'` : ''
+  return `${name}${tag}${min}`
+}
+
+function BracketScorers({ scorers }: { scorers: Scorer[] }) {
+  if (!scorers.length) return null
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 1 }}>
+      {scorers.map((s, i) => (
+        <div key={i} style={{
+          display: 'flex', alignItems: 'center', gap: 3,
+          justifyContent: s.side === 'home' ? 'flex-start' : 'flex-end',
+          fontSize: 8, color: 'var(--text-2)', lineHeight: 1.2,
+        }}>
+          {s.side === 'away' && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span>}
+          <span style={{ fontSize: 8 }}>⚽</span>
+          {s.side === 'home' && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Knockout bracket — double tableau de tournoi ──────────────────────────
-function MiniTeam({ team, score, win, dim }: {
-  team: Team; score: number | null; win: boolean; dim: boolean
+function MiniTeam({ team, score, win, dim, fire }: {
+  team: Team; score: number | null; win: boolean; dim: boolean; fire?: boolean
 }) {
   const isTBD = team.code === 'un'
   return (
@@ -976,11 +1067,21 @@ function MiniTeam({ team, score, win, dim }: {
           background: 'var(--bg-fill)', border: '1px solid var(--border)',
         }} />
       ) : (
-        <img src={`https://flagcdn.com/w20/${team.code}.png`} alt={team.short}
-          style={{
-            width: 18, height: 12, objectFit: 'cover', borderRadius: 2,
-            border: '1px solid var(--border)', flexShrink: 0,
-          }} />
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <img src={`https://flagcdn.com/w20/${team.code}.png`} alt={team.short}
+            style={{
+              width: 18, height: 12, objectFit: 'cover', borderRadius: 2,
+              border: `${fire ? 2 : 1}px solid ${fire ? 'rgba(245,130,30,0.95)' : 'var(--border)'}`,
+              boxShadow: fire ? '0 0 12px 2px rgba(245,130,30,0.85)' : undefined,
+            }} />
+          {fire && (
+            <span style={{
+              position: 'absolute', top: -13, left: '50%', marginLeft: -8, fontSize: 15, lineHeight: 1,
+              filter: 'drop-shadow(0 0 5px rgba(245,130,30,1))',
+              animation: 'flameFlicker 0.55s ease-in-out infinite', pointerEvents: 'none',
+            }}>🔥</span>
+          )}
+        </div>
       )}
       <span style={{
         fontFamily: "'Bebas Neue', cursive", fontSize: 12, letterSpacing: 0.8,
@@ -1000,8 +1101,9 @@ function MiniTeam({ team, score, win, dim }: {
   )
 }
 
-function BracketCell({ match, result, liveScore, selected, onSelect }: {
+function BracketCell({ match, result, liveScore, scorers, flashSide, selected, onSelect }: {
   match: Match; result?: MatchResult; liveScore?: LiveScore
+  scorers?: Scorer[]; flashSide?: 'home' | 'away'
   selected: boolean; onSelect: (id: string) => void
 }) {
   const isLive = !!liveScore && INPLAY.has(liveScore.status)
@@ -1010,6 +1112,9 @@ function BracketCell({ match, result, liveScore, selected, onSelect }: {
   const decided = !!result && hs != null && as != null
   const homeWin = decided && (hs as number) > (as as number)
   const awayWin = decided && (as as number) > (hs as number)
+  // Flamme uniquement pendant le live (pas sur un match terminé)
+  const fireHome = isLive && flashSide === 'home'
+  const fireAway = isLive && flashSide === 'away'
   return (
     <button onClick={() => onSelect(match.id)} style={{
       width: '100%', display: 'flex', flexDirection: 'column', gap: 3,
@@ -1020,16 +1125,18 @@ function BracketCell({ match, result, liveScore, selected, onSelect }: {
       animation: isLive ? 'livePulse 1.6s ease-in-out infinite' : undefined,
       transition: 'all 0.15s',
     }}>
-      <MiniTeam team={match.home} score={hs} win={homeWin} dim={awayWin} />
+      <MiniTeam team={match.home} score={hs} win={homeWin} dim={awayWin} fire={fireHome} />
       <div style={{ height: 1, background: 'var(--sep)' }} />
-      <MiniTeam team={match.away} score={as} win={awayWin} dim={homeWin} />
+      <MiniTeam team={match.away} score={as} win={awayWin} dim={homeWin} fire={fireAway} />
+      <BracketScorers scorers={scorers ?? []} />
     </button>
   )
 }
 
-function BracketCol({ ids, label, width, results, live, selectedId, onSelect }: {
+function BracketCol({ ids, label, width, results, live, goals, goalFlash, selectedId, onSelect }: {
   ids: string[]; label: string; width: number
   results: Record<string, MatchResult>; live: Record<string, LiveScore>
+  goals: Record<string, Scorer[]>; goalFlash: Record<string, 'home' | 'away'>
   selectedId: string; onSelect: (id: string) => void
 }) {
   return (
@@ -1048,6 +1155,7 @@ function BracketCol({ ids, label, width, results, live, selectedId, onSelect }: 
           return (
             <BracketCell key={id} match={m}
               result={results[id]} liveScore={live[id]}
+              scorers={goals[id]} flashSide={goalFlash[id]}
               selected={selectedId === id} onSelect={onSelect} />
           )
         })}
@@ -1056,17 +1164,24 @@ function BracketCol({ ids, label, width, results, live, selectedId, onSelect }: 
   )
 }
 
-function KnockoutBracket({ results, live, selectedId, onSelect }: {
+function KnockoutBracket({ results, live, goals, goalFlash, selectedId, onSelect }: {
   results: Record<string, MatchResult>; live: Record<string, LiveScore>
+  goals: Record<string, Scorer[]>; goalFlash: Record<string, 'home' | 'away'>
   selectedId: string; onSelect: (id: string) => void
 }) {
-  const W = 92
-  const colProps = { results, live, selectedId, onSelect }
+  const W = 96
+  const colProps = { results, live, goals, goalFlash, selectedId, onSelect }
   const finalMatch = KNOCKOUT_MATCHES.find(m => m.id === 'final')!
   const thirdMatch = KNOCKOUT_MATCHES.find(m => m.id === '3rd')!
+  const centerCell = (id: string, m: Match) => (
+    <BracketCell match={m}
+      result={results[id]} liveScore={live[id]}
+      scorers={goals[id]} flashSide={goalFlash[id]}
+      selected={selectedId === id} onSelect={onSelect} />
+  )
   return (
     <div style={{ overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 8, marginBottom: 4 }}>
-      <div style={{ display: 'flex', gap: 8, minWidth: 860, height: 440, alignItems: 'stretch' }}>
+      <div style={{ display: 'flex', gap: 8, minWidth: 880, minHeight: 440, alignItems: 'stretch' }}>
         {/* ── Côté gauche ── */}
         <BracketCol {...colProps} width={W} label="32es"
           ids={['r32-1', 'r32-2', 'r32-3', 'r32-4', 'r32-5', 'r32-6', 'r32-7', 'r32-8']} />
@@ -1078,7 +1193,7 @@ function KnockoutBracket({ results, live, selectedId, onSelect }: {
           ids={['sf-1']} />
 
         {/* ── Centre : finale + 3e place ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 110, width: 110 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 112, width: 112 }}>
           <div style={{
             fontSize: 9, fontWeight: 800, color: '#A07828', textAlign: 'center',
             letterSpacing: 0.6, marginBottom: 6, textTransform: 'uppercase',
@@ -1088,16 +1203,12 @@ function KnockoutBracket({ results, live, selectedId, onSelect }: {
             justifyContent: 'center', alignItems: 'stretch', gap: 6,
           }}>
             <div style={{ textAlign: 'center', fontSize: 26, lineHeight: 1 }}>🏆</div>
-            <BracketCell match={finalMatch}
-              result={results['final']} liveScore={live['final']}
-              selected={selectedId === 'final'} onSelect={onSelect} />
+            {centerCell('final', finalMatch)}
             <div style={{
               fontSize: 8, fontWeight: 700, color: 'var(--text-3)', textAlign: 'center',
               letterSpacing: 0.5, marginTop: 14, textTransform: 'uppercase',
             }}>3e place</div>
-            <BracketCell match={thirdMatch}
-              result={results['3rd']} liveScore={live['3rd']}
-              selected={selectedId === '3rd'} onSelect={onSelect} />
+            {centerCell('3rd', thirdMatch)}
           </div>
         </div>
 

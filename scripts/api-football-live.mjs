@@ -17,10 +17,41 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 let validIds = new Set()
 
+// Extrait les buteurs d'un fixture (type "Goal"), avec côté domicile/extérieur.
+function scorersFrom(events, homeId) {
+  return (events || [])
+    .filter(e => e.type === 'Goal' && e.detail !== 'Missed Penalty')
+    .map(e => {
+      const og = e.detail === 'Own Goal'
+      // Un csc compte pour l'équipe adverse au joueur.
+      const playerHome = e.team?.id === homeId
+      const side = og ? (playerHome ? 'away' : 'home') : (playerHome ? 'home' : 'away')
+      return {
+        p: e.player?.name || '?',
+        s: side,
+        t: e.time?.elapsed ?? null,
+        og,
+        pen: e.detail === 'Penalty',
+      }
+    })
+}
+
+async function writeGoals(matchId, fixtureId, homeId) {
+  try {
+    const ev = await api(`/fixtures/events?fixture=${fixtureId}`)
+    const scorers = scorersFrom(ev.response, homeId)
+    await sb('match_goals?on_conflict=match_id', {
+      method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify([{ match_id: matchId, scorers, updated_at: new Date().toISOString() }]),
+    })
+  } catch (e) { console.warn(`  ⚠️ events ${matchId}:`, String(e)) }
+}
+
 async function tick() {
   const data = await api('/fixtures?league=1&season=2026&live=all')
   const fixtures = data.response || []
   const rows = []
+  const goalJobs = []
   for (const f of fixtures) {
     const id = fixtureToMatchId(f, validIds)
     if (!id) continue
@@ -30,6 +61,10 @@ async function tick() {
       home_score: f.goals?.home ?? 0, away_score: f.goals?.away ?? 0,
       updated_at: new Date().toISOString(),
     })
+    // Récupère les buteurs dès qu'au moins un but est marqué.
+    if ((f.goals?.home ?? 0) + (f.goals?.away ?? 0) > 0) {
+      goalJobs.push(writeGoals(id, f.fixture?.id, f.teams?.home?.id))
+    }
   }
   const ids = rows.map(r => r.match_id)
   // Retire de match_live les matchs qui ne sont plus en direct
@@ -41,6 +76,7 @@ async function tick() {
       body: JSON.stringify(rows),
     })
   }
+  if (goalJobs.length) await Promise.all(goalJobs)
   const t = new Date().toISOString().slice(11, 19)
   console.log(`[${t}] en direct : ${rows.length}${rows.length ? ' → ' + ids.join(', ') : ''}`)
   return rows.length

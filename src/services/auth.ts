@@ -821,3 +821,39 @@ export function subscribeToLive(cb: () => void): () => void {
     .subscribe()
   return () => { supabase!.removeChannel(channel) }
 }
+
+// ─── Buteurs (match_goals) ──────────────────────────────────────────────────
+export interface Scorer {
+  player: string
+  side: 'home' | 'away'
+  minute: number | null
+  og: boolean
+  pen: boolean
+}
+
+export async function getMatchGoals(): Promise<Record<string, Scorer[]>> {
+  if (!supabaseConfigured) return {}
+  const res = await authFetch('GET', 'match_goals?select=*')
+  if (!res.ok) return {}
+  const map: Record<string, Scorer[]> = {}
+  for (const r of (await res.json() as any[])) {
+    const arr = Array.isArray(r.scorers) ? r.scorers : []
+    map[r.match_id as string] = arr.map((s: any) => ({
+      player: String(s.p ?? '?'),
+      side: s.s === 'away' ? 'away' : 'home',
+      minute: typeof s.t === 'number' ? s.t : null,
+      og: !!s.og,
+      pen: !!s.pen,
+    }))
+  }
+  return map
+}
+
+export function subscribeToMatchGoals(cb: () => void): () => void {
+  if (!supabase) return () => {}
+  const channel = supabase
+    .channel(`goals-${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'match_goals' }, cb)
+    .subscribe()
+  return () => { supabase!.removeChannel(channel) }
+}
