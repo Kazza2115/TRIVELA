@@ -643,37 +643,21 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
       opacity: finished ? 0.6 : locked ? 0.8 : 1,
       filter: finished ? 'grayscale(0.55)' : 'none',
     }}>
-      {/* Drapeaux des deux pays en fond, avec un effet de pli (satin) sur le drapeau —
-          seulement quand le match est en direct */}
-      {live && !isTBD && (() => {
-        const foldHome: React.CSSProperties = {
-          position: 'absolute', left: 0, top: 0, height: '100%', width: '46%',
-          transform: 'skewX(-7deg) scale(1.04)', transformOrigin: 'left',
-          WebkitMaskImage: 'linear-gradient(to right, #000 0%, #000 6%, transparent 55%)',
-          maskImage: 'linear-gradient(to right, #000 0%, #000 6%, transparent 55%)',
-        }
-        const foldAway: React.CSSProperties = {
-          position: 'absolute', right: 0, top: 0, height: '100%', width: '46%',
-          transform: 'skewX(-7deg) scale(1.04)', transformOrigin: 'right',
-          WebkitMaskImage: 'linear-gradient(to left, #000 0%, #000 6%, transparent 55%)',
-          maskImage: 'linear-gradient(to left, #000 0%, #000 6%, transparent 55%)',
-        }
-        // Plis satinés : ombres et reflets doux, verticaux
-        const folds = 'repeating-linear-gradient(94deg, rgba(0,0,0,0.30) 0px, rgba(0,0,0,0) 22px, rgba(255,255,255,0.28) 40px, rgba(0,0,0,0) 60px)'
-        return (
-          <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: -1, pointerEvents: 'none', overflow: 'hidden' }}>
-            <img src={`https://flagcdn.com/${match.home.code}.svg`} alt="" style={{ ...foldHome, objectFit: 'cover', opacity: 0.46, filter: 'saturate(1.35)' }} />
-            <div style={{ ...foldHome, mixBlendMode: 'overlay', opacity: 0.6, background: folds }} />
-            <img src={`https://flagcdn.com/${match.away.code}.svg`} alt="" style={{ ...foldAway, objectFit: 'cover', opacity: 0.46, filter: 'saturate(1.35)' }} />
-            <div style={{ ...foldAway, mixBlendMode: 'overlay', opacity: 0.6, background: folds }} />
-            {/* Centre noir entre les deux drapeaux */}
-            <div style={{
-              position: 'absolute', inset: 0,
-              background: 'linear-gradient(90deg, transparent 28%, rgba(0,0,0,0.6) 50%, transparent 72%)',
-            }} />
-          </div>
-        )
-      })()}
+      {/* Drapeaux des deux pays en fond — simple, sans effet — seulement en direct */}
+      {live && !isTBD && (
+        <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: -1, pointerEvents: 'none', overflow: 'hidden' }}>
+          <img src={`https://flagcdn.com/${match.home.code}.svg`} alt="" style={{
+            position: 'absolute', left: 0, top: 0, height: '100%', width: '46%', objectFit: 'cover', opacity: 0.42,
+            WebkitMaskImage: 'linear-gradient(to right, #000 0%, #000 8%, transparent 60%)',
+            maskImage: 'linear-gradient(to right, #000 0%, #000 8%, transparent 60%)',
+          }} />
+          <img src={`https://flagcdn.com/${match.away.code}.svg`} alt="" style={{
+            position: 'absolute', right: 0, top: 0, height: '100%', width: '46%', objectFit: 'cover', opacity: 0.42,
+            WebkitMaskImage: 'linear-gradient(to left, #000 0%, #000 8%, transparent 60%)',
+            maskImage: 'linear-gradient(to left, #000 0%, #000 8%, transparent 60%)',
+          }} />
+        </div>
+      )}
 
       {confirmed && !locked && (
         <div style={{ height: 3, background: 'linear-gradient(90deg,transparent,#C89B3C 20%,#E8D080 50%,#C89B3C 80%,transparent)' }} />
