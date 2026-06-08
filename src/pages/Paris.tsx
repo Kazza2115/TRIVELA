@@ -615,24 +615,24 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
           lisibles, dégradés vers un centre noir) — seulement quand le match est en direct */}
       {live && !isTBD && (
         <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: -1, pointerEvents: 'none', overflow: 'hidden' }}>
-          <img src={`https://flagcdn.com/w160/${match.home.code}.png`} alt="" style={{
+          <img src={`https://flagcdn.com/${match.home.code}.svg`} alt="" style={{
             position: 'absolute', left: 0, top: 0, height: '100%', width: '46%', objectFit: 'cover',
-            opacity: 0.2, filter: 'saturate(0.8)',
+            opacity: 0.42, filter: 'saturate(0.8)',
             transform: 'skewX(-11deg) scale(1.05)', transformOrigin: 'left',
-            WebkitMaskImage: 'linear-gradient(to right, #000 0%, transparent 78%)',
-            maskImage: 'linear-gradient(to right, #000 0%, transparent 78%)',
+            WebkitMaskImage: 'linear-gradient(to right, #000 0%, #000 6%, transparent 55%)',
+            maskImage: 'linear-gradient(to right, #000 0%, #000 6%, transparent 55%)',
           }} />
-          <img src={`https://flagcdn.com/w160/${match.away.code}.png`} alt="" style={{
+          <img src={`https://flagcdn.com/${match.away.code}.svg`} alt="" style={{
             position: 'absolute', right: 0, top: 0, height: '100%', width: '46%', objectFit: 'cover',
-            opacity: 0.2, filter: 'saturate(0.8)',
+            opacity: 0.42, filter: 'saturate(0.8)',
             transform: 'skewX(-11deg) scale(1.05)', transformOrigin: 'right',
-            WebkitMaskImage: 'linear-gradient(to left, #000 0%, transparent 78%)',
-            maskImage: 'linear-gradient(to left, #000 0%, transparent 78%)',
+            WebkitMaskImage: 'linear-gradient(to left, #000 0%, #000 6%, transparent 55%)',
+            maskImage: 'linear-gradient(to left, #000 0%, #000 6%, transparent 55%)',
           }} />
           {/* Centre noir entre les deux drapeaux */}
           <div style={{
             position: 'absolute', inset: 0,
-            background: 'linear-gradient(90deg, transparent 22%, rgba(0,0,0,0.6) 50%, transparent 78%)',
+            background: 'linear-gradient(90deg, transparent 28%, rgba(0,0,0,0.6) 50%, transparent 72%)',
           }} />
         </div>
       )}
