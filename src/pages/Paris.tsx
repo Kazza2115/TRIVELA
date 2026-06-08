@@ -590,7 +590,7 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
   const finished   = !!result
   const reallyLive = !!liveData && INPLAY.has(liveData.status)
   const live       = reallyLive || (!finished && isMatchLive(match, nowTs))
-  const showCol    = finished || reallyLive || confirmed
+  const showCol    = finished || live || confirmed
   // Flamme uniquement en direct, sur l'équipe qui vient de marquer (jamais sur un match terminé)
   const homeFlame  = reallyLive && goalSide === 'home'
   const awayFlame  = reallyLive && goalSide === 'away'
@@ -698,22 +698,22 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
             {/* Score — grand et centré (final, en direct, ou en attente) */}
             <div style={{
               fontFamily: "'Bebas Neue', cursive", fontSize: 30, letterSpacing: 2, lineHeight: 1,
-              color: reallyLive ? '#dc2626' : finished ? 'var(--text-1)' : 'var(--text-3)',
-              animation: (result || reallyLive) ? 'fadeIn 0.3s ease' : 'none',
+              color: live ? '#dc2626' : finished ? 'var(--text-1)' : 'var(--text-3)',
+              animation: (result || live) ? 'fadeIn 0.3s ease' : 'none',
             }}>
-              {finished ? result!.homeScore : reallyLive ? liveData!.homeScore : '–'}
+              {finished ? result!.homeScore : live ? (liveData?.homeScore ?? 0) : '–'}
               <span style={{ color: 'var(--text-3)', margin: '0 4px' }}>:</span>
-              {finished ? result!.awayScore : reallyLive ? liveData!.awayScore : '–'}
+              {finished ? result!.awayScore : live ? (liveData?.awayScore ?? 0) : '–'}
             </div>
             {/* Minute / EN DIRECT */}
-            {reallyLive && (
+            {live && !finished && (
               <div style={{
                 marginTop: 4, fontSize: 9, fontWeight: 800, letterSpacing: 0.5, color: '#dc2626',
                 display: 'flex', alignItems: 'center', gap: 4,
               }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#dc2626',
                   animation: 'liveDot 1s ease-in-out infinite' }} />
-                {liveData!.elapsed != null ? `${liveData!.elapsed}'` : 'EN DIRECT'}
+                {liveData?.elapsed != null ? `${liveData.elapsed}'` : 'EN DIRECT'}
               </div>
             )}
             {/* Prono — petit, décalé sous le score */}
@@ -727,7 +727,7 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
                 <span style={{ color: 'var(--text-2)' }}>{pred.away}</span>
               </div>
             )}
-            {confirmed && !result && !reallyLive && (
+            {confirmed && !result && !live && (
               <div style={{ marginTop: 2, fontSize: 8, color: 'var(--text-3)', opacity: 0.7, letterSpacing: 0.3 }}>
                 en attente du résultat
               </div>
