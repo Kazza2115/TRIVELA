@@ -1,10 +1,14 @@
 // Récupère les actualités "Coupe du Monde 2026" (Google Actualités RSS) côté
 // serveur et les écrit dans la table Supabase `news`. Lancé par GitHub Actions.
-// Tolérant aux pannes : journalise et sort en succès (pas de run rouge) si le
-// flux est indisponible ou si la table n'existe pas encore.
+// Pour chaque article on résout l'Open Graph (og:image + og:description) afin
+// d'afficher une vraie image et un vrai résumé (et jamais le fouillis du flux).
+// Tolérant aux pannes : journalise et sort en succès (pas de run rouge).
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+const MAX_ARTICLES = 20
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36'
 
 const QUERY = 'Coupe du Monde 2026 OR Mondial 2026 football'
 const RSS = `https://news.google.com/rss/search?q=${encodeURIComponent(QUERY)}&hl=fr&gl=FR&ceid=FR:fr`
@@ -19,6 +23,10 @@ const tag = (b, n) => {
   return m ? m[1].replace(/<!\[CDATA\[/g, '').replace(/\]\]>/g, '').trim() : ''
 }
 const stripHtml = s => s.replace(/<[^>]+>/g, ' ').replace(/&[^;]+;/g, ' ').replace(/\s+/g, ' ').trim()
+const decode = s => (s || '')
+  .replace(/&amp;/g, '&').replace(/&#0?39;/g, "'").replace(/&#x27;/gi, "'")
+  .replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
+  .replace(/\s+/g, ' ').trim()
 
 function meta(text) {
   const t = text.toLowerCase()
@@ -29,30 +37,77 @@ function meta(text) {
   return ['⚽', 'Mondial 2026', '#C89B3C']
 }
 
+// Extrait une balise <meta property|name="X" content="Y"> (ordre des attributs indifférent)
+function metaContent(html, key) {
+  const re1 = new RegExp(`<meta[^>]+(?:property|name)=["']${key}["'][^>]*content=["']([^"']+)["']`, 'i')
+  const re2 = new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']${key}["']`, 'i')
+  const m = html.match(re1) || html.match(re2)
+  return m ? decode(m[1]) : ''
+}
+
+async function getHtml(url) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 6000)
+  try {
+    const res = await fetch(url, { redirect: 'follow', signal: ctrl.signal, headers: { 'User-Agent': UA } })
+    const html = await res.text()
+    return { html, finalUrl: res.url }
+  } finally { clearTimeout(timer) }
+}
+
+// Résout l'image + le résumé d'un article (lien Google Actualités → éditeur).
+async function resolveOg(link) {
+  try {
+    let { html, finalUrl } = await getHtml(link)
+    let img  = metaContent(html, 'og:image') || metaContent(html, 'twitter:image')
+    let desc = metaContent(html, 'og:description') || metaContent(html, 'description')
+
+    // Toujours sur Google (page intermédiaire) → on extrait l'URL réelle et on refait un saut.
+    if (!img && /news\.google\.com|consent\.google/.test(finalUrl)) {
+      const real = html.match(/https?:\/\/(?!(?:news\.google|google|gstatic|googleusercontent|policies\.google|accounts\.google)\.com)[^\s"'<>]+/i)
+      if (real) {
+        const r2 = await getHtml(real[0])
+        img  = metaContent(r2.html, 'og:image') || metaContent(r2.html, 'twitter:image')
+        desc = desc || metaContent(r2.html, 'og:description') || metaContent(r2.html, 'description')
+      }
+    }
+    return { img: img || null, desc: desc || '' }
+  } catch {
+    return { img: null, desc: '' }
+  }
+}
+
+async function mapLimit(items, limit, fn) {
+  let i = 0
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) { const idx = i++; await fn(items[idx]) }
+  })
+  await Promise.all(workers)
+}
+
 async function main() {
   if (!SERVICE) { console.error('⚠️  SUPABASE_SERVICE_ROLE_KEY absent — arrêt.'); return }
 
   let xml = ''
   try {
-    const res = await fetch(RSS, { headers: { 'User-Agent': 'Mozilla/5.0 (TRIVELA news bot)' } })
+    const res = await fetch(RSS, { headers: { 'User-Agent': UA } })
     if (!res.ok) { console.warn(`⚠️  Flux RSS indisponible (HTTP ${res.status}).`); return }
     xml = await res.text()
   } catch (e) {
     console.warn('⚠️  Flux RSS injoignable :', String(e)); return
   }
 
-  const rows = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 40).map(m => {
+  const rows = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, MAX_ARTICLES).map(m => {
     const b = m[1]
     const rawTitle = tag(b, 'title'); const link = tag(b, 'link'); const source = tag(b, 'source')
-    const pub = tag(b, 'pubDate'); const desc = tag(b, 'description')
+    const pub = tag(b, 'pubDate')
     const title = source && rawTitle.endsWith(` - ${source}`)
       ? rawTitle.slice(0, -(` - ${source}`).length)
       : rawTitle.replace(/\s+-\s+[^-]+$/, '')
-    const excerpt = stripHtml(desc).slice(0, 220)
-    const [flag, category, color] = meta(`${title} ${excerpt}`)
+    const [flag, category, color] = meta(title)
     return {
-      id: link, title: title.trim(), excerpt: excerpt || title.trim(), url: link,
-      source: source || 'Google Actualités', category, category_color: color, flag,
+      id: link, title: title.trim(), excerpt: '', url: link, image: null,
+      source: source || 'Actualités', category, category_color: color, flag,
       published_at: pub ? new Date(pub).toISOString() : new Date().toISOString(),
     }
   }).filter(r => r.id && r.title)
@@ -60,25 +115,46 @@ async function main() {
   console.log(`Articles récupérés : ${rows.length}`)
   if (rows.length === 0) { console.warn('⚠️  Aucun article (flux vide).'); return }
 
-  const up = await sb('news?on_conflict=id', {
-    method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify(rows),
+  // Enrichissement Open Graph (image + résumé propre), en parallèle limité.
+  let withImg = 0, withDesc = 0
+  await mapLimit(rows, 5, async r => {
+    const { img, desc } = await resolveOg(r.id)
+    if (img)  { r.image = img; withImg++ }
+    if (desc) { r.excerpt = desc.slice(0, 200); withDesc++ }
   })
-  console.log('Upsert news :', up.status)
+  console.log(`Open Graph → images : ${withImg}/${rows.length} · résumés : ${withDesc}/${rows.length}`)
+
+  const upsert = body => sb('news?on_conflict=id', {
+    method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(body),
+  })
+
+  let up = await upsert(rows)
   if (!up.ok) {
     const detail = await up.text().catch(() => '')
     if (detail.includes('PGRST205')) {
-      console.warn('⚠️  La table `news` n\'existe pas encore — exécute db-news.sql dans Supabase. (Pas d\'échec : on réessaiera au prochain passage.)')
-    } else {
-      console.warn('⚠️  Échec de l\'upsert :', detail)
+      console.warn('⚠️  Table `news` absente — exécute db-news.sql dans Supabase.'); return
     }
-    return
+    if (/image/i.test(detail) && /(column|find)/i.test(detail)) {
+      // La colonne `image` n'existe pas encore → on écrit sans elle.
+      console.warn('⚠️  Colonne `image` absente — écriture sans image. Ajoute : alter table news add column if not exists image text;')
+      const slim = rows.map(({ image, ...r }) => r)
+      up = await upsert(slim)
+    }
   }
+  console.log('Upsert news :', up.status)
+  if (!up.ok) { console.warn('⚠️  Échec de l\'upsert :', await up.text().catch(() => '')); return }
 
-  // Purge des articles de plus de 21 jours
-  const cutoff = new Date(Date.now() - 21 * 864e5).toISOString()
-  const del = await sb(`news?published_at=lt.${cutoff}`, { method: 'DELETE' })
-  console.log('Purge anciens :', del.status)
+  // Ne garder que les 20 plus récents : purge propre via un seuil de date
+  // (le 21e article le plus récent) — pas d'échappement d'URL hasardeux.
+  const cut = await sb(`news?select=published_at&order=published_at.desc&offset=${MAX_ARTICLES}&limit=1`)
+  if (cut.ok) {
+    const arr = await cut.json()
+    if (arr.length && arr[0].published_at) {
+      const del = await sb(`news?published_at=lt.${encodeURIComponent(arr[0].published_at)}`, { method: 'DELETE' })
+      console.log('Purge (garde 20) :', del.status)
+    }
+  }
   console.log('✅ Terminé')
 }
 

@@ -34,11 +34,6 @@ const PROXIES = [
 
 interface RawItem { title: string; link: string; source: string; pubDate: string; description: string }
 
-function stripHtml(s: string): string {
-  const d = new DOMParser().parseFromString(s, 'text/html')
-  return (d.body.textContent ?? '').replace(/\s+/g, ' ').trim()
-}
-
 function pickMeta(text: string): { flag: string; category: string; color: string } {
   const t = text.toLowerCase()
   if (/\bbleus?\b|france|deschamps|mbapp/.test(t)) return { flag: '🇫🇷', category: 'Équipe de France', color: '#3b82f6' }
@@ -53,12 +48,11 @@ function mapItems(items: RawItem[]): Article[] {
     const title = it.source && it.title.endsWith(` - ${it.source}`)
       ? it.title.slice(0, -(` - ${it.source}`).length)
       : it.title.replace(/\s+-\s+[^-]+$/, '')
-    const excerpt = stripHtml(it.description).slice(0, 180)
     const publishedAt = it.pubDate ? Date.parse(it.pubDate) : Date.now()
-    const meta = pickMeta(`${title} ${excerpt}`)
+    const meta = pickMeta(title)
     return {
-      id: it.link || String(i), title: title.trim(), excerpt: excerpt || title.trim(),
-      url: it.link, source: it.source || 'Google Actualités', image: null,
+      id: it.link || String(i), title: title.trim(), excerpt: '',
+      url: it.link, source: it.source || 'Actualités', image: null,
       category: meta.category, categoryColor: meta.color, flag: meta.flag,
       isNew: Date.now() - publishedAt < 24 * 3600 * 1000, publishedAt,
     }
@@ -67,7 +61,7 @@ function mapItems(items: RawItem[]): Article[] {
 
 function parseRss(xml: string): RawItem[] {
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
-  return Array.from(doc.querySelectorAll('item')).slice(0, 25).map(it => ({
+  return Array.from(doc.querySelectorAll('item')).slice(0, 20).map(it => ({
     title: it.querySelector('title')?.textContent ?? '',
     link: it.querySelector('link')?.textContent ?? '',
     source: it.querySelector('source')?.textContent ?? '',
@@ -78,7 +72,7 @@ function parseRss(xml: string): RawItem[] {
 
 // 1) Table Supabase `news` (alimentée par GitHub Actions — fiable, sans CORS)
 async function fromTable(): Promise<Article[]> {
-  const res = await fetch(`${SUPA_URL}/rest/v1/news?select=*&order=published_at.desc&limit=40`, {
+  const res = await fetch(`${SUPA_URL}/rest/v1/news?select=*&order=published_at.desc&limit=20`, {
     headers: { apikey: SUPA_ANON, Authorization: `Bearer ${SUPA_ANON}` }, cache: 'no-store',
   })
   if (!res.ok) throw new Error('table')
@@ -87,10 +81,10 @@ async function fromTable(): Promise<Article[]> {
   return rows.map((r: any, i: number): Article => ({
     id: (r.id as string) || String(i),
     title: r.title as string,
-    excerpt: (r.excerpt as string) || (r.title as string),
+    excerpt: (r.excerpt as string) || '',
     url: r.url as string,
     source: (r.source as string) || 'Actualités',
-    image: null,
+    image: (r.image as string) || null,
     category: (r.category as string) || 'Mondial 2026',
     categoryColor: (r.category_color as string) || '#C89B3C',
     flag: (r.flag as string) || '⚽',
@@ -244,7 +238,7 @@ function ArticleCard({ article: a }: { article: Article }) {
     >
       {/* Image / banner */}
       <div style={{
-        height: 110, overflow: 'hidden', position: 'relative',
+        height: 150, overflow: 'hidden', position: 'relative',
         background: `linear-gradient(135deg, ${a.categoryColor}22, ${a.categoryColor}44)`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
@@ -296,9 +290,11 @@ function ArticleCard({ article: a }: { article: Article }) {
           {a.title}
         </div>
 
-        <p style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.55, marginBottom: 10 }}>
-          {a.excerpt}
-        </p>
+        {a.excerpt && (
+          <p style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.55, marginBottom: 10 }}>
+            {a.excerpt}
+          </p>
+        )}
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 600 }}>
