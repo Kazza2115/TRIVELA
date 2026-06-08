@@ -121,7 +121,7 @@ export default function App() {
   const navigateTo   = (s: string) => { setViewedPlayer(null); setSection(s as SectionId); setActiveNav(s as SectionId) }
   const navigateMenu = (s: SectionId) => {
     if (s === 'chat') { openChat(); return }   // chat = panneau sur l'accueil, pas une page
-    setViewedPlayer(null); setSection(s)
+    setViewedPlayer(null); setSection(s); setActiveNav(s)
   }
   const openProfileFromChat = async (userId: string) => {
     const board = await getLeaderboard()
