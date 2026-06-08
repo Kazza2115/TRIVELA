@@ -138,6 +138,16 @@ Object.entries(FLAG_CODE).forEach(([id, code]) => { CODE_TO_ID[code] = parseInt(
 CODE_TO_ID['gb-eng'] = 826; CODE_TO_ID['gb-sct'] = 826
 CODE_TO_ID['gb-nir'] = 826; CODE_TO_ID['gb-wls'] = 826
 
+// Position précise [lon, lat] pour les sélections sans pays propre dans le
+// world-atlas (le RU est une seule forme → centroïde en Angleterre). On force
+// donc le drapeau sur le bon territoire.
+const TEAM_LL: Record<string, [number, number]> = {
+  'gb-nir': [-6.7, 54.7],   // Irlande du Nord
+  'gb-sct': [-4.2, 56.8],   // Écosse
+  'gb-wls': [-3.8, 52.3],   // Pays de Galles
+  'gb-eng': [-1.3, 52.6],   // Angleterre
+}
+
 interface MatchFlag {
   code: string         // code drapeau flagcdn (ex. 'fr', 'gb-nir')
   color: string        // couleur nationale (contour)
@@ -642,8 +652,10 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
         const byCountry = new Map<number, Match>()
         todaysMatches().forEach(m => {
           const hId = CODE_TO_ID[m.home.code], aId = CODE_TO_ID[m.away.code]
-          if (hId == null || aId == null || hId === aId) return
-          const hc = centroidOf(hId), ac = centroidOf(aId)
+          if (hId == null || aId == null) return
+          // Position du drapeau : coordonnée forcée (nations UK) sinon centroïde du pays
+          const hc = TEAM_LL[m.home.code] ?? centroidOf(hId)
+          const ac = TEAM_LL[m.away.code] ?? centroidOf(aId)
           if (!hc || !ac) return
           arcs.push({
             match: m,
