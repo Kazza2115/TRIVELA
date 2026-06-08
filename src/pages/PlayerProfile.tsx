@@ -43,9 +43,10 @@ interface PlayerProfileProps {
   rank: number | null
   currentUser: UserProfile | null
   onBack: () => void
+  onEditProfile?: () => void
 }
 
-export default function PlayerProfile({ player, rank, currentUser, onBack }: PlayerProfileProps) {
+export default function PlayerProfile({ player, rank, currentUser, onBack, onEditProfile }: PlayerProfileProps) {
   const [bets,     setBets]     = useState<PublicBet[]>([])
   const [myBets,   setMyBets]   = useState<PublicBet[]>([])
   const [results,  setResults]  = useState<Map<string, MatchResult>>(new Map())
@@ -166,6 +167,20 @@ export default function PlayerProfile({ player, rank, currentUser, onBack }: Pla
       title={player.pseudo}
       subtitle={`${rank ? `#${rank} · ` : ''}${player.score.toLocaleString()} pts · ${player.countryName}`}>
 
+      {/* Contenu centré au milieu, quelle que soit la largeur d'écran */}
+      <div style={{ maxWidth: 600, margin: '0 auto', width: '100%' }}>
+
+      {/* ── Modifier mon profil (soi-même) ── */}
+      {isSelf && onEditProfile && (
+        <button onClick={onEditProfile} style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          width: '100%', marginBottom: 14, padding: '11px 14px', borderRadius: 12,
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
+          color: 'var(--text-1)', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+          boxShadow: 'var(--shadow-sm)',
+        }}>⚙️ Modifier mon profil</button>
+      )}
+
       {/* ── Barre admin (visible par les admins, sur les autres joueurs) ── */}
       {currentUser?.isAdmin && !isSelf && (
         <div style={{
@@ -284,6 +299,8 @@ export default function PlayerProfile({ player, rank, currentUser, onBack }: Pla
           })}
         </div>
       )}
+
+      </div>
     </PageLayout>
   )
 }

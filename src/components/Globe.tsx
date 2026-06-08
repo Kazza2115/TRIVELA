@@ -297,6 +297,7 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
   useEffect(() => {
     if (isActive === false) {
       handleClose()
+      setMatchCard(null)
       if (projRef.current && baseRRef.current > 0) {
         projRef.current.scale(baseRRef.current)
       }

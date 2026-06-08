@@ -132,6 +132,15 @@ export default function App() {
     setSection('classement'); setActiveNav('classement')
   }
 
+  // Mon avatar (en haut) → la MÊME page de profil que les autres joueurs.
+  const openOwnProfile = async () => {
+    if (!currentUser) return
+    const board = await getLeaderboard()
+    const idx = board.findIndex(p => p.id === currentUser.id)
+    setViewedPlayer({ player: idx >= 0 ? board[idx] : currentUser, rank: idx >= 0 ? idx + 1 : 0 })
+    setSection('classement'); setActiveNav('classement')
+  }
+
   const gold   = '#C89B3C'
   const dimCol = '#AEAEB2'
 
@@ -235,7 +244,7 @@ export default function App() {
 
           {/* User / login */}
           {currentUser ? (
-            <button onClick={() => setShowProfile(true)} style={{
+            <button onClick={openOwnProfile} style={{
               display: 'flex', alignItems: 'center', gap: 7,
               background: 'none', border: '1px solid var(--border)',
               borderRadius: 20, padding: '5px 10px 5px 6px',
@@ -299,7 +308,8 @@ export default function App() {
           viewedPlayer
             ? <PlayerProfile
                 player={viewedPlayer.player} rank={viewedPlayer.rank}
-                currentUser={currentUser} onBack={() => setViewedPlayer(null)} />
+                currentUser={currentUser} onBack={() => setViewedPlayer(null)}
+                onEditProfile={() => setShowProfile(true)} />
             : <Classement
                 onBack={back} currentUser={currentUser} onOpenAuth={openAuth}
                 onSelectPlayer={(player, rank) => setViewedPlayer({ player, rank })} />
@@ -434,7 +444,10 @@ export default function App() {
           currentUser={currentUser}
           onClose={() => setShowProfile(false)}
           onLogout={handleLogout}
-          onUpdated={setCurrentUser}
+          onUpdated={(u) => {
+            setCurrentUser(u)
+            setViewedPlayer(vp => vp && vp.player.id === u.id ? { ...vp, player: u } : vp)
+          }}
         />
       )}
     </div>
