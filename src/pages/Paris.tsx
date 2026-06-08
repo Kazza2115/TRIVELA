@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import PageLayout from './PageLayout'
-import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS, teamColor } from '../data/wc2026Matches'
+import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
 import { saveBet, saveFavorites, getBets, subscribeToResults, getLive, subscribeToLive, getMatchGoals, subscribeToMatchGoals } from '../services/auth'
 import type { UserProfile, MatchResult, LiveScore, Scorer } from '../services/auth'
@@ -595,15 +595,11 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
   const homeFlame  = reallyLive && goalSide === 'home'
   const awayFlame  = reallyLive && goalSide === 'away'
   const entry      = `fadeSlideUp .3s cubic-bezier(0.4,0,0.2,1) ${delay}ms both`
-  // Dégradé sobre aux couleurs des deux pays (touche finale)
-  const hc = teamColor(match.home), ac = teamColor(match.away)
-  const teamGrad = isTBD ? 'none' : `linear-gradient(100deg, ${hc}22 0%, transparent 30%, transparent 70%, ${ac}22 100%)`
 
   return (
     <div id={domId} style={{
-      borderRadius: 16, overflow: 'hidden',
-      backgroundColor: finished ? 'var(--bg-fill)' : 'var(--bg-card)',
-      backgroundImage: teamGrad,
+      borderRadius: 16, overflow: 'hidden', position: 'relative',
+      background: finished ? 'var(--bg-fill)' : 'var(--bg-card)',
       border: live ? '1px solid rgba(220,38,38,0.6)'
         : confirmed && !finished ? '1px solid rgba(200,155,60,0.5)'
         : '1px solid var(--border)',
@@ -615,6 +611,22 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
       opacity: finished ? 0.6 : locked ? 0.8 : 1,
       filter: finished ? 'grayscale(0.55)' : 'none',
     }}>
+      {/* Drapeaux des deux pays en fond — uniquement quand le match est en direct */}
+      {live && !isTBD && (
+        <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: -1, pointerEvents: 'none', overflow: 'hidden' }}>
+          <img src={`https://flagcdn.com/w320/${match.home.code}.png`} alt="" style={{
+            position: 'absolute', left: 0, top: 0, height: '100%', width: '60%', objectFit: 'cover', opacity: 0.22,
+            WebkitMaskImage: 'linear-gradient(to right, #000 0%, #000 18%, transparent 92%)',
+            maskImage: 'linear-gradient(to right, #000 0%, #000 18%, transparent 92%)',
+          }} />
+          <img src={`https://flagcdn.com/w320/${match.away.code}.png`} alt="" style={{
+            position: 'absolute', right: 0, top: 0, height: '100%', width: '60%', objectFit: 'cover', opacity: 0.22,
+            WebkitMaskImage: 'linear-gradient(to left, #000 0%, #000 18%, transparent 92%)',
+            maskImage: 'linear-gradient(to left, #000 0%, #000 18%, transparent 92%)',
+          }} />
+        </div>
+      )}
+
       {confirmed && !locked && (
         <div style={{ height: 3, background: 'linear-gradient(90deg,transparent,#C89B3C 20%,#E8D080 50%,#C89B3C 80%,transparent)' }} />
       )}
