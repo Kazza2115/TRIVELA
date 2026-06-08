@@ -620,7 +620,7 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
 
   const nowTs      = now ?? Date.now()
   const finished   = !!result
-  const reallyLive = !!liveData && INPLAY.has(liveData.status)
+  const reallyLive = !finished && !!liveData && INPLAY.has(liveData.status)
   const live       = reallyLive || (!finished && isMatchLive(match, nowTs))
   const showCol    = finished || live || confirmed
   // Flamme uniquement en direct, sur l'équipe qui vient de marquer (jamais sur un match terminé)
