@@ -22,7 +22,12 @@ const TEST_INPLAY = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', '
 async function trackFriendly(rows, goalJobs) {
   try {
     const d = await api('/fixtures?team=2&date=2026-06-08')
-    const f = (d.response || [])[0]
+    const list = d.response || []
+    console.log('amical(team=2,2026-06-08):', JSON.stringify(list.map(f => ({
+      id: f.fixture?.id, st: f.fixture?.status?.short,
+      h: f.teams?.home?.name, a: f.teams?.away?.name, g: `${f.goals?.home}-${f.goals?.away}`,
+    }))))
+    const f = list[0]
     const st = f?.fixture?.status?.short
     if (!f || !TEST_INPLAY.has(st)) return   // pas en jeu → réglé par le job résultats si terminé
     rows.push({
