@@ -1189,7 +1189,7 @@ function BracketCell({ match, data, expanded, alwaysBet, onSelect }: {
   const fireAway = isLive && flashSide === 'away'
   const confirmed = data.confirmed.has(id)
   const pred = data.predictions[id]
-  const showBet = (expanded || alwaysBet) && !result && !isLive
+  const showBet = !!alwaysBet && !result && !isLive
   const pts = result && confirmed && pred ? calcPoints(result, pred) : null
   return (
     <div onClick={() => onSelect(id)} style={{
@@ -1223,26 +1223,61 @@ function BracketCell({ match, data, expanded, alwaysBet, onSelect }: {
   )
 }
 
-function BracketCol({ ids, label, width, data, selectedId, onSelect }: {
-  ids: string[]; label: string; width: number; data: KOData
-  selectedId: string; onSelect: (id: string) => void
+// ─── Lignes de branche du tournoi (géométrie en %) ─────────────────────────
+const KO_LINE = 'var(--text-3)'
+
+function connLines(pairs: number, side: 'left' | 'right') {
+  // pairs === 0 → simple trait horizontal (demie → finale)
+  if (pairs === 0) {
+    return [
+      <div key="s" style={{ position: 'absolute', top: '50%', left: 0, width: '100%', height: 0, borderTop: `2px solid ${KO_LINE}` }} />,
+    ]
+  }
+  const N = pairs
+  const stubLeft = side === 'left' ? '0' : '50%'
+  const outLeft  = side === 'left' ? '50%' : '0'
+  const out: React.ReactNode[] = []
+  for (let i = 0; i < N; i++) {
+    const topC = ((4 * i + 1) / (4 * N)) * 100
+    const botC = ((4 * i + 3) / (4 * N)) * 100
+    const midC = ((4 * i + 2) / (4 * N)) * 100
+    out.push(<div key={`t${i}`} style={{ position: 'absolute', top: `${topC}%`, left: stubLeft, width: '50%', height: 0, borderTop: `2px solid ${KO_LINE}` }} />)
+    out.push(<div key={`b${i}`} style={{ position: 'absolute', top: `${botC}%`, left: stubLeft, width: '50%', height: 0, borderTop: `2px solid ${KO_LINE}` }} />)
+    out.push(<div key={`v${i}`} style={{ position: 'absolute', top: `${topC}%`, left: '50%', width: 0, height: `${botC - topC}%`, borderLeft: `2px solid ${KO_LINE}` }} />)
+    out.push(<div key={`o${i}`} style={{ position: 'absolute', top: `${midC}%`, left: outLeft, width: '50%', height: 0, borderTop: `2px solid ${KO_LINE}` }} />)
+  }
+  return out
+}
+
+const KO_HEAD_H = 22
+
+function ConnectorColumn({ pairs, side, width }: { pairs: number; side: 'left' | 'right'; width: number }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', width, minWidth: width, height: '100%' }}>
+      <div style={{ height: KO_HEAD_H }} />
+      <div style={{ flex: 1, position: 'relative' }}>{connLines(pairs, side)}</div>
+    </div>
+  )
+}
+
+function RoundColumn({ label, ids, width, data, selected, onSelect }: {
+  label: string; ids: string[]; width: number; data: KOData
+  selected: string; onSelect: (id: string) => void
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minWidth: width, width }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width, minWidth: width, height: '100%' }}>
       <div style={{
-        fontSize: 9, fontWeight: 700, color: 'var(--text-3)', textAlign: 'center',
-        letterSpacing: 0.5, marginBottom: 6, textTransform: 'uppercase',
+        height: KO_HEAD_H, fontSize: 9, fontWeight: 700, color: 'var(--text-3)',
+        textAlign: 'center', letterSpacing: 0.5, textTransform: 'uppercase',
       }}>{label}</div>
-      <div style={{
-        flex: 1, display: 'flex', flexDirection: 'column',
-        justifyContent: 'space-around', gap: 8,
-      }}>
+      <div style={{ flex: 1, display: 'grid', gridTemplateRows: `repeat(${ids.length}, 1fr)` }}>
         {ids.map(id => {
           const m = KNOCKOUT_MATCHES.find(x => x.id === id)
           if (!m) return null
           return (
-            <BracketCell key={id} match={m} data={data}
-              expanded={selectedId === id} onSelect={onSelect} />
+            <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 2px' }}>
+              <BracketCell match={m} data={data} expanded={selected === id} onSelect={onSelect} />
+            </div>
           )
         })}
       </div>
@@ -1250,58 +1285,87 @@ function BracketCol({ ids, label, width, data, selectedId, onSelect }: {
   )
 }
 
-// ─── Vue desktop : double tableau de tournoi ───────────────────────────────
+// ─── Vue desktop : vraie branche de tournoi (double tableau + lignes) ───────
 function DesktopBracket({ data }: { data: KOData }) {
   const [selected, setSelected] = useState<string>('final')
-  const onSelect = (id: string) => setSelected(cur => (cur === id ? '' : id))
-  const W = 124
-  const colProps = { data, selectedId: selected, onSelect }
+  const onSelect = (id: string) => setSelected(id)
+  const W = 118   // largeur d'une colonne de matchs
+  const CW = 22   // largeur d'une colonne de connecteurs
+  const BR_H = 588
   const finalMatch = KNOCKOUT_MATCHES.find(m => m.id === 'final')!
   const thirdMatch = KNOCKOUT_MATCHES.find(m => m.id === '3rd')!
+  const sel = KNOCKOUT_MATCHES.find(m => m.id === selected)
+  const colP = { data, selected, onSelect }
+  const minW = 8 * W + 8 * CW + W + 16
   return (
-    <div style={{ overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 8, marginBottom: 4 }}>
-      <div style={{ display: 'flex', gap: 8, minWidth: 9 * W + 8 * 8 + 16, alignItems: 'stretch' }}>
-        {/* ── Côté gauche ── */}
-        <BracketCol {...colProps} width={W} label="32es"
-          ids={['r32-1', 'r32-2', 'r32-3', 'r32-4', 'r32-5', 'r32-6', 'r32-7', 'r32-8']} />
-        <BracketCol {...colProps} width={W} label="8es"
-          ids={['r16-1', 'r16-2', 'r16-3', 'r16-4']} />
-        <BracketCol {...colProps} width={W} label="Quarts"
-          ids={['qf-1', 'qf-2']} />
-        <BracketCol {...colProps} width={W} label="Demies"
-          ids={['sf-1']} />
+    <>
+      <div style={{ overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 0, minWidth: minW, height: BR_H, alignItems: 'stretch' }}>
+          {/* ── Côté gauche ── */}
+          <RoundColumn {...colP} width={W} label="32es" ids={['r32-1', 'r32-2', 'r32-3', 'r32-4', 'r32-5', 'r32-6', 'r32-7', 'r32-8']} />
+          <ConnectorColumn pairs={4} side="left" width={CW} />
+          <RoundColumn {...colP} width={W} label="8es" ids={['r16-1', 'r16-2', 'r16-3', 'r16-4']} />
+          <ConnectorColumn pairs={2} side="left" width={CW} />
+          <RoundColumn {...colP} width={W} label="Quarts" ids={['qf-1', 'qf-2']} />
+          <ConnectorColumn pairs={1} side="left" width={CW} />
+          <RoundColumn {...colP} width={W} label="Demies" ids={['sf-1']} />
+          <ConnectorColumn pairs={0} side="left" width={CW} />
 
-        {/* ── Centre : finale + 3e place ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: W, width: W }}>
-          <div style={{
-            fontSize: 9, fontWeight: 800, color: '#A07828', textAlign: 'center',
-            letterSpacing: 0.6, marginBottom: 6, textTransform: 'uppercase',
-          }}>Finale</div>
-          <div style={{
-            flex: 1, display: 'flex', flexDirection: 'column',
-            justifyContent: 'center', alignItems: 'stretch', gap: 6,
-          }}>
-            <div style={{ textAlign: 'center', fontSize: 26, lineHeight: 1 }}>🏆</div>
-            <BracketCell match={finalMatch} data={data} expanded={selected === 'final'} onSelect={onSelect} />
+          {/* ── Centre : finale + 3e place ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', width: W, minWidth: W, height: '100%' }}>
             <div style={{
-              fontSize: 8, fontWeight: 700, color: 'var(--text-3)', textAlign: 'center',
-              letterSpacing: 0.5, marginTop: 14, textTransform: 'uppercase',
-            }}>3e place</div>
-            <BracketCell match={thirdMatch} data={data} expanded={selected === '3rd'} onSelect={onSelect} />
+              height: KO_HEAD_H, fontSize: 9, fontWeight: 800, color: '#A07828',
+              textAlign: 'center', letterSpacing: 0.6, textTransform: 'uppercase',
+            }}>🏆 Finale</div>
+            <div style={{ flex: 1, position: 'relative' }}>
+              <div style={{ position: 'absolute', top: '50%', left: 0, right: 0, transform: 'translateY(-50%)' }}>
+                <BracketCell match={finalMatch} data={data} expanded={selected === 'final'} onSelect={onSelect} />
+              </div>
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0 }}>
+                <div style={{
+                  fontSize: 8, fontWeight: 700, color: 'var(--text-3)', textAlign: 'center',
+                  letterSpacing: 0.5, marginBottom: 4, textTransform: 'uppercase',
+                }}>3e place</div>
+                <BracketCell match={thirdMatch} data={data} expanded={selected === '3rd'} onSelect={onSelect} />
+              </div>
+            </div>
           </div>
-        </div>
 
-        {/* ── Côté droit ── */}
-        <BracketCol {...colProps} width={W} label="Demies"
-          ids={['sf-2']} />
-        <BracketCol {...colProps} width={W} label="Quarts"
-          ids={['qf-3', 'qf-4']} />
-        <BracketCol {...colProps} width={W} label="8es"
-          ids={['r16-5', 'r16-6', 'r16-7', 'r16-8']} />
-        <BracketCol {...colProps} width={W} label="32es"
-          ids={['r32-9', 'r32-10', 'r32-11', 'r32-12', 'r32-13', 'r32-14', 'r32-15', 'r32-16']} />
+          {/* ── Côté droit ── */}
+          <ConnectorColumn pairs={0} side="right" width={CW} />
+          <RoundColumn {...colP} width={W} label="Demies" ids={['sf-2']} />
+          <ConnectorColumn pairs={1} side="right" width={CW} />
+          <RoundColumn {...colP} width={W} label="Quarts" ids={['qf-3', 'qf-4']} />
+          <ConnectorColumn pairs={2} side="right" width={CW} />
+          <RoundColumn {...colP} width={W} label="8es" ids={['r16-5', 'r16-6', 'r16-7', 'r16-8']} />
+          <ConnectorColumn pairs={4} side="right" width={CW} />
+          <RoundColumn {...colP} width={W} label="32es" ids={['r32-9', 'r32-10', 'r32-11', 'r32-12', 'r32-13', 'r32-14', 'r32-15', 'r32-16']} />
+        </div>
       </div>
-    </div>
+
+      {/* Pari sur le match sélectionné dans le tableau */}
+      {sel && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{
+            fontFamily: "'Bebas Neue', cursive", fontSize: 15, letterSpacing: 1.5,
+            color: '#A07828', marginBottom: 8,
+          }}>
+            {KO_LABELS[sel.round as string] ?? sel.group} — votre pronostic
+          </div>
+          <MatchCard match={sel} domId={`match-${sel.id}`}
+            prediction={data.predictions[sel.id]} confirmed={data.confirmed.has(sel.id)}
+            lockError={data.lockErrors[sel.id]}
+            result={data.results[sel.id]} now={data.now}
+            liveData={data.live[sel.id]} goalSide={data.goalFlash[sel.id]}
+            scorers={data.goals[sel.id]}
+            delay={0}
+            onIncrement={(s, d) => data.onIncrement(sel.id, s, d)}
+            onConfirm={() => data.onConfirm(sel.id)}
+            onEdit={() => data.onEdit(sel.id)}
+          />
+        </div>
+      )}
+    </>
   )
 }
 
@@ -1361,7 +1425,7 @@ function KnockoutView(data: KOData) {
         borderRadius: 12, fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6,
       }}>
         {wide
-          ? 'Cliquez sur un match du tableau pour parier directement.'
+          ? 'Cliquez sur un match du tableau pour pronostiquer juste en dessous.'
           : 'Choisissez un tour, puis pariez sur chaque match.'}{' '}
         Les drapeaux des qualifiés apparaissent après la phase de groupes.
       </div>
