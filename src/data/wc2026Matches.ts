@@ -351,6 +351,24 @@ export function matchKickoffUTC(m: Match): number | null {
   return Date.UTC(2026, mon, day, hh, mm, 0)
 }
 
+// ─── Couleur "nationale" (drapeau) par sélection ────────────────────────────
+const NATION_COLOR: Record<string, string> = {
+  FRA: '#0055A4', NIR: '#00843D', ENG: '#CE1124', SCO: '#0065BF', ESP: '#C60B1E',
+  BRA: '#009B3A', ARG: '#75AADB', GER: '#000000', DEU: '#111111', POR: '#DA291C',
+  NED: '#FF6A00', BEL: '#FDDA24', CRO: '#0093DD', ITA: '#0066B2', USA: '#3C3B6E',
+  MEX: '#006847', CAN: '#FF0000', JPN: '#BC002D', KOR: '#003478', AUS: '#FFCD00',
+  MAR: '#C1272D', SEN: '#00853F', CIV: '#FF8200', EGY: '#CE1126', RSA: '#007A4D',
+  ZAF: '#007A4D', NOR: '#BA0C2F', SWE: '#FECC00', SUI: '#FF0000', CHE: '#FF0000',
+  AUT: '#ED2939', TUR: '#E30A17', NZL: '#00247D', URU: '#7B9FD4', COL: '#FCD116',
+  ECU: '#FFD100', PAR: '#D52B1E', IRN: '#239F40', KSA: '#006C35', QAT: '#8A1538',
+  JOR: '#007A3D', IRQ: '#007A3B', UZB: '#1EB53A', PAN: '#005293', HAI: '#00209F',
+  CUW: '#002B7F', TUN: '#E70013', ALG: '#006233', DZA: '#006233', GHA: '#006B3F',
+  COD: '#007FFF', CPV: '#003893', CZE: '#11457E', BIH: '#002395',
+}
+export function teamColor(team: Team): string {
+  return NATION_COLOR[team.short] ?? '#C89B3C'
+}
+
 /** Matchs dont le coup d'envoi tombe aujourd'hui (calendrier Europe/Zurich). */
 export function todaysMatches(now: number = Date.now()): Match[] {
   const dayStr = (ms: number) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' })

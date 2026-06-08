@@ -12,6 +12,7 @@ import MenuDrawer   from './components/MenuDrawer'
 import TrivelaLogo  from './components/TrivelaLogo'
 import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages, getLive, subscribeToLive } from './services/auth'
 import type { UserProfile, PresenceUser } from './services/auth'
+import { ALL_MATCHES, matchKickoffUTC } from './data/wc2026Matches'
 import { playMentionSound } from './utils/sound'
 import {
   IconGlobe, IconTrophy, IconBolt,
@@ -65,11 +66,22 @@ export default function App() {
   const [parisFocus, setParisFocus] = useState<{ id: string; nonce: number } | null>(null)
 
   // Matchs en direct (pour le bouton flottant "EN DIRECT")
+  // = présents dans match_live OU dans leur créneau horaire (coup d'envoi → +135 min)
   useEffect(() => {
-    const load = async () => setLiveIds((await getLive()).map(l => l.matchId))
-    load()
-    const unsub = subscribeToLive(load)
-    return unsub
+    const compute = async () => {
+      const fromDb = (await getLive()).map(l => l.matchId)
+      const now = Date.now()
+      const timeLive = ALL_MATCHES.filter(m => {
+        if (m.home.code === 'un') return false
+        const k = matchKickoffUTC(m)
+        return k !== null && now >= k && now < k + 135 * 60 * 1000
+      }).map(m => m.id)
+      setLiveIds([...new Set([...fromDb, ...timeLive])])
+    }
+    compute()
+    const unsub = subscribeToLive(compute)
+    const iv = setInterval(compute, 30000)
+    return () => { unsub(); clearInterval(iv) }
   }, [])
 
   const goToLive = () => {
@@ -379,7 +391,8 @@ export default function App() {
         const isLive = liveIds.length > 0
         return (
           <button onClick={goToLive} title={isLive ? 'Voir le match en direct' : 'Aucun match en direct'} style={{
-            position: 'fixed', top: 'calc(var(--header-h) + var(--sat) + 8px)', right: 12, zIndex: 50,
+            position: 'fixed', top: 'calc(var(--header-h) + var(--sat) + 8px)',
+            left: '50%', transform: 'translateX(-50%)', zIndex: 50,
             display: 'flex', alignItems: 'center', gap: 6,
             padding: isLive ? '6px 12px' : '5px 10px', borderRadius: 999, cursor: 'pointer',
             background: isLive ? 'linear-gradient(135deg,#e11d48,#dc2626)' : 'var(--bg-card)',

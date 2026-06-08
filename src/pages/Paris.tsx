@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import PageLayout from './PageLayout'
-import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS } from '../data/wc2026Matches'
+import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS, teamColor } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
 import { saveBet, saveFavorites, getBets, subscribeToResults, getLive, subscribeToLive, getMatchGoals, subscribeToMatchGoals } from '../services/auth'
 import type { UserProfile, MatchResult, LiveScore, Scorer } from '../services/auth'
@@ -595,11 +595,15 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
   const homeFlame  = reallyLive && goalSide === 'home'
   const awayFlame  = reallyLive && goalSide === 'away'
   const entry      = `fadeSlideUp .3s cubic-bezier(0.4,0,0.2,1) ${delay}ms both`
+  // Dégradé sobre aux couleurs des deux pays (touche finale)
+  const hc = teamColor(match.home), ac = teamColor(match.away)
+  const teamGrad = isTBD ? 'none' : `linear-gradient(100deg, ${hc}22 0%, transparent 30%, transparent 70%, ${ac}22 100%)`
 
   return (
     <div id={domId} style={{
       borderRadius: 16, overflow: 'hidden',
-      background: finished ? 'var(--bg-fill)' : 'var(--bg-card)',
+      backgroundColor: finished ? 'var(--bg-fill)' : 'var(--bg-card)',
+      backgroundImage: teamGrad,
       border: live ? '1px solid rgba(220,38,38,0.6)'
         : confirmed && !finished ? '1px solid rgba(200,155,60,0.5)'
         : '1px solid var(--border)',
