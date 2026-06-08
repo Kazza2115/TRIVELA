@@ -138,13 +138,16 @@ Object.entries(FLAG_CODE).forEach(([id, code]) => { CODE_TO_ID[code] = parseInt(
 CODE_TO_ID['gb-eng'] = 826; CODE_TO_ID['gb-sct'] = 826
 CODE_TO_ID['gb-nir'] = 826; CODE_TO_ID['gb-wls'] = 826
 
+interface MatchFlag {
+  feat: any            // polygone (mainland) du pays
+  code: string         // code drapeau flagcdn (ex. 'fr', 'gb-nir')
+  color: string        // couleur nationale (halo)
+  ll: [number, number] // centroïde [lon, lat]
+}
 interface MatchArc {
   match: Match
-  home: [number, number]   // [lon, lat]
-  away: [number, number]
-  mid: [number, number]    // milieu géographique (pour les épées)
-  homeColor: string
-  awayColor: string
+  mid: [number, number]          // milieu géographique (pour les épées)
+  flags: [MatchFlag, MatchFlag]  // [domicile, extérieur]
 }
 
 // Italy — didn't qualify; gets a special "struggling to light up" flicker
@@ -629,74 +632,90 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
           .attr('d', geoPath as any).attr('fill', 'none')
           .attr('stroke', C.border).attr('stroke-width', '0.60')
 
-        // ── Flèches des matchs du jour ──────────────────────────────
-        const centroidOf = (id: number): [number, number] | null => {
-          const feat = features.find((f: any) => parseInt(f.id) === id)
-          if (!feat) return null
-          const c = d3.geoCentroid(getLargestPolygon(feat) as any)
-          return (isFinite(c[0]) && isFinite(c[1])) ? [c[0], c[1]] : null
+        // ── Matchs du jour : drapeaux élevés + rivalité ─────────────
+        const featById = (id: number): any | null => {
+          const f = features.find((x: any) => parseInt(x.id) === id)
+          return f ? getLargestPolygon(f) : null
         }
         const arcs: MatchArc[] = []
         const byCountry = new Map<number, Match>()
         todaysMatches().forEach(m => {
           const hId = CODE_TO_ID[m.home.code], aId = CODE_TO_ID[m.away.code]
           if (hId == null || aId == null || hId === aId) return
-          const h = centroidOf(hId), a = centroidOf(aId)
-          if (!h || !a) return
-          const mid = d3.geoInterpolate(h, a)(0.5) as [number, number]
-          arcs.push({ match: m, home: h, away: a, mid, homeColor: nationColor(m.home), awayColor: nationColor(m.away) })
+          const hf = featById(hId), af = featById(aId)
+          if (!hf || !af) return
+          const hc = d3.geoCentroid(hf as any) as [number, number]
+          const ac = d3.geoCentroid(af as any) as [number, number]
+          if (!isFinite(hc[0]) || !isFinite(ac[0])) return
+          arcs.push({
+            match: m,
+            mid: d3.geoInterpolate(hc, ac)(0.5) as [number, number],
+            flags: [
+              { feat: hf, code: m.home.code, color: nationColor(m.home), ll: hc },
+              { feat: af, code: m.away.code, color: nationColor(m.away), ll: ac },
+            ],
+          })
           byCountry.set(hId, m); byCountry.set(aId, m)
         })
         matchArcsRef.current     = arcs
         todayByCountryRef.current = byCountry
 
         arcs.forEach((arc, i) => {
-          const grad = defs.append('linearGradient').attr('id', `arc-grad-${i}`).attr('gradientUnits', 'userSpaceOnUse')
-          grad.append('stop').attr('offset', '0%').attr('stop-color', arc.homeColor)
-          grad.append('stop').attr('offset', '100%').attr('stop-color', arc.awayColor)
-          // Halo doux + ligne nette (bien visible) reliant les deux pays.
-          gArcs.append('path').attr('class', `match-arc-glow arc-${i}`)
-            .attr('fill', 'none').attr('stroke', `url(#arc-grad-${i})`)
-            .attr('stroke-width', 10).attr('stroke-linecap', 'round').attr('opacity', 0.30)
-          gArcs.append('path').attr('class', `match-arc arc-${i}`)
-            .attr('fill', 'none').attr('stroke', `url(#arc-grad-${i})`)
-            .attr('stroke-width', 3.4).attr('stroke-linecap', 'round')
-          // Épées croisées au milieu — effet "match".
+          arc.flags.forEach((fl, s) => {
+            defs.append('clipPath').attr('id', `clip-mflag-${i}-${s}`)
+              .append('path').attr('class', `mflag-clip c-${i}-${s}`)
+            // Halo coloré (le pays "s'élève" / s'illumine)
+            gArcs.append('path').attr('class', `mflag-halo m-${i}-${s}`)
+              .attr('fill', 'none').attr('stroke', fl.color).attr('stroke-linejoin', 'round')
+              .style('filter', `drop-shadow(0 0 8px ${fl.color})`)
+            // Drapeau du pays, détouré sur son territoire
+            gArcs.append('image').attr('class', `mflag-img m-${i}-${s}`)
+              .attr('href', `https://flagcdn.com/w640/${fl.code}.png`)
+              .attr('preserveAspectRatio', 'xMidYMid slice')
+              .attr('clip-path', `url(#clip-mflag-${i}-${s})`)
+            // Contour net coloré au-dessus
+            gArcs.append('path').attr('class', `mflag-ring m-${i}-${s}`)
+              .attr('fill', 'none').attr('stroke', fl.color).attr('stroke-linejoin', 'round')
+          })
+          // ⚔️ rivalité au milieu des deux pays
           gArcs.append('text').attr('class', `match-swords arc-${i}`)
             .attr('text-anchor', 'middle').attr('dominant-baseline', 'central')
             .attr('pointer-events', 'none')
-            .style('filter', 'drop-shadow(0 1px 3px rgba(0,0,0,0.7))')
+            .style('filter', 'drop-shadow(0 1px 4px rgba(0,0,0,0.85))')
             .text('⚔️')
         })
 
         const updateArcs = (t: number) => {
           const list = matchArcsRef.current
           if (!list.length) return
-          const pulse = 0.5 + 0.5 * Math.sin(t / 420)
           const rot = rotRef.current
           const center: [number, number] = [-rot[0], -rot[1]]
           list.forEach((arc, i) => {
-            const geom = { type: 'LineString', coordinates: [arc.home, arc.away] } as any
-            const dStr = geoPath(geom)
-            const net  = gArcs.select(`.match-arc.arc-${i}`)
-            const glow = gArcs.select(`.match-arc-glow.arc-${i}`)
-            const sw   = gArcs.select(`.match-swords.arc-${i}`)
-            if (!dStr) { net.attr('opacity', 0); glow.attr('opacity', 0); sw.attr('opacity', 0); return }
-            net.attr('d', dStr).attr('opacity', 0.92 + 0.08 * pulse).attr('stroke-width', 3.2 + 1.0 * pulse)
-            glow.attr('d', dStr).attr('opacity', 0.22 + 0.22 * pulse).attr('stroke-width', 9 + 5 * pulse)
-            // Dégradé orienté écran (couleurs des deux pays)
-            const p0 = proj(arc.home), p1 = proj(arc.away)
-            if (p0 && p1) {
-              defs.select(`#arc-grad-${i}`)
-                .attr('x1', p0[0]).attr('y1', p0[1]).attr('x2', p1[0]).attr('y2', p1[1])
-            }
-            // Épées au milieu — seulement si le point est sur la face visible
+            arc.flags.forEach((fl, s) => {
+              const dStr = geoPath(fl.feat as any)
+              const halo = gArcs.select(`.mflag-halo.m-${i}-${s}`)
+              const img  = gArcs.select(`.mflag-img.m-${i}-${s}`)
+              const ring = gArcs.select(`.mflag-ring.m-${i}-${s}`)
+              const clip = defs.select(`#clip-mflag-${i}-${s} .mflag-clip`)
+              const visible = !!dStr && d3.geoDistance(center, fl.ll) < Math.PI / 2 - 0.02
+              if (!visible || !dStr) { halo.attr('opacity', 0); img.attr('opacity', 0); ring.attr('opacity', 0); return }
+              const [[x0, y0], [x1, y1]] = geoPath.bounds(fl.feat as any)
+              // Pulse alterné (rivalité) : domicile et extérieur en opposition de phase
+              const phase = 0.5 + 0.5 * Math.sin(t / 440 + s * Math.PI)
+              clip.attr('d', dStr)
+              img.attr('x', x0).attr('y', y0)
+                .attr('width', Math.max(x1 - x0, 1)).attr('height', Math.max(y1 - y0, 1))
+                .attr('opacity', 0.94)
+              halo.attr('d', dStr).attr('stroke-width', 4 + 6 * phase).attr('opacity', 0.30 + 0.45 * phase)
+              ring.attr('d', dStr).attr('stroke-width', 1.4 + 1.3 * phase).attr('opacity', 0.7 + 0.3 * phase)
+            })
+            // Épées croisées au milieu
+            const sw = gArcs.select(`.match-swords.arc-${i}`)
             const pm = proj(arc.mid)
-            const visible = !!pm && d3.geoDistance(center, arc.mid) < Math.PI / 2 - 0.03
-            if (visible && pm) {
-              sw.attr('x', pm[0]).attr('y', pm[1])
-                .attr('opacity', 0.9 + 0.1 * pulse)
-                .attr('font-size', 20 + 5 * pulse)
+            const vis = !!pm && d3.geoDistance(center, arc.mid) < Math.PI / 2 - 0.03
+            if (vis && pm) {
+              const p = 0.5 + 0.5 * Math.sin(t / 300)
+              sw.attr('x', pm[0]).attr('y', pm[1]).attr('opacity', 0.9 + 0.1 * p).attr('font-size', 20 + 6 * p)
             } else {
               sw.attr('opacity', 0)
             }
