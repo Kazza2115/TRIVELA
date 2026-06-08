@@ -334,3 +334,30 @@ export const KNOCKOUT_MATCHES: Match[] = [
 ]
 
 export const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
+
+// ─── Helpers temps ──────────────────────────────────────────────────────────
+const FR_MONTHS_MAP: Record<string, number> = {
+  Jan: 0, Fév: 1, Mar: 2, Avr: 3, Mai: 4, Juin: 5,
+  Juil: 6, Aoû: 7, Sep: 8, Oct: 9, Nov: 10, Déc: 11,
+}
+
+/** Coup d'envoi d'un match en ms UTC (les dates sont stockées en UTC). */
+export function matchKickoffUTC(m: Match): number | null {
+  const parts = m.date.split(' ')
+  const day = parseInt(parts[0], 10)
+  const mon = FR_MONTHS_MAP[parts[1]?.slice(0, 4)] ?? FR_MONTHS_MAP[parts[1]?.slice(0, 3)] ?? -1
+  if (isNaN(day) || mon < 0) return null
+  const [hh, mm] = m.time.split(':').map(Number)
+  return Date.UTC(2026, mon, day, hh, mm, 0)
+}
+
+/** Matchs dont le coup d'envoi tombe aujourd'hui (calendrier Europe/Zurich). */
+export function todaysMatches(now: number = Date.now()): Match[] {
+  const dayStr = (ms: number) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' })
+  const today = dayStr(now)
+  return ALL_MATCHES.filter(m => {
+    if (m.home.code === 'un' || m.away.code === 'un') return false   // équipes à déterminer
+    const k = matchKickoffUTC(m)
+    return k !== null && dayStr(k) === today
+  })
+}

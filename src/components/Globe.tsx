@@ -3,6 +3,10 @@ import * as d3 from 'd3'
 import { feature } from 'topojson-client'
 import type { Topology } from 'topojson-specification'
 import CountryPopup from './CountryPopup'
+import { todaysMatches, matchKickoffUTC } from '../data/wc2026Matches'
+import type { Match, Team } from '../data/wc2026Matches'
+import { getBets, getLive } from '../services/auth'
+import type { UserProfile } from '../services/auth'
 
 // ─── Featured countries — vivid national flag colours ─────────────────────
 // svgFill overrides the SVG path fill (allows gradients).
@@ -109,6 +113,39 @@ const FLAG_CODE: Record<number, string> = {
   380: 'it',  // Italy
 }
 
+// ─── Couleur "nationale" (drapeau) par sélection — pour les flèches de match ──
+const NATION_COLOR: Record<string, string> = {
+  FRA: '#0055A4', NIR: '#00843D', ENG: '#CE1124', SCO: '#0065BF', ESP: '#C60B1E',
+  BRA: '#009B3A', ARG: '#75AADB', GER: '#000000', DEU: '#111111', POR: '#DA291C',
+  NED: '#FF6A00', BEL: '#FDDA24', CRO: '#0093DD', ITA: '#0066B2', USA: '#3C3B6E',
+  MEX: '#006847', CAN: '#FF0000', JPN: '#BC002D', KOR: '#003478', AUS: '#FFCD00',
+  MAR: '#C1272D', SEN: '#00853F', CIV: '#FF8200', EGY: '#CE1126', RSA: '#007A4D',
+  ZAF: '#007A4D', NOR: '#BA0C2F', SWE: '#FECC00', SUI: '#FF0000', CHE: '#FF0000',
+  AUT: '#ED2939', TUR: '#E30A17', NZL: '#00247D', URU: '#7B9FD4', COL: '#FCD116',
+  ECU: '#FFD100', PAR: '#D52B1E', IRN: '#239F40', KSA: '#006C35', QAT: '#8A1538',
+  JOR: '#007A3D', IRQ: '#007A3B', UZB: '#1EB53A', PAN: '#005293', HAI: '#00209F',
+  CUW: '#002B7F', TUN: '#E70013', ALG: '#006233', DZA: '#006233', GHA: '#006B3F',
+  COD: '#007FFF', CPV: '#003893', CZE: '#11457E', BIH: '#002395',
+}
+function nationColor(team: Team): string {
+  return NATION_COLOR[team.short] ?? '#C89B3C'
+}
+
+// ISO-2 (flagcdn) → identifiant topojson, pour retrouver le centroïde d'un pays.
+const CODE_TO_ID: Record<string, number> = {}
+Object.entries(FLAG_CODE).forEach(([id, code]) => { CODE_TO_ID[code] = parseInt(id) })
+// Les nations britanniques partagent le Royaume-Uni (826) dans le world-atlas.
+CODE_TO_ID['gb-eng'] = 826; CODE_TO_ID['gb-sct'] = 826
+CODE_TO_ID['gb-nir'] = 826; CODE_TO_ID['gb-wls'] = 826
+
+interface MatchArc {
+  match: Match
+  home: [number, number]   // [lon, lat]
+  away: [number, number]
+  homeColor: string
+  awayColor: string
+}
+
 // Italy — didn't qualify; gets a special "struggling to light up" flicker
 const ITALY_ID = 380
 
@@ -172,6 +209,7 @@ interface GlobeProps {
   isActive?: boolean
   continentRequest?: { conf: string; ts: number } | null
   onContinentShown?: () => void
+  currentUser?: UserProfile | null
 }
 interface PopupState { countryId: number; x: number; y: number }
 interface CenteringState {
@@ -185,9 +223,13 @@ function shortestPath(from: number, to: number): number {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────
-export default function Globe({ onNavigate, isActive, continentRequest, onContinentShown }: GlobeProps) {
+export default function Globe({ onNavigate, isActive, continentRequest, onContinentShown, currentUser }: GlobeProps) {
   const containerRef    = useRef<HTMLDivElement>(null)
   const svgRef          = useRef<SVGSVGElement>(null)
+  const [matchCard,     setMatchCard]     = useState<Match | null>(null)
+  const matchArcsRef    = useRef<MatchArc[]>([])
+  const todayByCountryRef = useRef<Map<number, Match>>(new Map())
+  const openMatchCardRef  = useRef<(m: Match) => void>(() => {})
   const [popup,              setPopup]              = useState<PopupState | null>(null)
   const [isLoaded,           setIsLoaded]           = useState(false)
   const [continentPopup,     setContinentPopup]     = useState<{ conf: string } | null>(null)
@@ -351,6 +393,7 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
   triggerContinentRef.current  = triggerContinentForConf
   onNavigateRef.current        = onNavigate
   onContinentShownRef.current  = onContinentShown
+  openMatchCardRef.current     = (m: Match) => { handleClose(); setMatchCard(m) }
 
   // When Explorer is clicked: hide the React popup card but keep selectedRef + SVG flag,
   // then run the D3 projection zoom. navigate is called after the animation.
@@ -461,6 +504,7 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
     const gFtCountry  = svg.append('g').attr('class', 'g-ft-countries')
     const gFlags      = svg.append('g').attr('class', 'g-flags')
     const gBorders    = svg.append('g').attr('class', 'g-borders')
+    const gArcs       = svg.append('g').attr('class', 'g-arcs')  // flèches des matchs du jour
     const gVig        = svg.append('g').attr('class', 'g-vig')   // vignette circle
 
     // Ocean sphere
@@ -549,6 +593,8 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
           .on('click', (_event: MouseEvent, d: any) => {
             if (diveAnimRef.current) return
             const id   = parseInt(d.id)
+            const todayM = todayByCountryRef.current.get(id)
+            if (todayM) { openMatchCardRef.current(todayM); return }
             const conf = QUALIFIED[id]?.conf
             if (conf) triggerContinentRef.current(conf)
           })
@@ -570,6 +616,8 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
           .on('click', (_event: MouseEvent, d: any) => {
             if (diveAnimRef.current) return
             const id   = parseInt(d.id)
+            const todayM = todayByCountryRef.current.get(id)
+            if (todayM) { openMatchCardRef.current(todayM); return }
             const conf = QUALIFIED[id]?.conf
             if (conf) triggerContinentRef.current(conf)
           })
@@ -578,6 +626,66 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
         gBorders.append('path').datum(countries as any)
           .attr('d', geoPath as any).attr('fill', 'none')
           .attr('stroke', C.border).attr('stroke-width', '0.60')
+
+        // ── Flèches des matchs du jour ──────────────────────────────
+        const centroidOf = (id: number): [number, number] | null => {
+          const feat = features.find((f: any) => parseInt(f.id) === id)
+          if (!feat) return null
+          const c = d3.geoCentroid(getLargestPolygon(feat) as any)
+          return (isFinite(c[0]) && isFinite(c[1])) ? [c[0], c[1]] : null
+        }
+        const arcs: MatchArc[] = []
+        const byCountry = new Map<number, Match>()
+        todaysMatches().forEach(m => {
+          const hId = CODE_TO_ID[m.home.code], aId = CODE_TO_ID[m.away.code]
+          if (hId == null || aId == null || hId === aId) return
+          const h = centroidOf(hId), a = centroidOf(aId)
+          if (!h || !a) return
+          arcs.push({ match: m, home: h, away: a, homeColor: nationColor(m.home), awayColor: nationColor(m.away) })
+          byCountry.set(hId, m); byCountry.set(aId, m)
+        })
+        matchArcsRef.current     = arcs
+        todayByCountryRef.current = byCountry
+
+        arcs.forEach((arc, i) => {
+          const grad = defs.append('linearGradient').attr('id', `arc-grad-${i}`).attr('gradientUnits', 'userSpaceOnUse')
+          grad.append('stop').attr('offset', '0%').attr('stop-color', arc.homeColor)
+          grad.append('stop').attr('offset', '100%').attr('stop-color', arc.awayColor)
+          const mk = defs.append('marker').attr('id', `arc-head-${i}`)
+            .attr('viewBox', '0 0 10 10').attr('refX', 7).attr('refY', 5)
+            .attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto-start-reverse')
+          mk.append('path').attr('d', 'M0,0 L10,5 L0,10 z').attr('fill', arc.awayColor)
+          gArcs.append('path').attr('class', `match-arc-glow arc-${i}`)
+            .attr('fill', 'none').attr('stroke', `url(#arc-grad-${i})`)
+            .attr('stroke-width', 7).attr('stroke-linecap', 'round').attr('opacity', 0.18)
+          gArcs.append('path').attr('class', `match-arc arc-${i}`)
+            .attr('fill', 'none').attr('stroke', `url(#arc-grad-${i})`)
+            .attr('stroke-width', 2.4).attr('stroke-linecap', 'round')
+            .attr('stroke-dasharray', '2 7')
+            .attr('marker-end', `url(#arc-head-${i})`)
+        })
+
+        const updateArcs = (t: number) => {
+          const list = matchArcsRef.current
+          if (!list.length) return
+          const pulse = 0.5 + 0.5 * Math.sin(t / 360)
+          list.forEach((arc, i) => {
+            const geom = { type: 'LineString', coordinates: [arc.home, arc.away] } as any
+            const dStr = geoPath(geom)
+            const net  = gArcs.select(`.match-arc.arc-${i}`)
+            const glow = gArcs.select(`.match-arc-glow.arc-${i}`)
+            if (!dStr) { net.attr('opacity', 0); glow.attr('opacity', 0); return }
+            net.attr('d', dStr).attr('opacity', 0.8 + 0.2 * pulse)
+              .attr('stroke-width', 2.1 + 1.5 * pulse)
+              .attr('stroke-dashoffset', (-t / 28) % 1000)
+            glow.attr('d', dStr).attr('opacity', 0.12 + 0.2 * pulse).attr('stroke-width', 6 + 4 * pulse)
+            const p0 = proj(arc.home), p1 = proj(arc.away)
+            if (p0 && p1) {
+              defs.select(`#arc-grad-${i}`)
+                .attr('x1', p0[0]).attr('y1', p0[1]).attr('x2', p1[0]).attr('y2', p1[1])
+            }
+          })
+        }
 
 setIsLoaded(true)
 
@@ -780,6 +888,7 @@ setIsLoaded(true)
             }
           }
 
+          updateArcs(t)
           rafRef.current = requestAnimationFrame(animate)
         }
         rafRef.current = requestAnimationFrame(animate)
@@ -791,6 +900,7 @@ setIsLoaded(true)
       const target = d3.select(event.target as Element)
       // Clicks on any qualified country are handled by their own click listeners
       if (target.classed('ft-featured') || target.classed('qual-country')) return
+      setMatchCard(null)
       // Close continent mode or single-country popup
       if (continentCountriesRef.current.length > 0 || selectedRef.current !== null) {
         handleClose()
@@ -1012,6 +1122,140 @@ setIsLoaded(true)
           </div>
         )
       })()}
+
+      {/* Carte d'avant-match — match du jour cliqué sur le globe */}
+      {matchCard && (
+        <MatchPreCard
+          match={matchCard}
+          currentUser={currentUser}
+          onClose={() => setMatchCard(null)}
+          onNavigate={(s) => { setMatchCard(null); onNavigateRef.current(s) }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Carte d'avant-match (match du jour) ────────────────────────────────────
+function MatchPreCard({ match, currentUser, onClose, onNavigate }: {
+  match: Match
+  currentUser?: UserProfile | null
+  onClose: () => void
+  onNavigate: (section: string) => void
+}) {
+  const [prono, setProno] = useState<{ home: number; away: number } | null>(null)
+  const [live,  setLive]  = useState<{ home: number; away: number; status: string; elapsed: number | null } | null>(null)
+  const [vis,   setVis]   = useState(false)
+
+  useEffect(() => { const t = setTimeout(() => setVis(true), 60); return () => clearTimeout(t) }, [])
+  useEffect(() => {
+    let on = true
+    if (currentUser) {
+      getBets(currentUser.id).then(bs => {
+        if (!on) return
+        const b = bs.find(x => x.matchId === match.id)
+        if (b) setProno({ home: b.homeScore, away: b.awayScore })
+      }).catch(() => {})
+    }
+    getLive().then(arr => {
+      if (!on) return
+      const l = arr.find(x => x.matchId === match.id)
+      if (l) setLive({ home: l.homeScore, away: l.awayScore, status: l.status, elapsed: l.elapsed })
+    }).catch(() => {})
+    return () => { on = false }
+  }, [match.id, currentUser])
+
+  const kickoff = matchKickoffUTC(match)
+  const time = kickoff != null
+    ? new Date(kickoff).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Zurich' })
+    : match.time
+  const isLive = !!live && ['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE'].includes(live.status)
+  const stage = match.round === 'group'
+    ? (match.group === 'Amical' ? 'Match amical' : `Groupe ${match.group}`)
+    : match.group
+  const hc = nationColor(match.home), ac = nationColor(match.away)
+
+  const TeamCol = ({ t }: { t: Team }) => (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+      <img src={`https://flagcdn.com/w80/${t.code}.png`} alt={t.name}
+        style={{ width: 46, height: 31, objectFit: 'cover', borderRadius: 5, boxShadow: '0 2px 8px rgba(0,0,0,0.35)' }} />
+      <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 17, letterSpacing: 1, color: '#fff' }}>
+        {t.short}
+      </span>
+    </div>
+  )
+
+  return (
+    <div style={{
+      position: 'absolute', bottom: 104, left: '50%',
+      transform: vis ? 'translateX(-50%) translateY(0) scale(1)' : 'translateX(-50%) translateY(24px) scale(0.94)',
+      opacity: vis ? 1 : 0,
+      transition: 'opacity 0.34s cubic-bezier(0.34,1.15,0.64,1), transform 0.34s cubic-bezier(0.34,1.15,0.64,1)',
+      zIndex: 60, width: 'min(92vw, 360px)',
+    }}>
+      <div style={{
+        position: 'relative', background: 'rgba(8,18,38,0.92)',
+        border: '1.5px solid rgba(255,255,255,0.12)', borderRadius: 20, overflow: 'hidden',
+        boxShadow: '0 12px 40px rgba(0,0,0,0.55)', backdropFilter: 'blur(24px)', padding: '16px 18px 18px',
+      }}>
+        {/* Bandeau couleurs des deux pays */}
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: `linear-gradient(90deg, ${hc}, ${ac})` }} />
+
+        {/* Fermer */}
+        <button onClick={onClose} style={{
+          position: 'absolute', top: 10, right: 10, width: 26, height: 26, borderRadius: 8,
+          background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+          color: 'rgba(255,255,255,0.7)', fontSize: 13, cursor: 'pointer', lineHeight: 1,
+        }}>✕</button>
+
+        <div style={{
+          textAlign: 'center', fontSize: 9, fontWeight: 800, letterSpacing: 1.6,
+          color: isLive ? '#ff5a5a' : 'rgba(200,155,60,0.95)', textTransform: 'uppercase', marginBottom: 12,
+        }}>
+          {isLive ? `● EN DIRECT${live!.elapsed != null ? ` · ${live!.elapsed}'` : ''}` : `Aujourd'hui · ${stage}`}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <TeamCol t={match.home} />
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 64 }}>
+            {isLive || live ? (
+              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, color: isLive ? '#ff5a5a' : '#fff', lineHeight: 1 }}>
+                {live!.home}<span style={{ opacity: 0.5, margin: '0 4px' }}>:</span>{live!.away}
+              </div>
+            ) : (
+              <>
+                <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: '#fff', lineHeight: 1 }}>{time}</div>
+                <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.5)', letterSpacing: 0.5, marginTop: 2 }}>GVA</div>
+              </>
+            )}
+          </div>
+          <TeamCol t={match.away} />
+        </div>
+
+        <div style={{ textAlign: 'center', fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 12 }}>
+          {match.venue} · {match.city}
+        </div>
+
+        {/* Prono */}
+        <div style={{
+          marginTop: 12, padding: '9px 12px', borderRadius: 12,
+          background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+        }}>
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)' }}>
+            {prono
+              ? <>Ton prono <b style={{ color: '#fff' }}>{prono.home}–{prono.away}</b></>
+              : currentUser ? 'Pas encore de prono' : 'Connecte-toi pour parier'}
+          </span>
+          <button onClick={() => onNavigate('paris')} style={{
+            padding: '7px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+            background: 'linear-gradient(135deg,#C89B3C,#E8D080)', color: '#0D0800', fontSize: 12, fontWeight: 800,
+            flexShrink: 0,
+          }}>
+            {prono ? 'Modifier' : 'Parier'} →
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

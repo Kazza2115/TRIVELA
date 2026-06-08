@@ -278,7 +278,7 @@ export default function App() {
           width: '100%', height: '100%', position: 'relative', background: 'var(--bg)',
           display: section === 'globe' ? 'block' : 'none',
         }}>
-          <Globe onNavigate={navigateTo} isActive={section === 'globe'} />
+          <Globe onNavigate={navigateTo} isActive={section === 'globe'} currentUser={currentUser} />
 
           <p style={{
             position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',
