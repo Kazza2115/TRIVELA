@@ -106,7 +106,9 @@ async function main() {
   const sched = await sb('match_schedule?select=match_id')
   if (sched.ok) validIds = new Set((await sched.json()).map(r => r.match_id))
 
-  const ITER = 9, GAP = 30000
+  // Boucle ~5,5 min en interrogeant toutes les 15 s (le cron */5 relance →
+  // couverture quasi continue). Arrêt anticipé si aucun match en direct.
+  const ITER = 22, GAP = 15000
   for (let i = 0; i < ITER; i++) {
     let n = 0
     try { n = await tick() } catch (e) { console.warn('tick erreur:', String(e)) }

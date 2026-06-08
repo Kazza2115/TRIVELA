@@ -3,7 +3,7 @@ name: API-Football live
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/5 * * * *'   # chaque exécution boucle ~5 min en interrogeant toutes les 30 s
+    - cron: '*/5 * * * *'   # chaque exécution boucle ~5,5 min en interrogeant toutes les 15 s
   push:
     branches: [claude/resume-codebase-work-i3uAg]
     paths: ['scripts/api-football-live.mjs', 'scripts/wc-map.mjs', '.github/workflows/api-football-live.yml']
