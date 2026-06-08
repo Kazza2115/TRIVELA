@@ -7,6 +7,7 @@ import { buildFixtureMap } from '../scripts/wc-map.mjs'
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const API = 'https://v3.football.api-sports.io'
 const INPLAY = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP'])
+const FINISHED = new Set(['FT', 'AET', 'PEN'])
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 function scorersFrom(events, homeId) {
@@ -29,13 +30,57 @@ function clients(env) {
   return { api, sb, ok: !!(KEY && SERVICE) }
 }
 
-async function buildMap(api, sb) {
+async function buildContext(api, sb) {
   try {
     const sres = await sb('match_schedule?select=match_id')
     const validIds = sres.ok ? new Set((await sres.json()).map(r => r.match_id)) : new Set()
-    const allRes = await api('/fixtures?league=1&season=2026')
-    return buildFixtureMap(allRes.response || [], validIds).map
-  } catch { return new Map() }
+    const all = (await api('/fixtures?league=1&season=2026')).response || []
+    return { map: buildFixtureMap(all, validIds).map, all }
+  } catch { return { map: new Map(), all: [] } }
+}
+
+async function settleOne(api, sb, id, f, haveGoals) {
+  await sb('rpc/settle_match', {
+    method: 'POST', body: JSON.stringify({ p_match_id: id, p_home_score: f.goals.home, p_away_score: f.goals.away }),
+  })
+  if (!haveGoals.has(id) && (f.goals.home + f.goals.away) > 0) {
+    try {
+      const ev = await api(`/fixtures/events?fixture=${f.fixture?.id}`)
+      await sb('match_goals?on_conflict=match_id', {
+        method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify([{ match_id: id, scorers: scorersFrom(ev.response, f.teams?.home?.id), updated_at: new Date().toISOString() }]),
+      })
+    } catch { /* ignore */ }
+  }
+}
+
+// Règle (débloque les pronos) les matchs terminés — dès la minute suivant la fin.
+async function settleAll(api, sb, all, fxMap) {
+  const er = await sb('match_results?select=match_id')
+  const have = er.ok ? new Set((await er.json()).map(r => r.match_id)) : new Set()
+  const eg = await sb('match_goals?select=match_id')
+  const haveGoals = eg.ok ? new Set((await eg.json()).map(r => r.match_id)) : new Set()
+  const jobs = []
+  for (const f of all) {
+    const id = fxMap.get(f.fixture?.id)
+    const st = f.fixture?.status?.short
+    if (id && !have.has(id) && FINISHED.has(st) && f.goals?.home != null && f.goals?.away != null) {
+      jobs.push(settleOne(api, sb, id, f, haveGoals))
+    }
+  }
+  // Amical France–Irlande du Nord (par date + noms)
+  try {
+    const d = await api('/fixtures?date=2026-06-08')
+    const f = (d.response || []).find(x => {
+      const n = [x.teams?.home?.name, x.teams?.away?.name]
+      return n.includes('France') && n.includes('Northern Ireland')
+    })
+    const st = f?.fixture?.status?.short
+    if (f && FINISHED.has(st) && f.goals?.home != null && !have.has('fr-nir')) {
+      jobs.push(settleOne(api, sb, 'fr-nir', f, haveGoals))
+    }
+  } catch { /* ignore */ }
+  if (jobs.length) await Promise.all(jobs)
 }
 
 async function poll(api, sb, fxMap) {
@@ -94,7 +139,8 @@ async function poll(api, sb, fxMap) {
 async function runLoop(env) {
   const { api, sb, ok } = clients(env)
   if (!ok) return
-  const fxMap = await buildMap(api, sb)
+  const { map: fxMap, all } = await buildContext(api, sb)
+  try { await settleAll(api, sb, all, fxMap) } catch (e) { console.log('settle err', String(e)) }
   for (let i = 0; i < 4; i++) {
     try { await poll(api, sb, fxMap) } catch (e) { console.log('poll err', String(e)) }
     if (i < 3) await sleep(14000)
@@ -106,7 +152,8 @@ export default {
   async fetch(_req, env) {
     const { api, sb, ok } = clients(env)
     if (!ok) return new Response('secrets manquants', { status: 500 })
-    const fxMap = await buildMap(api, sb)
+    const { map: fxMap, all } = await buildContext(api, sb)
+    await settleAll(api, sb, all, fxMap)
     const n = await poll(api, sb, fxMap)
     return new Response(`live: ${n} (map: ${fxMap.size})`)
   },
