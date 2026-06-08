@@ -657,24 +657,29 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
         matchArcsRef.current     = arcs
         todayByCountryRef.current = byCountry
 
-        const FLAG_W = 28, FLAG_H = 18
+        const FLAG_W = 18, FLAG_H = 12, POLE_H = 15
         arcs.forEach((arc, i) => {
           arc.flags.forEach((fl, s) => {
-            // Ombre au sol (ancre le drapeau au pays)
             gArcs.append('ellipse').attr('class', `mflag-shadow m-${i}-${s}`)
               .attr('fill', 'rgba(0,0,0,0.4)')
-            // Mât (noir, avec un léger liseré clair pour rester visible)
             gArcs.append('line').attr('class', `mflag-pole m-${i}-${s}`)
-              .attr('stroke', '#000000').attr('stroke-width', 2).attr('stroke-linecap', 'round')
-              .style('filter', 'drop-shadow(0 0 1.4px rgba(255,255,255,0.65))')
-            // Drapeau surélevé (ombre portée → effet "au-dessus de la surface")
+              .attr('stroke', '#000000').attr('stroke-width', 1.6).attr('stroke-linecap', 'round')
+              .style('filter', 'drop-shadow(0 0 1.2px rgba(255,255,255,0.6))')
             gArcs.append('image').attr('class', `mflag-img m-${i}-${s}`)
               .attr('href', `https://flagcdn.com/w160/${fl.code}.png`)
               .attr('preserveAspectRatio', 'none')
-              .style('filter', 'drop-shadow(0 4px 5px rgba(0,0,0,0.55))')
+              .style('filter', 'drop-shadow(0 2px 3px rgba(0,0,0,0.5))')
             gArcs.append('rect').attr('class', `mflag-edge m-${i}-${s}`)
-              .attr('fill', 'none').attr('stroke', fl.color).attr('stroke-width', 1.6).attr('rx', 1.5)
+              .attr('fill', 'none').attr('stroke', fl.color).attr('stroke-width', 1.2).attr('rx', 1)
           })
+          // Lien de match entre les deux pays + petit "VS"
+          gArcs.append('line').attr('class', `mflag-link arc-${i}`)
+            .attr('stroke', '#C89B3C').attr('stroke-width', 1.5).attr('stroke-dasharray', '3 3').attr('stroke-linecap', 'round')
+          gArcs.append('text').attr('class', `mflag-vs arc-${i}`)
+            .attr('text-anchor', 'middle').attr('dominant-baseline', 'central')
+            .attr('font-size', 9).attr('font-weight', 800).attr('letter-spacing', 0.5)
+            .attr('fill', '#FFE9B0').attr('stroke', 'rgba(0,0,0,0.85)').attr('stroke-width', 2.4)
+            .style('paint-order', 'stroke').text('VS')
         })
 
         const updateArcs = (_t: number) => {
@@ -683,6 +688,8 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
           const rot = rotRef.current
           const center: [number, number] = [-rot[0], -rot[1]]
           list.forEach((arc, i) => {
+            // Position écran (et visibilité) de chaque drapeau
+            const tops: ([number, number] | null)[] = []
             arc.flags.forEach((fl, s) => {
               const sh   = gArcs.select(`.mflag-shadow.m-${i}-${s}`)
               const pole = gArcs.select(`.mflag-pole.m-${i}-${s}`)
@@ -691,18 +698,28 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
               const p = proj(fl.ll)
               const visible = !!p && d3.geoDistance(center, fl.ll) < Math.PI / 2 - 0.02
               if (!visible || !p) {
-                sh.attr('opacity', 0); pole.attr('opacity', 0); img.attr('opacity', 0); edge.attr('opacity', 0); return
+                sh.attr('opacity', 0); pole.attr('opacity', 0); img.attr('opacity', 0); edge.attr('opacity', 0)
+                tops.push(null); return
               }
               const [x, y] = p
-              // Drapeau planté, centré sur le milieu du pays (sans pulsation)
-              const H  = 26
               const fx = x - FLAG_W / 2
-              const fy = y - H - FLAG_H
-              sh.attr('cx', x).attr('cy', y + 1).attr('rx', 5).attr('ry', 2).attr('opacity', 0.4)
-              pole.attr('x1', x).attr('y1', y).attr('x2', x).attr('y2', y - H).attr('opacity', 1)
+              const fy = y - POLE_H - FLAG_H
+              sh.attr('cx', x).attr('cy', y + 1).attr('rx', 3.5).attr('ry', 1.6).attr('opacity', 0.4)
+              pole.attr('x1', x).attr('y1', y).attr('x2', x).attr('y2', y - POLE_H).attr('opacity', 1)
               img.attr('x', fx).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 1)
               edge.attr('x', fx).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 0.9)
+              tops.push([x, y - POLE_H - FLAG_H / 2])   // centre du drapeau
             })
+            // Lien + "VS" si les deux drapeaux sont visibles
+            const link = gArcs.select(`.mflag-link.arc-${i}`)
+            const vs   = gArcs.select(`.mflag-vs.arc-${i}`)
+            if (tops[0] && tops[1]) {
+              const [a, b] = [tops[0], tops[1]]
+              link.attr('x1', a[0]).attr('y1', a[1]).attr('x2', b[0]).attr('y2', b[1]).attr('opacity', 0.8)
+              vs.attr('x', (a[0] + b[0]) / 2).attr('y', (a[1] + b[1]) / 2).attr('opacity', 1)
+            } else {
+              link.attr('opacity', 0); vs.attr('opacity', 0)
+            }
           })
         }
 
