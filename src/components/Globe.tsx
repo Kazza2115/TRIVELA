@@ -142,6 +142,7 @@ interface MatchArc {
   match: Match
   home: [number, number]   // [lon, lat]
   away: [number, number]
+  mid: [number, number]    // milieu géographique (pour les épées)
   homeColor: string
   awayColor: string
 }
@@ -641,7 +642,8 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
           if (hId == null || aId == null || hId === aId) return
           const h = centroidOf(hId), a = centroidOf(aId)
           if (!h || !a) return
-          arcs.push({ match: m, home: h, away: a, homeColor: nationColor(m.home), awayColor: nationColor(m.away) })
+          const mid = d3.geoInterpolate(h, a)(0.5) as [number, number]
+          arcs.push({ match: m, home: h, away: a, mid, homeColor: nationColor(m.home), awayColor: nationColor(m.away) })
           byCountry.set(hId, m); byCountry.set(aId, m)
         })
         matchArcsRef.current     = arcs
@@ -651,38 +653,51 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
           const grad = defs.append('linearGradient').attr('id', `arc-grad-${i}`).attr('gradientUnits', 'userSpaceOnUse')
           grad.append('stop').attr('offset', '0%').attr('stop-color', arc.homeColor)
           grad.append('stop').attr('offset', '100%').attr('stop-color', arc.awayColor)
-          const mk = defs.append('marker').attr('id', `arc-head-${i}`)
-            .attr('viewBox', '0 0 10 10').attr('refX', 7).attr('refY', 5)
-            .attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto-start-reverse')
-          mk.append('path').attr('d', 'M0,0 L10,5 L0,10 z').attr('fill', arc.awayColor)
+          // Halo doux + ligne nette (bien visible) reliant les deux pays.
           gArcs.append('path').attr('class', `match-arc-glow arc-${i}`)
             .attr('fill', 'none').attr('stroke', `url(#arc-grad-${i})`)
-            .attr('stroke-width', 7).attr('stroke-linecap', 'round').attr('opacity', 0.18)
+            .attr('stroke-width', 10).attr('stroke-linecap', 'round').attr('opacity', 0.30)
           gArcs.append('path').attr('class', `match-arc arc-${i}`)
             .attr('fill', 'none').attr('stroke', `url(#arc-grad-${i})`)
-            .attr('stroke-width', 2.4).attr('stroke-linecap', 'round')
-            .attr('stroke-dasharray', '2 7')
-            .attr('marker-end', `url(#arc-head-${i})`)
+            .attr('stroke-width', 3.4).attr('stroke-linecap', 'round')
+          // Épées croisées au milieu — effet "match".
+          gArcs.append('text').attr('class', `match-swords arc-${i}`)
+            .attr('text-anchor', 'middle').attr('dominant-baseline', 'central')
+            .attr('pointer-events', 'none')
+            .style('filter', 'drop-shadow(0 1px 3px rgba(0,0,0,0.7))')
+            .text('⚔️')
         })
 
         const updateArcs = (t: number) => {
           const list = matchArcsRef.current
           if (!list.length) return
-          const pulse = 0.5 + 0.5 * Math.sin(t / 360)
+          const pulse = 0.5 + 0.5 * Math.sin(t / 420)
+          const rot = rotRef.current
+          const center: [number, number] = [-rot[0], -rot[1]]
           list.forEach((arc, i) => {
             const geom = { type: 'LineString', coordinates: [arc.home, arc.away] } as any
             const dStr = geoPath(geom)
             const net  = gArcs.select(`.match-arc.arc-${i}`)
             const glow = gArcs.select(`.match-arc-glow.arc-${i}`)
-            if (!dStr) { net.attr('opacity', 0); glow.attr('opacity', 0); return }
-            net.attr('d', dStr).attr('opacity', 0.8 + 0.2 * pulse)
-              .attr('stroke-width', 2.1 + 1.5 * pulse)
-              .attr('stroke-dashoffset', (-t / 28) % 1000)
-            glow.attr('d', dStr).attr('opacity', 0.12 + 0.2 * pulse).attr('stroke-width', 6 + 4 * pulse)
+            const sw   = gArcs.select(`.match-swords.arc-${i}`)
+            if (!dStr) { net.attr('opacity', 0); glow.attr('opacity', 0); sw.attr('opacity', 0); return }
+            net.attr('d', dStr).attr('opacity', 0.92 + 0.08 * pulse).attr('stroke-width', 3.2 + 1.0 * pulse)
+            glow.attr('d', dStr).attr('opacity', 0.22 + 0.22 * pulse).attr('stroke-width', 9 + 5 * pulse)
+            // Dégradé orienté écran (couleurs des deux pays)
             const p0 = proj(arc.home), p1 = proj(arc.away)
             if (p0 && p1) {
               defs.select(`#arc-grad-${i}`)
                 .attr('x1', p0[0]).attr('y1', p0[1]).attr('x2', p1[0]).attr('y2', p1[1])
+            }
+            // Épées au milieu — seulement si le point est sur la face visible
+            const pm = proj(arc.mid)
+            const visible = !!pm && d3.geoDistance(center, arc.mid) < Math.PI / 2 - 0.03
+            if (visible && pm) {
+              sw.attr('x', pm[0]).attr('y', pm[1])
+                .attr('opacity', 0.9 + 0.1 * pulse)
+                .attr('font-size', 20 + 5 * pulse)
+            } else {
+              sw.attr('opacity', 0)
             }
           })
         }
