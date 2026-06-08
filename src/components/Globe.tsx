@@ -1189,7 +1189,13 @@ function MatchPreCard({ match, currentUser, onClose, onNavigate }: {
   onNavigate: (section: string) => void
 }) {
   const [prono, setProno] = useState<{ home: number; away: number } | null>(null)
-  const [live,  setLive]  = useState<{ home: number; away: number; status: string; elapsed: number | null } | null>(null)
+  const [live,  setLive]  = useState<{ home: number; away: number; status: string; elapsed: number | null } | null>(() => {
+    try {
+      const o = JSON.parse(localStorage.getItem('trivela-live') || '{}')
+      const l = o[match.id]
+      return l ? { home: l.homeScore, away: l.awayScore, status: l.status, elapsed: l.elapsed } : null
+    } catch { return null }
+  })
   const [vis,   setVis]   = useState(false)
 
   useEffect(() => { const t = setTimeout(() => setVis(true), 60); return () => clearTimeout(t) }, [])
@@ -1202,19 +1208,24 @@ function MatchPreCard({ match, currentUser, onClose, onNavigate }: {
         if (b) setProno({ home: b.homeScore, away: b.awayScore })
       }).catch(() => {})
     }
-    getLive().then(arr => {
+    const poll = () => getLive().then(arr => {
       if (!on) return
       const l = arr.find(x => x.matchId === match.id)
       if (l) setLive({ home: l.homeScore, away: l.awayScore, status: l.status, elapsed: l.elapsed })
     }).catch(() => {})
-    return () => { on = false }
+    poll()
+    const iv = setInterval(poll, 15000)   // suit le score live tant que la carte est ouverte
+    return () => { on = false; clearInterval(iv) }
   }, [match.id, currentUser])
 
   const kickoff = matchKickoffUTC(match)
   const time = kickoff != null
     ? new Date(kickoff).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Zurich' })
     : match.time
-  const isLive = !!live && ['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE'].includes(live.status)
+  // En direct = données API en jeu OU dans le créneau horaire du match
+  const now = Date.now()
+  const inWindow = kickoff != null && now >= kickoff && now < kickoff + 135 * 60 * 1000
+  const isLive = (!!live && ['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE'].includes(live.status)) || inWindow
   const stage = match.round === 'group'
     ? (match.group === 'Amical' ? 'Match amical' : `Groupe ${match.group}`)
     : match.group
@@ -1240,8 +1251,11 @@ function MatchPreCard({ match, currentUser, onClose, onNavigate }: {
     }}>
       <div style={{
         position: 'relative', background: 'rgba(8,18,38,0.92)',
-        border: '1.5px solid rgba(255,255,255,0.12)', borderRadius: 20, overflow: 'hidden',
-        boxShadow: '0 12px 40px rgba(0,0,0,0.55)', backdropFilter: 'blur(24px)', padding: '16px 18px 18px',
+        border: isLive ? '1.5px solid rgba(220,38,38,0.7)' : '1.5px solid rgba(255,255,255,0.12)',
+        borderRadius: 20, overflow: 'hidden',
+        boxShadow: isLive ? '0 12px 40px rgba(220,38,38,0.4)' : '0 12px 40px rgba(0,0,0,0.55)',
+        backdropFilter: 'blur(24px)', padding: '16px 18px 18px',
+        animation: isLive ? 'livePulse 1.6s ease-in-out infinite' : undefined,
       }}>
         {/* Bandeau couleurs des deux pays */}
         <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: `linear-gradient(90deg, ${hc}, ${ac})` }} />
@@ -1257,15 +1271,15 @@ function MatchPreCard({ match, currentUser, onClose, onNavigate }: {
           textAlign: 'center', fontSize: 9, fontWeight: 800, letterSpacing: 1.6,
           color: isLive ? '#ff5a5a' : 'rgba(200,155,60,0.95)', textTransform: 'uppercase', marginBottom: 12,
         }}>
-          {isLive ? `● EN DIRECT${live!.elapsed != null ? ` · ${live!.elapsed}'` : ''}` : `Aujourd'hui · ${stage}`}
+          {isLive ? `● EN DIRECT${live?.elapsed != null ? ` · ${live.elapsed}'` : ''}` : `Aujourd'hui · ${stage}`}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <TeamCol t={match.home} />
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 64 }}>
-            {isLive || live ? (
-              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, color: isLive ? '#ff5a5a' : '#fff', lineHeight: 1 }}>
-                {live!.home}<span style={{ opacity: 0.5, margin: '0 4px' }}>:</span>{live!.away}
+            {isLive ? (
+              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, color: '#ff5a5a', lineHeight: 1 }}>
+                {live?.home ?? 0}<span style={{ opacity: 0.5, margin: '0 4px' }}>:</span>{live?.away ?? 0}
               </div>
             ) : (
               <>
