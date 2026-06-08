@@ -515,7 +515,8 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
     const gStruggle    = svg.append('g').attr('class', 'g-struggle')      // Italy flicker
     const gQualCountry = svg.append('g').attr('class', 'g-qual-countries')
     const gFtCountry  = svg.append('g').attr('class', 'g-ft-countries')
-    const gFlags      = svg.append('g').attr('class', 'g-flags')
+    // Drapeaux (continent / pays) — décoratifs : laissent passer le clic vers les pays
+    const gFlags      = svg.append('g').attr('class', 'g-flags').attr('pointer-events', 'none')
     const gBorders    = svg.append('g').attr('class', 'g-borders')
     const gVig        = svg.append('g').attr('class', 'g-vig')   // vignette circle
     // Marqueurs des matchs du jour — au-dessus de tout, sans bloquer les clics
