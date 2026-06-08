@@ -617,15 +617,15 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
         <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: -1, pointerEvents: 'none', overflow: 'hidden' }}>
           <img src={`https://flagcdn.com/${match.home.code}.svg`} alt="" style={{
             position: 'absolute', left: 0, top: 0, height: '100%', width: '46%', objectFit: 'cover',
-            opacity: 0.42, filter: 'saturate(0.8)',
-            transform: 'skewX(-11deg) scale(1.05)', transformOrigin: 'left',
+            opacity: 0.46, filter: 'saturate(1.35) drop-shadow(0 0 7px rgba(255,255,255,0.3))',
+            transformOrigin: 'left', animation: 'flagWave 4.5s ease-in-out infinite',
             WebkitMaskImage: 'linear-gradient(to right, #000 0%, #000 6%, transparent 55%)',
             maskImage: 'linear-gradient(to right, #000 0%, #000 6%, transparent 55%)',
           }} />
           <img src={`https://flagcdn.com/${match.away.code}.svg`} alt="" style={{
             position: 'absolute', right: 0, top: 0, height: '100%', width: '46%', objectFit: 'cover',
-            opacity: 0.42, filter: 'saturate(0.8)',
-            transform: 'skewX(-11deg) scale(1.05)', transformOrigin: 'right',
+            opacity: 0.46, filter: 'saturate(1.35) drop-shadow(0 0 7px rgba(255,255,255,0.3))',
+            transformOrigin: 'right', animation: 'flagWave 4.5s ease-in-out infinite', animationDelay: '-2.2s',
             WebkitMaskImage: 'linear-gradient(to left, #000 0%, #000 6%, transparent 55%)',
             maskImage: 'linear-gradient(to left, #000 0%, #000 6%, transparent 55%)',
           }} />

@@ -129,6 +129,12 @@ html, body {
   100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 
+/* Drapeau de fond (carte live) — léger flottement "au vent" */
+@keyframes flagWave {
+  0%, 100% { transform: skewX(-6deg) scale(1.04); }
+  50%      { transform: skewX(-8deg) scaleX(1.015) scaleY(1.05); }
+}
+
 /* Country flag flash overlay — enter, hold, fade out */
 @keyframes flagEnter {
   0%   { opacity: 0; transform: scale(1.06); }
