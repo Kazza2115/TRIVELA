@@ -1,7 +1,7 @@
 // Scores en direct : interroge l'API toutes les 30 s pendant ~5 min (le cron
 // relance toutes les 5 min) et écrit l'état des matchs en cours dans match_live.
 // S'arrête tôt s'il n'y a aucun match en direct (économise le quota).
-import { fixtureToMatchId } from './wc-map.mjs'
+import { buildFixtureMap } from './wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -16,6 +16,7 @@ const api   = path => fetch(`${API}${path}`, { headers: { 'x-apisports-key': KEY
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 let validIds = new Set()
+let fxMap = new Map()   // fixture_id API → notre match_id (groupes + élimination directe)
 
 // Match test : amical France (team id 2) du 8 juin 2026 — suivi comme un live.
 const TEST_INPLAY = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP'])
@@ -79,8 +80,8 @@ async function tick() {
   const rows = []
   const goalJobs = []
   for (const f of fixtures) {
-    const id = fixtureToMatchId(f, validIds)
-    if (!id) continue
+    const id = fxMap.get(f.fixture?.id)
+    if (!id) { console.warn(`⚠️ live non mappé: ${f.teams?.home?.name} vs ${f.teams?.away?.name} (fixture ${f.fixture?.id})`); continue }
     rows.push({
       match_id: id, status: f.fixture?.status?.short || 'LIVE',
       elapsed: f.fixture?.status?.elapsed ?? null,
@@ -112,6 +113,15 @@ async function tick() {
 async function main() {
   const sched = await sb('match_schedule?select=match_id')
   if (sched.ok) validIds = new Set((await sched.json()).map(r => r.match_id))
+
+  // Mapping fiable de TOUTE la compétition (groupes + élimination directe) par fixture_id.
+  try {
+    const allRes = await api('/fixtures?league=1&season=2026')
+    const { map, unmatched } = buildFixtureMap(allRes.response || [], validIds)
+    fxMap = map
+    console.log(`Mapping fixtures : ${fxMap.size} mappés${unmatched.length ? ` · ${unmatched.length} NON mappés` : ''}`)
+    if (unmatched.length) console.log(' - ' + unmatched.join('\n - '))
+  } catch (e) { console.warn('build map erreur:', String(e)) }
 
   // Boucle ~5,5 min en interrogeant toutes les 15 s (le cron */5 relance →
   // couverture quasi continue). Arrêt anticipé si aucun match en direct.

@@ -1,7 +1,8 @@
 // TRIVELA — Worker Cloudflare : scores en direct API-Football → Supabase (match_live + match_goals)
 // Cron 1 min, avec une boucle interne (~14 s) → mise à jour quasi temps réel.
+// Mapping FIABLE par fixture_id (groupes + élimination directe) via buildFixtureMap.
 // Secrets (wrangler secret put) : API_FOOTBALL_KEY, SUPABASE_SERVICE_ROLE_KEY
-import { fixtureToMatchId } from '../scripts/wc-map.mjs'
+import { buildFixtureMap } from '../scripts/wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const API = 'https://v3.football.api-sports.io'
@@ -19,17 +20,25 @@ function scorersFrom(events, homeId) {
     })
 }
 
-async function poll(env) {
+function clients(env) {
   const KEY = env.API_FOOTBALL_KEY, SERVICE = env.SUPABASE_SERVICE_ROLE_KEY
-  if (!KEY || !SERVICE) return 0
   const api = path => fetch(`${API}${path}`, { headers: { 'x-apisports-key': KEY } }).then(r => r.json())
   const sb = (path, init = {}) => fetch(`${SUPA_URL}/rest/v1/${path}`, {
     ...init, headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json', ...(init.headers || {}) },
   })
+  return { api, sb, ok: !!(KEY && SERVICE) }
+}
 
-  const sres = await sb('match_schedule?select=match_id')
-  const validIds = sres.ok ? new Set((await sres.json()).map(r => r.match_id)) : new Set()
+async function buildMap(api, sb) {
+  try {
+    const sres = await sb('match_schedule?select=match_id')
+    const validIds = sres.ok ? new Set((await sres.json()).map(r => r.match_id)) : new Set()
+    const allRes = await api('/fixtures?league=1&season=2026')
+    return buildFixtureMap(allRes.response || [], validIds).map
+  } catch { return new Map() }
+}
 
+async function poll(api, sb, fxMap) {
   const writeGoals = async (matchId, fixtureId, homeId) => {
     try {
       const ev = await api(`/fixtures/events?fixture=${fixtureId}`)
@@ -42,10 +51,10 @@ async function poll(env) {
   }
 
   const rows = [], goalJobs = []
-  // Matchs de Coupe du Monde en direct
+  // Matchs de Coupe du Monde en direct (mappés par fixture_id)
   const data = await api('/fixtures?league=1&season=2026&live=all')
   for (const f of (data.response || [])) {
-    const id = fixtureToMatchId(f, validIds)
+    const id = fxMap.get(f.fixture?.id)
     if (!id) continue
     rows.push({
       match_id: id, status: f.fixture?.status?.short || 'LIVE', elapsed: f.fixture?.status?.elapsed ?? null,
@@ -54,7 +63,7 @@ async function poll(env) {
     if ((f.goals?.home ?? 0) + (f.goals?.away ?? 0) > 0) goalJobs.push(writeGoals(id, f.fixture?.id, f.teams?.home?.id))
   }
 
-  // Match test : amical France–Irlande du Nord du 8 juin 2026
+  // Match test : amical France–Irlande du Nord du 8 juin 2026 (par date + noms)
   try {
     const d = await api('/fixtures?date=2026-06-08')
     const f = (d.response || []).find(x => {
@@ -83,13 +92,22 @@ async function poll(env) {
 
 // Boucle ~4 passages espacés de 14 s → couvre la minute du cron (≈14 s de granularité)
 async function runLoop(env) {
+  const { api, sb, ok } = clients(env)
+  if (!ok) return
+  const fxMap = await buildMap(api, sb)
   for (let i = 0; i < 4; i++) {
-    try { await poll(env) } catch (e) { console.log('poll err', String(e)) }
+    try { await poll(api, sb, fxMap) } catch (e) { console.log('poll err', String(e)) }
     if (i < 3) await sleep(14000)
   }
 }
 
 export default {
   async scheduled(_event, env, ctx) { ctx.waitUntil(runLoop(env)) },
-  async fetch(_req, env) { const n = await poll(env); return new Response(`live: ${n}`) },
+  async fetch(_req, env) {
+    const { api, sb, ok } = clients(env)
+    if (!ok) return new Response('secrets manquants', { status: 500 })
+    const fxMap = await buildMap(api, sb)
+    const n = await poll(api, sb, fxMap)
+    return new Response(`live: ${n} (map: ${fxMap.size})`)
+  },
 }

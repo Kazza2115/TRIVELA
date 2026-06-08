@@ -43,3 +43,46 @@ export function fixtureToMatchId(f, validIds) {
   }
   return id
 }
+
+// Rounds à élimination directe (l'ordre = priorité de test des libellés API).
+const KO_ROUNDS = [
+  { re: /round of 32|1\/16|last 32/i, prefix: 'r32',   n: 16 },
+  { re: /round of 16|1\/8|last 16/i,  prefix: 'r16',   n: 8  },
+  { re: /quarter/i,                   prefix: 'qf',    n: 4  },
+  { re: /semi/i,                      prefix: 'sf',    n: 2  },
+  { re: /3rd|third place/i,           prefix: '3rd',   n: 1  },
+  { re: /final/i,                     prefix: 'final', n: 1  },
+]
+
+/**
+ * Construit le mapping FIABLE fixture_id → notre match_id pour TOUTE la compétition
+ * (groupes par équipes/journée, élimination directe par tour + ordre chronologique).
+ * Renvoie { map: Map<fixtureId, matchId>, unmatched: [...] }.
+ */
+export function buildFixtureMap(fixtures, validIds) {
+  const map = new Map()
+  const buckets = {}
+  const unmatched = []
+  for (const f of (fixtures || [])) {
+    const fid = f.fixture?.id
+    if (!fid) continue
+    const round = f.league?.round || ''
+    if (/group/i.test(round)) {
+      const id = fixtureToMatchId(f, validIds)
+      if (id) map.set(fid, id)
+      else unmatched.push(`${f.teams?.home?.name} vs ${f.teams?.away?.name} [${round}]`)
+      continue
+    }
+    const ko = KO_ROUNDS.find(k => k.re.test(round))
+    if (!ko) { unmatched.push(`${f.teams?.home?.name} vs ${f.teams?.away?.name} [${round}]`); continue }
+    const ts = Date.parse(f.fixture?.date || '') || 0
+    ;(buckets[ko.prefix] ||= []).push({ fid, ts })
+  }
+  for (const ko of KO_ROUNDS) {
+    const arr = buckets[ko.prefix]
+    if (!arr) continue
+    arr.sort((a, b) => a.ts - b.ts)
+    arr.forEach((x, i) => map.set(x.fid, ko.n === 1 ? ko.prefix : `${ko.prefix}-${i + 1}`))
+  }
+  return { map, unmatched }
+}

@@ -1,6 +1,6 @@
 // Résultats via API-Football : règle les matchs de groupe TERMINÉS
 // (settle_match → points + classements). Mapping partagé via wc-map.mjs.
-import { fixtureToMatchId } from './wc-map.mjs'
+import { buildFixtureMap } from './wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -36,11 +36,11 @@ async function main() {
 
   const data = await api('/fixtures?league=1&season=2026')
   const fixtures = data.response || []
+  const { map: fxMap, unmatched } = buildFixtureMap(fixtures, validIds)
   let matched = 0, settled = 0, goalsWritten = 0
-  const unmatched = []
   for (const f of fixtures) {
-    const id = fixtureToMatchId(f, validIds)
-    if (!id) { unmatched.push(`${f.teams?.home?.name} vs ${f.teams?.away?.name} [${f.league?.round}]`); continue }
+    const id = fxMap.get(f.fixture?.id)
+    if (!id) continue
     matched++
     const status = f.fixture?.status?.short
     if (FINISHED.has(status) && f.goals?.home != null && f.goals?.away != null) {

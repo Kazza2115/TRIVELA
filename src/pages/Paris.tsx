@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import PageLayout from './PageLayout'
-import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS } from '../data/wc2026Matches'
+import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS, ALL_MATCHES, matchKickoffUTC } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
 import { saveBet, saveFavorites, getBets, subscribeToResults, getLive, subscribeToLive, getMatchGoals, subscribeToMatchGoals } from '../services/auth'
 import type { UserProfile, MatchResult, LiveScore, Scorer } from '../services/auth'
@@ -54,6 +54,11 @@ function isMatchLocked(match: Match): boolean {
 
 /** Fenêtre « en direct » : du coup d'envoi à +2h15 (tant qu'aucun résultat final). */
 const LIVE_MS = 135 * 60 * 1000
+const KICKOFF_MS = new Map<string, number | null>(ALL_MATCHES.map(m => [m.id, matchKickoffUTC(m)]))
+function inLiveWindow(id: string, now: number): boolean {
+  const k = KICKOFF_MS.get(id)
+  return k != null && now >= k && now < k + LIVE_MS
+}
 function isMatchLive(match: Match, now: number): boolean {
   const utc = parseUTC(match.date, match.time)
   return utc !== null && now >= utc && now < utc + LIVE_MS
@@ -172,11 +177,12 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
   const [live, setLive] = useState<Record<string, LiveScore>>({})
   const [goalFlash, setGoalFlash] = useState<Record<string, 'home' | 'away'>>({})
   const prevLive = useRef<Record<string, LiveScore>>({})
+  const liveRef  = useRef<Record<string, LiveScore>>({})   // dernier affichage (anti-flicker)
 
   const loadLive = useCallback(async () => {
     const arr = await getLive()
-    const map: Record<string, LiveScore> = {}
-    arr.forEach(l => { map[l.matchId] = l })
+    const real: Record<string, LiveScore> = {}
+    arr.forEach(l => { real[l.matchId] = l })
     const prev = prevLive.current
     for (const l of arr) {
       const p = prev[l.matchId]
@@ -188,8 +194,16 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
         setTimeout(() => setGoalFlash(g => { const n = { ...g }; delete n[l.matchId]; return n }), 30000)
       }
     }
-    prevLive.current = map
-    setLive(map)
+    prevLive.current = real
+    // Anti-flicker : si une ligne live disparaît brièvement (creux API) alors que le
+    // match est toujours dans son créneau, on garde le dernier score live affiché.
+    const now = Date.now()
+    const display: Record<string, LiveScore> = { ...real }
+    for (const [id, last] of Object.entries(liveRef.current)) {
+      if (!display[id] && inLiveWindow(id, now)) display[id] = last
+    }
+    liveRef.current = display
+    setLive(display)
   }, [])
 
   useEffect(() => {
