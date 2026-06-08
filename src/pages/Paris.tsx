@@ -611,24 +611,26 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
       opacity: finished ? 0.6 : locked ? 0.8 : 1,
       filter: finished ? 'grayscale(0.55)' : 'none',
     }}>
-      {/* Drapeaux des deux pays en fond, en diagonale, dégradés vers un centre noir
-          — uniquement quand le match est en direct */}
+      {/* Drapeaux des deux pays en fond (style "carte de chat" : inclinés, bien
+          lisibles, dégradés vers un centre noir) — seulement quand le match est en direct */}
       {live && !isTBD && (
         <div aria-hidden style={{ position: 'absolute', inset: 0, zIndex: -1, pointerEvents: 'none', overflow: 'hidden' }}>
-          <img src={`https://flagcdn.com/w320/${match.home.code}.png`} alt="" style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3,
-            WebkitMaskImage: 'linear-gradient(135deg, #000 0%, #000 18%, transparent 45%)',
-            maskImage: 'linear-gradient(135deg, #000 0%, #000 18%, transparent 45%)',
+          <img src={`https://flagcdn.com/w160/${match.home.code}.png`} alt="" style={{
+            position: 'absolute', left: 0, top: 0, height: '100%', width: '46%', objectFit: 'cover', opacity: 0.34,
+            transform: 'skewX(-11deg) scale(1.05)', transformOrigin: 'left',
+            WebkitMaskImage: 'linear-gradient(to right, #000 0%, #000 35%, transparent 100%)',
+            maskImage: 'linear-gradient(to right, #000 0%, #000 35%, transparent 100%)',
           }} />
-          <img src={`https://flagcdn.com/w320/${match.away.code}.png`} alt="" style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.3,
-            WebkitMaskImage: 'linear-gradient(135deg, transparent 55%, #000 82%, #000 100%)',
-            maskImage: 'linear-gradient(135deg, transparent 55%, #000 82%, #000 100%)',
+          <img src={`https://flagcdn.com/w160/${match.away.code}.png`} alt="" style={{
+            position: 'absolute', right: 0, top: 0, height: '100%', width: '46%', objectFit: 'cover', opacity: 0.34,
+            transform: 'skewX(-11deg) scale(1.05)', transformOrigin: 'right',
+            WebkitMaskImage: 'linear-gradient(to left, #000 0%, #000 35%, transparent 100%)',
+            maskImage: 'linear-gradient(to left, #000 0%, #000 35%, transparent 100%)',
           }} />
-          {/* Bande noire au milieu (diagonale) */}
+          {/* Centre noir entre les deux drapeaux */}
           <div style={{
             position: 'absolute', inset: 0,
-            background: 'linear-gradient(135deg, transparent 34%, rgba(0,0,0,0.62) 50%, transparent 66%)',
+            background: 'linear-gradient(90deg, transparent 30%, rgba(0,0,0,0.6) 50%, transparent 70%)',
           }} />
         </div>
       )}
