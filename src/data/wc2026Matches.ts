@@ -52,6 +52,7 @@ const T: Record<string, Team> = {
   SCO: { name: 'Écosse',            short: 'SCO', code: 'gb-sct' },
   CZE: { name: 'Tchéquie',          short: 'CZE', code: 'cz' },
   BIH: { name: 'Bosnie-Herzégovine',short: 'BIH', code: 'ba' },
+  NIR: { name: 'Irlande du Nord',   short: 'NIR', code: 'gb-nir' },
   // CONCACAF
   USA: { name: 'États-Unis',        short: 'USA', code: 'us' },
   MEX: { name: 'Mexique',           short: 'MEX', code: 'mx' },
@@ -104,6 +105,10 @@ export const GROUPS: Record<string, [Team, Team, Team, Team]> = {
 
 // ─── Group stage — 72 matches (hardcoded, verified against official schedule) ─
 export const GROUP_MATCHES: Match[] = [
+
+  // ── Match test (amical France – Irlande du Nord, traité comme un match CdM) ──
+  { id:'fr-nir', group:'Amical', round:'group', matchday:1, home:T.FRA, away:T.NIR,
+    date:'8 Juin', time:'19:10', venue:'Stade Pierre-Mauroy', city:'Lille', status:'upcoming' },
 
   // ── GROUP A ─────────────────────────────────────────────────────────────────
   // MD1 — 11 juin 3pm ET / 11 jun 10pm ET

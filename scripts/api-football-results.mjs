@@ -64,5 +64,25 @@ async function main() {
   }
   console.log(`✅ Mappés : ${matched}/${fixtures.length} · Réglés : ${settled} · Buteurs écrits : ${goalsWritten}`)
   if (unmatched.length) console.log(`⚠️ Non mappés (${unmatched.length}) :\n - ${unmatched.join('\n - ')}`)
+
+  // Match test : règle l'amical France (team 2) du 8 juin quand terminé.
+  try {
+    const d = await api('/fixtures?team=2&date=2026-06-08')
+    const f = (d.response || [])[0]
+    const st = f?.fixture?.status?.short
+    if (f && FINISHED.has(st) && f.goals?.home != null && f.goals?.away != null) {
+      const r = await sb('rpc/settle_match', { method: 'POST',
+        body: JSON.stringify({ p_match_id: 'fr-nir', p_home_score: f.goals.home, p_away_score: f.goals.away }) })
+      console.log(`Amical France réglé (${f.goals.home}-${f.goals.away}) :`, r.status)
+      if (!haveGoals.has('fr-nir') && (f.goals.home + f.goals.away) > 0) {
+        const ev = await api(`/fixtures/events?fixture=${f.fixture?.id}`)
+        const scorers = scorersFrom(ev.response, f.teams?.home?.id)
+        await sb('match_goals?on_conflict=match_id', {
+          method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify([{ match_id: 'fr-nir', scorers, updated_at: new Date().toISOString() }]),
+        })
+      }
+    }
+  } catch (e) { console.warn('amical:', String(e)) }
 }
 main().catch(e => { console.error('Erreur :', e); process.exit(1) })
