@@ -663,10 +663,10 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
             // Ombre au sol (ancre le drapeau au pays)
             gArcs.append('ellipse').attr('class', `mflag-shadow m-${i}-${s}`)
               .attr('fill', 'rgba(0,0,0,0.4)')
-            // Mât
+            // Mât (noir, avec un léger liseré clair pour rester visible)
             gArcs.append('line').attr('class', `mflag-pole m-${i}-${s}`)
-              .attr('stroke', 'rgba(255,255,255,0.9)').attr('stroke-width', 2).attr('stroke-linecap', 'round')
-              .style('filter', 'drop-shadow(0 1px 2px rgba(0,0,0,0.6))')
+              .attr('stroke', '#000000').attr('stroke-width', 2).attr('stroke-linecap', 'round')
+              .style('filter', 'drop-shadow(0 0 1.4px rgba(255,255,255,0.65))')
             // Drapeau surélevé (ombre portée → effet "au-dessus de la surface")
             gArcs.append('image').attr('class', `mflag-img m-${i}-${s}`)
               .attr('href', `https://flagcdn.com/w160/${fl.code}.png`)
@@ -677,7 +677,7 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
           })
         })
 
-        const updateArcs = (t: number) => {
+        const updateArcs = (_t: number) => {
           const list = matchArcsRef.current
           if (!list.length) return
           const rot = rotRef.current
@@ -694,14 +694,14 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
                 sh.attr('opacity', 0); pole.attr('opacity', 0); img.attr('opacity', 0); edge.attr('opacity', 0); return
               }
               const [x, y] = p
-              // Rivalité : les deux mâts ondulent en opposition de phase
-              const phase = 0.5 + 0.5 * Math.sin(t / 520 + s * Math.PI)
-              const H  = 22 + 6 * phase
+              // Drapeau planté, centré sur le milieu du pays (sans pulsation)
+              const H  = 26
+              const fx = x - FLAG_W / 2
               const fy = y - H - FLAG_H
               sh.attr('cx', x).attr('cy', y + 1).attr('rx', 5).attr('ry', 2).attr('opacity', 0.4)
               pole.attr('x1', x).attr('y1', y).attr('x2', x).attr('y2', y - H).attr('opacity', 1)
-              img.attr('x', x).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 1)
-              edge.attr('x', x).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 0.9)
+              img.attr('x', fx).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 1)
+              edge.attr('x', fx).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 0.9)
             })
           })
         }
