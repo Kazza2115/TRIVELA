@@ -406,7 +406,21 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
   triggerContinentRef.current  = triggerContinentForConf
   onNavigateRef.current        = onNavigate
   onContinentShownRef.current  = onContinentShown
-  openMatchCardRef.current     = (m: Match) => { handleClose(); setMatchCard(m) }
+  openMatchCardRef.current     = (m: Match) => {
+    handleClose()
+    // Allume les deux pays du match (même effet que le continent, réduit à 2 pays)
+    const ids = [...new Set([CODE_TO_ID[m.home.code], CODE_TO_ID[m.away.code]]
+      .filter((x): x is number => typeof x === 'number'))]
+    if (svgRef.current && pathRef.current && featuresRef.current.length && ids.length) {
+      const svg = d3.select(svgRef.current)
+      applyContinent(ids, featuresRef.current, pathRef.current,
+        svg.select('.g-flags') as any, svg.select('defs') as any)
+      continentCountriesRef.current = ids
+      isRotRef.current = false
+      velRef.current   = { x: 0, y: 0 }
+    }
+    setMatchCard(m)
+  }
 
   // When Explorer is clicked: hide the React popup card but keep selectedRef + SVG flag,
   // then run the D3 projection zoom. navigate is called after the animation.
@@ -1177,8 +1191,8 @@ setIsLoaded(true)
         <MatchPreCard
           match={matchCard}
           currentUser={currentUser}
-          onClose={() => setMatchCard(null)}
-          onNavigate={(s) => { setMatchCard(null); onNavigateRef.current(s) }}
+          onClose={() => { handleClose(); setMatchCard(null) }}
+          onNavigate={(s) => { handleClose(); setMatchCard(null); onNavigateRef.current(s) }}
         />
       )}
     </div>
