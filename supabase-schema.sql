@@ -146,7 +146,7 @@ begin
   values (p_match_id, p_home_score, p_away_score, now());
 
   -- Barème identique à calcPoints() côté client :
-  --   +5 score exact · +3 bon vainqueur · +1 si match nul réel · 0 sinon
+  --   +5 score exact · +3 bon vainqueur · +1 nul correctement pronostiqué · 0 sinon
   with scored as (
     select
       b.id,
@@ -155,7 +155,7 @@ begin
         when b.home_score = p_home_score and b.away_score = p_away_score then 5
         when p_home_score > p_away_score and b.home_score > b.away_score then 3
         when p_home_score < p_away_score and b.home_score < b.away_score then 3
-        when p_home_score = p_away_score then 1
+        when p_home_score = p_away_score and b.home_score = b.away_score then 1
         else 0
       end as pts
     from bets b
