@@ -41,7 +41,7 @@ async function main() {
     console.warn('⚠️  Flux RSS injoignable :', String(e)); return
   }
 
-  const rows = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 30).map(m => {
+  const rows = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].slice(0, 40).map(m => {
     const b = m[1]
     const rawTitle = tag(b, 'title'); const link = tag(b, 'link'); const source = tag(b, 'source')
     const pub = tag(b, 'pubDate'); const desc = tag(b, 'description')
