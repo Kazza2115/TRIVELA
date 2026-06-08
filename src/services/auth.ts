@@ -30,32 +30,91 @@ export interface BetRecord {
 
 const SUPA_URL  = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SUPA_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpdmN3dHp6aHJzZGZ6eGlyamt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0MjM2MTMsImV4cCI6MjA5MTk5OTYxM30.BUfzNXfEobrz4CSeyBSj3I8To4F1eR-7AktC_kZfsO8'
-const JWT_KEY   = 'trivela-jwt'
+const JWT_KEY     = 'trivela-jwt'
+const REFRESH_KEY = 'trivela-refresh'
+const PERSIST_KEY = 'trivela-remember'
 
-// ─── JWT store — bypasses Supabase JS client lock issues ─────────────────────
+// ─── Session store — access + refresh tokens, "stay logged in" aware ─────────
 
 let _jwt: string | null = null
+let _refresh: string | null = null
+let _persist = true                       // true → localStorage (longue durée), false → sessionStorage
+let _refreshTimer: ReturnType<typeof setInterval> | null = null
 
-// Restore JWT on module load (page reload)
+function tokenExpMs(jwt: string): number {
+  try { return (JSON.parse(atob(jwt.split('.')[1])).exp ?? 0) * 1000 } catch { return 0 }
+}
+function safeLocal(): Storage | null   { try { return localStorage } catch { return null } }
+function safeSession(): Storage | null { try { return sessionStorage } catch { return null } }
+function clearKey(k: string) { safeLocal()?.removeItem(k); safeSession()?.removeItem(k) }
+
+// Restore tokens on module load — depuis localStorage OU sessionStorage
 try {
-  const raw = localStorage.getItem(JWT_KEY)
-  if (raw) {
-    const exp: number = JSON.parse(atob(raw.split('.')[1])).exp ?? 0
-    if (exp * 1000 > Date.now()) _jwt = raw
-    else localStorage.removeItem(JWT_KEY)
-  }
+  _persist = safeLocal()?.getItem(PERSIST_KEY) !== '0'
+  const jwt = safeLocal()?.getItem(JWT_KEY) ?? safeSession()?.getItem(JWT_KEY) ?? null
+  const rt  = safeLocal()?.getItem(REFRESH_KEY) ?? safeSession()?.getItem(REFRESH_KEY) ?? null
+  if (rt) _refresh = rt
+  if (jwt && tokenExpMs(jwt) > Date.now()) _jwt = jwt   // sinon : on renouvellera via le refresh token
 } catch {}
 
-function setJwt(token: string | null) {
-  _jwt = token
+/** Enregistre la session. `persist` true = reste connecté (localStorage). */
+function persistSession(access: string | null, refresh: string | null, persist: boolean = _persist) {
+  _jwt = access
+  if (refresh) _refresh = refresh
+  _persist = persist
+  clearKey(JWT_KEY); clearKey(REFRESH_KEY)
+  const s = persist ? safeLocal() : safeSession()
   try {
-    if (token) localStorage.setItem(JWT_KEY, token)
-    else localStorage.removeItem(JWT_KEY)
+    if (access && s)   s.setItem(JWT_KEY, access)
+    if (_refresh && s) s.setItem(REFRESH_KEY, _refresh)
+    safeLocal()?.setItem(PERSIST_KEY, persist ? '1' : '0')
   } catch {}
 }
 
+function clearSession() {
+  _jwt = null; _refresh = null
+  clearKey(JWT_KEY); clearKey(REFRESH_KEY)
+  if (_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer = null }
+}
+
+// Compat : ancien setJwt → met à jour l'access token sans toucher au refresh
+function setJwt(token: string | null) {
+  if (token === null) { clearSession(); return }
+  persistSession(token, _refresh, _persist)
+}
+
+/** Échange le refresh token contre un nouvel access token. */
+async function refreshSession(): Promise<boolean> {
+  if (!_refresh) return false
+  try {
+    const res = await fetch(`${SUPA_URL}/auth/v1/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: { 'apikey': SUPA_ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: _refresh }),
+    })
+    if (!res.ok) return false
+    const body = await res.json()
+    if (!body.access_token) return false
+    persistSession(body.access_token, body.refresh_token ?? _refresh, _persist)
+    return true
+  } catch { return false }
+}
+
+/** Garantit un access token valide (renouvelle si expiré / proche de l'expiration). */
+async function ensureFreshToken(): Promise<void> {
+  if (_jwt && tokenExpMs(_jwt) > Date.now() + 60_000) return
+  if (_refresh) await refreshSession()
+}
+
+function startRefreshTimer() {
+  if (_refreshTimer || !_refresh) return
+  _refreshTimer = setInterval(() => { refreshSession() }, 45 * 60 * 1000)
+}
+
+
 // Authenticated REST helper — uses stored JWT, falls back to anon key
 async function authFetch(method: string, path: string, body?: object): Promise<Response> {
+  await ensureFreshToken()
   const headers: Record<string, string> = {
     'apikey':        SUPA_ANON,
     'Authorization': `Bearer ${_jwt ?? SUPA_ANON}`,
@@ -113,6 +172,7 @@ function toProfile({ _pwKey: _, ...p }: StoredUser): UserProfile {
 export async function register(
   email: string, password: string,
   pseudo: string, countryCode: string, countryName: string,
+  remember: boolean = true,
 ): Promise<{ user?: UserProfile; error?: string }> {
 
   if (pseudo.length < 2 || pseudo.length > 20)
@@ -139,7 +199,10 @@ export async function register(
     if (!res.ok || body.error) return { error: body.error_description || body.msg || body.message || 'Erreur inscription.' }
     if (!body.user) return { error: 'Erreur lors de la création du compte.' }
 
-    if (body.access_token) setJwt(body.access_token)
+    if (body.access_token) {
+      persistSession(body.access_token, body.refresh_token ?? null, remember)
+      startRefreshTimer()
+    }
 
     await new Promise(r => setTimeout(r, 800))
 
@@ -171,7 +234,7 @@ export async function register(
 }
 
 export async function login(
-  email: string, password: string,
+  email: string, password: string, remember: boolean = true,
 ): Promise<{ user?: UserProfile; error?: string }> {
 
   if (supabaseConfigured) {
@@ -187,7 +250,8 @@ export async function login(
       const body = await res.json()
       if (!res.ok) return { error: body.error_description || body.msg || body.message || 'Identifiants incorrects.' }
 
-      setJwt(body.access_token)
+      persistSession(body.access_token, body.refresh_token ?? null, remember)
+      startRefreshTimer()
 
       // Fetch full profile now that JWT is stored
       const profile = await fetchProfile(body.user?.id)
@@ -237,22 +301,23 @@ type AuthCallback = (user: UserProfile | null) => void
 
 export function subscribeToAuth(cb: AuthCallback): () => void {
   if (supabaseConfigured) {
-    if (_jwt) {
-      // JWT restored from localStorage — fetch the profile
-      fetch(`${SUPA_URL}/auth/v1/user`, {
+    ;(async () => {
+      await ensureFreshToken()              // renouvelle via le refresh token si l'accès a expiré
+      if (!_jwt) { cb(null); return }
+      const fetchUser = () => fetch(`${SUPA_URL}/auth/v1/user`, {
         headers: { 'apikey': SUPA_ANON, 'Authorization': `Bearer ${_jwt}` },
       })
-        .then(r => r.ok ? r.json() : null)
-        .then(async user => {
-          if (!user?.id) { setJwt(null); cb(null); return }
-          const profile = await fetchProfile(user.id)
-          if (profile) { profile.email = user.email ?? ''; cb(profile) }
-          else cb(null)
-        })
-        .catch(() => cb(null))
-    } else {
-      cb(null)
-    }
+      try {
+        let r = await fetchUser()
+        if (!r.ok && await refreshSession()) r = await fetchUser()   // 401 → un essai de renouvellement
+        if (!r.ok) { clearSession(); cb(null); return }
+        const user = await r.json()
+        if (!user?.id) { clearSession(); cb(null); return }
+        const profile = await fetchProfile(user.id)
+        if (profile) { profile.email = user.email ?? ''; startRefreshTimer(); cb(profile) }
+        else cb(null)
+      } catch { cb(null) }
+    })()
     return () => {}
   }
 

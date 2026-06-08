@@ -18,6 +18,7 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
   const [country,    setCountry]    = useState(COUNTRIES[0])
   const [error,      setError]      = useState('')
   const [loading,    setLoading]    = useState(false)
+  const [remember,   setRemember]   = useState(true)
   const mouseDownTarget = useRef<EventTarget | null>(null)
 
   const switchMode = (m: Mode) => { setMode(m); setError('') }
@@ -29,8 +30,8 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
     setLoading(true)
     try {
       const result = mode === 'register'
-        ? await register(email.trim(), password, pseudo.trim(), country.code, country.name)
-        : await login(email.trim(), password)
+        ? await register(email.trim(), password, pseudo.trim(), country.code, country.name, remember)
+        : await login(email.trim(), password, remember)
       if (result.error || !result.user) { setError(result.error ?? 'Erreur inattendue.'); return }
       onSuccess(result.user)
     } catch (e) {
@@ -184,6 +185,35 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
             {error}
           </div>
         )}
+
+        {/* Rester connecté */}
+        <button
+          type="button"
+          onClick={() => setRemember(r => !r)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            marginTop: 16, background: 'none', border: 'none',
+            cursor: 'pointer', padding: 0, width: '100%', textAlign: 'left',
+          }}
+        >
+          <span style={{
+            width: 22, height: 22, borderRadius: 7, flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: remember ? 'linear-gradient(135deg,#C89B3C,#E8D080)' : 'var(--bg-fill)',
+            border: `1.5px solid ${remember ? '#C89B3C' : 'var(--border)'}`,
+            transition: 'all 0.15s',
+          }}>
+            {remember && (
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                stroke="#0D0800" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
+            Rester connecté
+          </span>
+        </button>
 
         {/* Submit */}
         <button
