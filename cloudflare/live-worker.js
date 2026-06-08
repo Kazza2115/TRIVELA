@@ -54,10 +54,13 @@ async function poll(env) {
     if ((f.goals?.home ?? 0) + (f.goals?.away ?? 0) > 0) goalJobs.push(writeGoals(id, f.fixture?.id, f.teams?.home?.id))
   }
 
-  // Match test : amical France (team 2) du 8 juin 2026
+  // Match test : amical France–Irlande du Nord du 8 juin 2026
   try {
-    const d = await api('/fixtures?team=2&date=2026-06-08')
-    const f = (d.response || [])[0]
+    const d = await api('/fixtures?date=2026-06-08')
+    const f = (d.response || []).find(x => {
+      const n = [x.teams?.home?.name, x.teams?.away?.name]
+      return n.includes('France') && n.includes('Northern Ireland')
+    })
     const st = f?.fixture?.status?.short
     if (f && INPLAY.has(st)) {
       rows.push({

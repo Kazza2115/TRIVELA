@@ -21,13 +21,15 @@ let validIds = new Set()
 const TEST_INPLAY = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP'])
 async function trackFriendly(rows, goalJobs) {
   try {
-    const d = await api('/fixtures?team=2&date=2026-06-08')
-    const list = d.response || []
-    console.log('amical(team=2,2026-06-08):', JSON.stringify(list.map(f => ({
-      id: f.fixture?.id, st: f.fixture?.status?.short,
-      h: f.teams?.home?.name, a: f.teams?.away?.name, g: `${f.goals?.home}-${f.goals?.away}`,
-    }))))
-    const f = list[0]
+    const d = await api('/fixtures?date=2026-06-08')
+    const all = d.response || []
+    const f = all.find(x => {
+      const n = [x.teams?.home?.name, x.teams?.away?.name]
+      return n.includes('France') && n.includes('Northern Ireland')
+    })
+    console.log('amical France–NIR:', f
+      ? JSON.stringify({ id: f.fixture?.id, st: f.fixture?.status?.short, h: f.teams?.home?.name, a: f.teams?.away?.name, g: `${f.goals?.home}-${f.goals?.away}` })
+      : `introuvable (${all.length} matchs ce jour)`)
     const st = f?.fixture?.status?.short
     if (!f || !TEST_INPLAY.has(st)) return   // pas en jeu → réglé par le job résultats si terminé
     rows.push({

@@ -65,10 +65,13 @@ async function main() {
   console.log(`✅ Mappés : ${matched}/${fixtures.length} · Réglés : ${settled} · Buteurs écrits : ${goalsWritten}`)
   if (unmatched.length) console.log(`⚠️ Non mappés (${unmatched.length}) :\n - ${unmatched.join('\n - ')}`)
 
-  // Match test : règle l'amical France (team 2) du 8 juin quand terminé.
+  // Match test : règle l'amical France–Irlande du Nord du 8 juin quand terminé.
   try {
-    const d = await api('/fixtures?team=2&date=2026-06-08')
-    const f = (d.response || [])[0]
+    const d = await api('/fixtures?date=2026-06-08')
+    const f = (d.response || []).find(x => {
+      const n = [x.teams?.home?.name, x.teams?.away?.name]
+      return n.includes('France') && n.includes('Northern Ireland')
+    })
     const st = f?.fixture?.status?.short
     if (f && FINISHED.has(st) && f.goals?.home != null && f.goals?.away != null) {
       const r = await sb('rpc/settle_match', { method: 'POST',
