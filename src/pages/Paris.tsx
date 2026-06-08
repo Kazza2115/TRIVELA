@@ -281,7 +281,11 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
 
   const thirdsQualified = bestThirds(results)
 
-  const liveList = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES].filter(m => live[m.id])
+  // Un match "en direct" = données live OU dans son créneau horaire (et non terminé).
+  // Il n'apparaît QUE dans la carte live en haut, jamais dans la liste des journées.
+  const isLiveNow = (m: Match) =>
+    m.home.code !== 'un' && !results[m.id] && (!!live[m.id] || isMatchLive(m, now))
+  const liveList = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES].filter(isLiveNow)
 
   return (
     <PageLayout onBack={onBack} accentColor="#C89B3C" flag="🎯" title="PARIS"
@@ -305,7 +309,8 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {liveList.map(m => (
               <LiveHeroCard key={`live-${m.id}`} match={m} domId={`match-${m.id}`}
-                live={live[m.id]} goalSide={goalFlash[m.id]} scorers={goals[m.id]}
+                live={live[m.id] ?? { matchId: m.id, status: 'LIVE', elapsed: null, homeScore: 0, awayScore: 0 }}
+                goalSide={goalFlash[m.id]} scorers={goals[m.id]}
                 prediction={predictions[m.id]} confirmed={confirmed.has(m.id)} />
             ))}
           </div>
@@ -387,7 +392,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
         <>
           {([1, 2, 3] as const).map(md => {
             const mdMatches = GROUP_MATCHES
-              .filter(m => m.matchday === md && !live[m.id])
+              .filter(m => m.matchday === md && !isLiveNow(m))
               .sort((a, b) => (parseUTC(a.date, a.time) ?? 0) - (parseUTC(b.date, b.time) ?? 0))
             const dates = [...new Set(mdMatches.map(m => m.date))]
             const dateRange = dates.length > 1 ? `${dates[0]} – ${dates[dates.length - 1]}` : dates[0] ?? ''
