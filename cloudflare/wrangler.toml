@@ -1,0 +1,6 @@
+name = "trivela-live"
+main = "live-worker.js"
+compatibility_date = "2024-11-06"
+
+[triggers]
+crons = ["* * * * *"]
