@@ -78,19 +78,25 @@ async function fromTable(): Promise<Article[]> {
   if (!res.ok) throw new Error('table')
   const rows = await res.json()
   if (!Array.isArray(rows) || rows.length === 0) throw new Error('empty')
-  return rows.map((r: any, i: number): Article => ({
-    id: (r.id as string) || String(i),
-    title: r.title as string,
-    excerpt: (r.excerpt as string) || '',
-    url: r.url as string,
-    source: (r.source as string) || 'Actualités',
-    image: (r.image as string) || null,
-    category: (r.category as string) || 'Mondial 2026',
-    categoryColor: (r.category_color as string) || '#C89B3C',
-    flag: (r.flag as string) || '⚽',
-    isNew: r.published_at ? (Date.now() - Date.parse(r.published_at) < 24 * 3600 * 1000) : false,
-    publishedAt: r.published_at ? Date.parse(r.published_at) : Date.now(),
-  })).filter(a => a.title && a.url)
+  return rows.map((r: any, i: number): Article => {
+    const rawImg = (r.image as string) || ''
+    const rawExc = (r.excerpt as string) || ''
+    const badImg = /\/\/[a-z0-9.-]*\b(?:gstatic|google|googleusercontent)\.com/i.test(rawImg)
+    const badExc = /aggregated from sources|google\s*news/i.test(rawExc)
+    return {
+      id: (r.id as string) || String(i),
+      title: r.title as string,
+      excerpt: badExc ? '' : rawExc,
+      url: r.url as string,
+      source: (r.source as string) || 'Actualités',
+      image: badImg || !rawImg ? null : rawImg,
+      category: (r.category as string) || 'Mondial 2026',
+      categoryColor: (r.category_color as string) || '#C89B3C',
+      flag: (r.flag as string) || '⚽',
+      isNew: r.published_at ? (Date.now() - Date.parse(r.published_at) < 24 * 3600 * 1000) : false,
+      publishedAt: r.published_at ? Date.parse(r.published_at) : Date.now(),
+    }
+  }).filter(a => a.title && a.url)
 }
 
 // 2) Proxys CORS publics sur le flux Google Actualités (repli)

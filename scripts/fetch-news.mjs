@@ -56,22 +56,48 @@ async function getHtml(url) {
   } finally { clearTimeout(timer) }
 }
 
+// À rejeter : images Google/gstatic et le résumé générique de Google Actualités.
+const BAD_IMG = /\/\/[a-z0-9.-]*\b(?:gstatic|google|googleusercontent)\.com/i
+const BAD_DESC = /aggregated from sources|google\s*news|coverage,\s*aggregated/i
+const NOT_GOOGLE = /https?:\/\/(?!(?:[a-z0-9.-]*\.)?(?:google|gstatic|googleusercontent|youtube|ggpht)\.[a-z.]+)[^\s"'<>]+/i
+
+// Décode l'URL réelle de l'éditeur encodée dans le lien Google Actualités.
+function decodeGoogleNewsUrl(link) {
+  const m = link.match(/\/articles\/([^?/]+)/)
+  if (!m) return null
+  let s = m[1].replace(/-/g, '+').replace(/_/g, '/')
+  while (s.length % 4) s += '='
+  let raw
+  try { raw = Buffer.from(s, 'base64').toString('latin1') } catch { return null }
+  const u = raw.match(/https?:\/\/[^\x00-\x1f\x80-\xff"'<>\\]+/)
+  return u ? u[0] : null
+}
+
 // Résout l'image + le résumé d'un article (lien Google Actualités → éditeur).
 async function resolveOg(link) {
+  // 1) URL réelle de l'éditeur : décodage direct, sinon on suit le lien.
+  let target = decodeGoogleNewsUrl(link)
+  if (!target) {
+    try {
+      const { html, finalUrl } = await getHtml(link)
+      if (!/news\.google|consent\.google/.test(finalUrl)) {
+        target = finalUrl
+      } else {
+        const canon = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)
+        const any = html.match(NOT_GOOGLE)
+        target = (canon && canon[1]) || (any && any[0]) || null
+      }
+    } catch { /* ignore */ }
+  }
+  if (!target || !NOT_GOOGLE.test(target)) return { img: null, desc: '' }
+
+  // 2) og:image + og:description sur le vrai article, en filtrant le bruit Google.
   try {
-    let { html, finalUrl } = await getHtml(link)
+    const { html } = await getHtml(target)
     let img  = metaContent(html, 'og:image') || metaContent(html, 'twitter:image')
     let desc = metaContent(html, 'og:description') || metaContent(html, 'description')
-
-    // Toujours sur Google (page intermédiaire) → on extrait l'URL réelle et on refait un saut.
-    if (!img && /news\.google\.com|consent\.google/.test(finalUrl)) {
-      const real = html.match(/https?:\/\/(?!(?:news\.google|google|gstatic|googleusercontent|policies\.google|accounts\.google)\.com)[^\s"'<>]+/i)
-      if (real) {
-        const r2 = await getHtml(real[0])
-        img  = metaContent(r2.html, 'og:image') || metaContent(r2.html, 'twitter:image')
-        desc = desc || metaContent(r2.html, 'og:description') || metaContent(r2.html, 'description')
-      }
-    }
+    if (img && BAD_IMG.test(img)) img = ''
+    if (desc && BAD_DESC.test(desc)) desc = ''
     return { img: img || null, desc: desc || '' }
   } catch {
     return { img: null, desc: '' }
