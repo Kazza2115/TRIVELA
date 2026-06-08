@@ -558,7 +558,7 @@ function calcPoints(result: MatchResult, pred: { home: number; away: number }): 
   if (rH === pH && rA === pA) return 5
   if (rH > rA && pH > pA) return 3
   if (rH < rA && pH < pA) return 3
-  if (rH === rA && pH === pA) return 1   // nul correctement pronostiqué (score inexact)
+  if (rH === rA && pH === pA) return 4   // nul correctement pronostiqué (score inexact)
   return 0
 }
 
@@ -766,9 +766,9 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
             <>
               <span style={{ color: '#A07828', fontWeight: 700 }}>+5</span> exact
               &nbsp;·&nbsp;
-              <span style={{ color: 'rgba(160,120,40,0.7)', fontWeight: 600 }}>+3</span> bon résultat
+              <span style={{ color: 'rgba(160,120,40,0.7)', fontWeight: 600 }}>+4</span> bon nul
               &nbsp;·&nbsp;
-              <span style={{ color: 'rgba(160,120,40,0.5)', fontWeight: 600 }}>+1</span> bon nul
+              <span style={{ color: 'rgba(160,120,40,0.6)', fontWeight: 600 }}>+3</span> bon vainqueur
             </>
           )}
         </div>
