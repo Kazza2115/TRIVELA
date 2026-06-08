@@ -281,9 +281,40 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
 
   const thirdsQualified = bestThirds(results)
 
+  // Matchs en direct (données live OU créneau horaire, non terminés)
+  const isLiveNow = (m: Match) =>
+    m.home.code !== 'un' && !results[m.id] && (!!live[m.id] || isMatchLive(m, now))
+  const liveList = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES].filter(isLiveNow)
+
   return (
     <PageLayout onBack={onBack} accentColor="#C89B3C" flag="🎯" title="PARIS"
       subtitle="Coupe du Monde 2026 · Pronostics">
+
+      {/* ── Rubrique EN DIRECT (en haut) — les matchs restent aussi dans les journées ── */}
+      {liveList.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
+            padding: '8px 14px', borderRadius: 12,
+            background: 'linear-gradient(90deg, rgba(220,38,38,0.14) 0%, rgba(220,38,38,0.03) 100%)',
+            border: '1px solid rgba(220,38,38,0.35)', borderLeft: '4px solid #dc2626',
+          }}>
+            <span style={{ width: 9, height: 9, borderRadius: '50%', background: '#dc2626',
+              animation: 'liveDot 1s ease-in-out infinite' }} />
+            <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 17, letterSpacing: 2, color: '#dc2626' }}>
+              EN DIRECT{liveList.length > 1 ? ` · ${liveList.length}` : ''}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {liveList.map(m => (
+              <LiveHeroCard key={`live-${m.id}`} match={m} domId={`live-${m.id}`}
+                live={live[m.id] ?? { matchId: m.id, status: 'LIVE', elapsed: null, homeScore: 0, awayScore: 0 }}
+                goalSide={goalFlash[m.id]} scorers={goals[m.id]}
+                prediction={predictions[m.id]} confirmed={confirmed.has(m.id)} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Auth gate banner ──────────────────────────────────── */}
       {!currentUser && (
@@ -1357,5 +1388,92 @@ function KnockoutView(data: KOData) {
       </div>
       {wide ? <DesktopBracket data={data} /> : <MobileRounds data={data} />}
     </>
+  )
+}
+
+// ─── Carte live mise en avant (rubrique EN DIRECT en haut) ─────────────────
+function HeroTeam({ team, align, fire }: { team: Team; align: 'left' | 'right'; fire?: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+      order: align === 'left' ? 0 : 2 }}>
+      <div style={{ position: 'relative' }}>
+        <img src={`https://flagcdn.com/w80/${team.code}.png`} alt={team.name}
+          style={{ width: 56, height: 38, objectFit: 'cover', borderRadius: 6,
+            border: `${fire ? 2 : 1}px solid ${fire ? 'rgba(245,130,30,0.95)' : 'var(--border)'}`,
+            boxShadow: fire ? '0 0 22px 4px rgba(245,130,30,0.85)' : '0 2px 8px rgba(0,0,0,0.18)' }} />
+        {fire && (
+          <span style={{ position: 'absolute', top: -22, left: '50%', marginLeft: -17, fontSize: 34, lineHeight: 1,
+            filter: 'drop-shadow(0 0 7px rgba(245,130,30,1)) drop-shadow(0 0 14px rgba(245,90,10,0.7))',
+            animation: 'flameFlicker 0.55s ease-in-out infinite', pointerEvents: 'none' }}>🔥</span>
+        )}
+      </div>
+      <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 18, letterSpacing: 1, color: 'var(--text-1)' }}>
+        {team.short}
+      </span>
+    </div>
+  )
+}
+
+function LiveHeroCard({ match, live, goalSide, scorers, prediction, confirmed, domId }: {
+  match: Match; live: LiveScore; goalSide?: 'home' | 'away'; scorers?: Scorer[]
+  prediction?: { home: number; away: number }; confirmed: boolean; domId?: string
+}) {
+  const pred = prediction ?? { home: 0, away: 0 }
+  const stage = match.round === 'group'
+    ? (match.group === 'Amical' ? 'Match amical' : `Groupe ${match.group} · J${match.matchday}`)
+    : KO_LABELS[match.round as string] ?? match.group
+  const isLive = ['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE'].includes(live.status)
+  return (
+    <div id={domId} style={{
+      position: 'relative', overflow: 'hidden', borderRadius: 18, padding: '12px 16px 16px',
+      background: 'linear-gradient(160deg, rgba(220,38,38,0.14), var(--bg-card) 70%)',
+      border: '1.5px solid rgba(220,38,38,0.55)',
+      boxShadow: '0 10px 34px rgba(220,38,38,0.28)',
+      animation: 'livePulse 1.6s ease-in-out infinite',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 6,
+        fontSize: 11, fontWeight: 800, letterSpacing: 1, color: '#dc2626' }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#dc2626',
+          animation: 'liveDot 1s ease-in-out infinite' }} />
+        EN DIRECT{live.elapsed != null ? ` · ${live.elapsed}'` : (isLive ? '' : ` · ${live.status}`)}
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, margin: '6px 0 8px' }}>
+        <HeroTeam team={match.home} align="left" fire={goalSide === 'home'} />
+        <div style={{ order: 1, fontFamily: "'Bebas Neue', cursive", fontSize: 48, lineHeight: 1, color: '#dc2626',
+          animation: 'fadeIn 0.3s ease' }}>
+          {live.homeScore}<span style={{ color: 'var(--text-3)', margin: '0 6px' }}>:</span>{live.awayScore}
+        </div>
+        <HeroTeam team={match.away} align="right" fire={goalSide === 'away'} />
+      </div>
+
+      {scorers && scorers.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px', margin: '8px 0 4px', alignItems: 'start' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {scorers.filter(s => s.side === 'home').map((s, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-2)', fontWeight: 600 }}>
+                <span>⚽</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
+            {scorers.filter(s => s.side === 'away').map((s, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-2)', fontWeight: 600 }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span><span>⚽</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{ textAlign: 'center', fontSize: 9, color: 'var(--text-3)', letterSpacing: 0.4 }}>
+        {stage} · {match.venue} · {match.city}
+      </div>
+      {confirmed && (
+        <div style={{ textAlign: 'center', marginTop: 6, fontSize: 11, fontWeight: 700, color: 'var(--text-3)' }}>
+          Ton prono <span style={{ color: 'var(--text-2)' }}>{pred.home}–{pred.away}</span>
+        </div>
+      )}
+    </div>
   )
 }
