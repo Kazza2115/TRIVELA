@@ -106,6 +106,19 @@ function bestThirds(results: Record<string, MatchResult>): Set<string> {
   return new Set(played.slice(0, 8).map(r => r.team.short))
 }
 
+// Vrai sur écran large (ordinateur) → tableau à double face ; sinon vue mobile.
+function useIsWide(threshold = 820): boolean {
+  const [wide, setWide] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= threshold,
+  )
+  useEffect(() => {
+    const onResize = () => setWide(window.innerWidth >= threshold)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [threshold])
+  return wide
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────
 export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
   onBack: () => void
@@ -114,7 +127,6 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
   focus?: { id: string; nonce: number } | null
 }) {
   const [tab,         setTab]         = useState<Tab>('phase')
-  const [selectedKO,  setSelectedKO]  = useState<string>('final')
   const [predictions, setPredictions] = useState<Predictions>({})
   const [confirmed,   setConfirmed]   = useState<Set<string>>(new Set())
   const [lockErrors,  setLockErrors]  = useState<Record<string, string>>({})
@@ -438,49 +450,14 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
         </>
       )}
 
-      {/* ══ KNOCKOUT — tableau de tournoi à double tableau ═══════ */}
-      {tab === 'eliminatoires' && (() => {
-        const selMatch =
-          KNOCKOUT_MATCHES.find(m => m.id === selectedKO) ??
-          KNOCKOUT_MATCHES[KNOCKOUT_MATCHES.length - 1]
-        return (
-          <>
-            <KnockoutBracket
-              results={results} live={live} goals={goals} goalFlash={goalFlash}
-              selectedId={selectedKO} onSelect={setSelectedKO}
-            />
-
-            <div style={{
-              padding: '11px 14px', margin: '4px 0 14px',
-              background: 'rgba(200,155,60,0.07)',
-              border: '1px solid rgba(200,155,60,0.2)',
-              borderRadius: 12, fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6,
-            }}>
-              Touchez un match du tableau pour pronostiquer.
-              Les drapeaux des qualifiés apparaîtront après la phase de groupes.
-            </div>
-
-            <div style={{
-              fontFamily: "'Bebas Neue', cursive", fontSize: 16, letterSpacing: 1.5,
-              color: '#A07828', marginBottom: 10,
-            }}>
-              {KO_LABELS[selMatch.round as string] ?? selMatch.group}
-            </div>
-
-            <MatchCard match={selMatch} domId={`match-${selMatch.id}`}
-              prediction={predictions[selMatch.id]} confirmed={confirmed.has(selMatch.id)}
-              lockError={lockErrors[selMatch.id]}
-              result={results[selMatch.id]} now={now}
-              liveData={live[selMatch.id]} goalSide={goalFlash[selMatch.id]}
-              scorers={goals[selMatch.id]}
-              delay={0}
-              onIncrement={(s, d) => setPrediction(selMatch.id, s, d)}
-              onConfirm={() => confirm(selMatch.id)}
-              onEdit={() => edit(selMatch.id)}
-            />
-          </>
-        )
-      })()}
+      {/* ══ KNOCKOUT — tableau de tournoi responsive + paris inline ═══ */}
+      {tab === 'eliminatoires' && (
+        <KnockoutView
+          results={results} live={live} goals={goals} goalFlash={goalFlash}
+          predictions={predictions} confirmed={confirmed} lockErrors={lockErrors} now={now}
+          onIncrement={setPrediction} onConfirm={confirm} onEdit={edit}
+        />
+      )}
     </PageLayout>
   )
 }
@@ -1101,42 +1078,153 @@ function MiniTeam({ team, score, win, dim, fire }: {
   )
 }
 
-function BracketCell({ match, result, liveScore, scorers, flashSide, selected, onSelect }: {
-  match: Match; result?: MatchResult; liveScore?: LiveScore
-  scorers?: Scorer[]; flashSide?: 'home' | 'away'
-  selected: boolean; onSelect: (id: string) => void
+// Données + handlers partagés par la vue éliminatoires (desktop & mobile).
+interface KOData {
+  results: Record<string, MatchResult>
+  live: Record<string, LiveScore>
+  goals: Record<string, Scorer[]>
+  goalFlash: Record<string, 'home' | 'away'>
+  predictions: Predictions
+  confirmed: Set<string>
+  lockErrors: Record<string, string>
+  now: number
+  onIncrement: (id: string, side: 'home' | 'away', delta: number) => void
+  onConfirm: (id: string) => void
+  onEdit: (id: string) => void
+}
+
+// ─── Stepper compact pour parier dans une case ─────────────────────────────
+function MiniStepper({ value, onUp, onDown }: { value: number; onUp: () => void; onDown: () => void }) {
+  const btn: React.CSSProperties = {
+    width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'var(--bg-fill)', border: '1px solid var(--border)', borderRadius: 6,
+    color: 'var(--text-2)', fontSize: 14, fontWeight: 700, lineHeight: 1, padding: 0,
+    cursor: 'pointer', userSelect: 'none', flexShrink: 0,
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <button style={btn} onClick={onDown}>−</button>
+      <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 17, minWidth: 14, textAlign: 'center', color: 'var(--text-1)' }}>{value}</span>
+      <button style={btn} onClick={onUp}>+</button>
+    </div>
+  )
+}
+
+// Bloc de pari inline (steppers + bouton) réutilisé dans chaque case.
+function BetArea({ match, data }: { match: Match; data: KOData }) {
+  const id = match.id
+  const pred = data.predictions[id] ?? { home: 0, away: 0 }
+  const confirmed = data.confirmed.has(id)
+  const lockError = data.lockErrors[id]
+  const isTBD = match.home.code === 'un'
+  const locked = isMatchLocked(match)
+  const labelStyle: React.CSSProperties = {
+    fontSize: 10, fontWeight: 700, color: 'var(--text-2)',
+    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 64,
+  }
+  return (
+    <div onClick={e => e.stopPropagation()} style={{
+      marginTop: 6, paddingTop: 7, borderTop: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column', gap: 6,
+    }}>
+      {isTBD ? (
+        <div style={{ fontSize: 9, color: 'var(--text-3)', textAlign: 'center', fontWeight: 600 }}>
+          Équipes à venir
+        </div>
+      ) : locked ? (
+        <div style={{ fontSize: 9, color: 'var(--text-3)', textAlign: 'center', fontWeight: 700, letterSpacing: 0.4 }}>
+          🔒 Verrouillé
+        </div>
+      ) : (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            <span style={labelStyle}>{match.home.short}</span>
+            <MiniStepper value={pred.home}
+              onUp={() => data.onIncrement(id, 'home', 1)} onDown={() => data.onIncrement(id, 'home', -1)} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            <span style={labelStyle}>{match.away.short}</span>
+            <MiniStepper value={pred.away}
+              onUp={() => data.onIncrement(id, 'away', 1)} onDown={() => data.onIncrement(id, 'away', -1)} />
+          </div>
+          {confirmed ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 700 }}>✓ {pred.home}–{pred.away}</span>
+              <button onClick={() => data.onEdit(id)} style={{
+                padding: '3px 9px', background: 'var(--bg-fill)', border: '1px solid var(--border)',
+                borderRadius: 7, color: 'var(--text-2)', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+              }}>Modifier</button>
+            </div>
+          ) : (
+            <button onClick={() => data.onConfirm(id)} style={{
+              width: '100%', padding: '6px 0', borderRadius: 8, cursor: 'pointer',
+              background: 'linear-gradient(135deg, #C89B3C, #A07828)', border: 'none',
+              color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: 0.6,
+            }}>PARIER</button>
+          )}
+          {lockError && (
+            <div style={{ fontSize: 9, color: '#dc2626', textAlign: 'center', fontWeight: 600 }}>{lockError}</div>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function BracketCell({ match, data, expanded, alwaysBet, onSelect }: {
+  match: Match; data: KOData; expanded: boolean; alwaysBet?: boolean
+  onSelect: (id: string) => void
 }) {
+  const id = match.id
+  const result = data.results[id]
+  const liveScore = data.live[id]
   const isLive = !!liveScore && INPLAY.has(liveScore.status)
   const hs = result ? result.homeScore : isLive ? liveScore!.homeScore : null
   const as = result ? result.awayScore : isLive ? liveScore!.awayScore : null
   const decided = !!result && hs != null && as != null
   const homeWin = decided && (hs as number) > (as as number)
   const awayWin = decided && (as as number) > (hs as number)
-  // Flamme uniquement pendant le live (pas sur un match terminé)
+  const flashSide = data.goalFlash[id]
   const fireHome = isLive && flashSide === 'home'
   const fireAway = isLive && flashSide === 'away'
+  const confirmed = data.confirmed.has(id)
+  const pred = data.predictions[id]
+  const showBet = (expanded || alwaysBet) && !result && !isLive
+  const pts = result && confirmed && pred ? calcPoints(result, pred) : null
   return (
-    <button onClick={() => onSelect(match.id)} style={{
+    <div onClick={() => onSelect(id)} style={{
       width: '100%', display: 'flex', flexDirection: 'column', gap: 3,
       padding: '6px 7px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-      background: selected ? 'rgba(200,155,60,0.12)' : 'var(--bg-card)',
-      border: `1px solid ${isLive ? 'rgba(220,38,38,0.85)' : selected ? '#C89B3C' : 'var(--border)'}`,
+      background: expanded ? 'rgba(200,155,60,0.12)' : 'var(--bg-card)',
+      border: `1px solid ${isLive ? 'rgba(220,38,38,0.85)' : expanded ? '#C89B3C' : 'var(--border)'}`,
       boxShadow: isLive ? '0 0 10px rgba(220,38,38,0.3)' : 'var(--shadow-sm)',
       animation: isLive ? 'livePulse 1.6s ease-in-out infinite' : undefined,
-      transition: 'all 0.15s',
+      transition: 'border-color 0.15s, background 0.15s',
     }}>
       <MiniTeam team={match.home} score={hs} win={homeWin} dim={awayWin} fire={fireHome} />
       <div style={{ height: 1, background: 'var(--sep)' }} />
       <MiniTeam team={match.away} score={as} win={awayWin} dim={homeWin} fire={fireAway} />
-      <BracketScorers scorers={scorers ?? []} />
-    </button>
+      <BracketScorers scorers={data.goals[id] ?? []} />
+      {result && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 2 }}>
+          {pts != null ? (
+            <span style={{
+              fontSize: 9, fontWeight: 800, padding: '1px 7px', borderRadius: 6,
+              color: pts === 5 ? '#22c55e' : pts > 0 ? '#A07828' : 'var(--text-3)',
+              background: pts === 5 ? 'rgba(34,197,94,0.12)' : pts > 0 ? 'rgba(200,155,60,0.12)' : 'rgba(110,110,115,0.1)',
+            }}>{pts > 0 ? '+' : ''}{pts} pts</span>
+          ) : (
+            <span style={{ fontSize: 8, color: 'var(--text-3)', fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase' }}>terminé</span>
+          )}
+        </div>
+      )}
+      {showBet && <BetArea match={match} data={data} />}
+    </div>
   )
 }
 
-function BracketCol({ ids, label, width, results, live, goals, goalFlash, selectedId, onSelect }: {
-  ids: string[]; label: string; width: number
-  results: Record<string, MatchResult>; live: Record<string, LiveScore>
-  goals: Record<string, Scorer[]>; goalFlash: Record<string, 'home' | 'away'>
+function BracketCol({ ids, label, width, data, selectedId, onSelect }: {
+  ids: string[]; label: string; width: number; data: KOData
   selectedId: string; onSelect: (id: string) => void
 }) {
   return (
@@ -1147,16 +1235,14 @@ function BracketCol({ ids, label, width, results, live, goals, goalFlash, select
       }}>{label}</div>
       <div style={{
         flex: 1, display: 'flex', flexDirection: 'column',
-        justifyContent: 'space-around', gap: 6,
+        justifyContent: 'space-around', gap: 8,
       }}>
         {ids.map(id => {
           const m = KNOCKOUT_MATCHES.find(x => x.id === id)
           if (!m) return null
           return (
-            <BracketCell key={id} match={m}
-              result={results[id]} liveScore={live[id]}
-              scorers={goals[id]} flashSide={goalFlash[id]}
-              selected={selectedId === id} onSelect={onSelect} />
+            <BracketCell key={id} match={m} data={data}
+              expanded={selectedId === id} onSelect={onSelect} />
           )
         })}
       </div>
@@ -1164,24 +1250,17 @@ function BracketCol({ ids, label, width, results, live, goals, goalFlash, select
   )
 }
 
-function KnockoutBracket({ results, live, goals, goalFlash, selectedId, onSelect }: {
-  results: Record<string, MatchResult>; live: Record<string, LiveScore>
-  goals: Record<string, Scorer[]>; goalFlash: Record<string, 'home' | 'away'>
-  selectedId: string; onSelect: (id: string) => void
-}) {
-  const W = 96
-  const colProps = { results, live, goals, goalFlash, selectedId, onSelect }
+// ─── Vue desktop : double tableau de tournoi ───────────────────────────────
+function DesktopBracket({ data }: { data: KOData }) {
+  const [selected, setSelected] = useState<string>('final')
+  const onSelect = (id: string) => setSelected(cur => (cur === id ? '' : id))
+  const W = 124
+  const colProps = { data, selectedId: selected, onSelect }
   const finalMatch = KNOCKOUT_MATCHES.find(m => m.id === 'final')!
   const thirdMatch = KNOCKOUT_MATCHES.find(m => m.id === '3rd')!
-  const centerCell = (id: string, m: Match) => (
-    <BracketCell match={m}
-      result={results[id]} liveScore={live[id]}
-      scorers={goals[id]} flashSide={goalFlash[id]}
-      selected={selectedId === id} onSelect={onSelect} />
-  )
   return (
     <div style={{ overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 8, marginBottom: 4 }}>
-      <div style={{ display: 'flex', gap: 8, minWidth: 880, minHeight: 440, alignItems: 'stretch' }}>
+      <div style={{ display: 'flex', gap: 8, minWidth: 9 * W + 8 * 8 + 16, alignItems: 'stretch' }}>
         {/* ── Côté gauche ── */}
         <BracketCol {...colProps} width={W} label="32es"
           ids={['r32-1', 'r32-2', 'r32-3', 'r32-4', 'r32-5', 'r32-6', 'r32-7', 'r32-8']} />
@@ -1193,7 +1272,7 @@ function KnockoutBracket({ results, live, goals, goalFlash, selectedId, onSelect
           ids={['sf-1']} />
 
         {/* ── Centre : finale + 3e place ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 112, width: 112 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: W, width: W }}>
           <div style={{
             fontSize: 9, fontWeight: 800, color: '#A07828', textAlign: 'center',
             letterSpacing: 0.6, marginBottom: 6, textTransform: 'uppercase',
@@ -1203,12 +1282,12 @@ function KnockoutBracket({ results, live, goals, goalFlash, selectedId, onSelect
             justifyContent: 'center', alignItems: 'stretch', gap: 6,
           }}>
             <div style={{ textAlign: 'center', fontSize: 26, lineHeight: 1 }}>🏆</div>
-            {centerCell('final', finalMatch)}
+            <BracketCell match={finalMatch} data={data} expanded={selected === 'final'} onSelect={onSelect} />
             <div style={{
               fontSize: 8, fontWeight: 700, color: 'var(--text-3)', textAlign: 'center',
               letterSpacing: 0.5, marginTop: 14, textTransform: 'uppercase',
             }}>3e place</div>
-            {centerCell('3rd', thirdMatch)}
+            <BracketCell match={thirdMatch} data={data} expanded={selected === '3rd'} onSelect={onSelect} />
           </div>
         </div>
 
@@ -1223,5 +1302,70 @@ function KnockoutBracket({ results, live, goals, goalFlash, selectedId, onSelect
           ids={['r32-9', 'r32-10', 'r32-11', 'r32-12', 'r32-13', 'r32-14', 'r32-15', 'r32-16']} />
       </div>
     </div>
+  )
+}
+
+// ─── Vue mobile : sélecteur de tour + cartes verticales bettables ──────────
+const KO_TABS = [
+  { key: 'r32', label: '32es', ids: ['r32-1', 'r32-2', 'r32-3', 'r32-4', 'r32-5', 'r32-6', 'r32-7', 'r32-8', 'r32-9', 'r32-10', 'r32-11', 'r32-12', 'r32-13', 'r32-14', 'r32-15', 'r32-16'] },
+  { key: 'r16', label: '8es',    ids: ['r16-1', 'r16-2', 'r16-3', 'r16-4', 'r16-5', 'r16-6', 'r16-7', 'r16-8'] },
+  { key: 'qf',  label: 'Quarts', ids: ['qf-1', 'qf-2', 'qf-3', 'qf-4'] },
+  { key: 'sf',  label: 'Demies', ids: ['sf-1', 'sf-2'] },
+  { key: 'final', label: 'Finale', ids: ['final', '3rd'] },
+] as const
+
+function MobileRounds({ data }: { data: KOData }) {
+  const [round, setRound] = useState<string>('r32')
+  const grid: React.CSSProperties = {
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10,
+  }
+  const tab = KO_TABS.find(t => t.key === round) ?? KO_TABS[0]
+  return (
+    <>
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 14, scrollbarWidth: 'none' }}>
+        {KO_TABS.map(t => {
+          const on = round === t.key
+          return (
+            <button key={t.key} onClick={() => setRound(t.key)} style={{
+              flexShrink: 0, padding: '7px 15px', borderRadius: 20,
+              border: `1px solid ${on ? '#C89B3C' : 'var(--border)'}`,
+              background: on ? 'rgba(200,155,60,0.12)' : 'var(--bg-card)',
+              color: on ? '#A07828' : 'var(--text-2)',
+              fontSize: 12, fontWeight: 700, letterSpacing: 0.3, cursor: 'pointer', whiteSpace: 'nowrap',
+            }}>{t.label}</button>
+          )
+        })}
+      </div>
+      <div style={grid}>
+        {tab.ids.map(id => {
+          const m = KNOCKOUT_MATCHES.find(x => x.id === id)
+          if (!m) return null
+          return (
+            <BracketCell key={id} match={m} data={data}
+              expanded={false} alwaysBet onSelect={() => {}} />
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
+function KnockoutView(data: KOData) {
+  const wide = useIsWide()
+  return (
+    <>
+      <div style={{
+        padding: '11px 14px', margin: '0 0 14px',
+        background: 'rgba(200,155,60,0.07)',
+        border: '1px solid rgba(200,155,60,0.2)',
+        borderRadius: 12, fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6,
+      }}>
+        {wide
+          ? 'Cliquez sur un match du tableau pour parier directement.'
+          : 'Choisissez un tour, puis pariez sur chaque match.'}{' '}
+        Les drapeaux des qualifiés apparaissent après la phase de groupes.
+      </div>
+      {wide ? <DesktopBracket data={data} /> : <MobileRounds data={data} />}
+    </>
   )
 }
