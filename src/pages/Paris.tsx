@@ -661,10 +661,10 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
             WebkitMaskImage: 'linear-gradient(to left, #000 0%, #000 6%, transparent 55%)',
             maskImage: 'linear-gradient(to left, #000 0%, #000 6%, transparent 55%)',
           }} />
-          {/* Effet de pli (plis du tissu) — bandes d'ombre/lumière diagonales, statiques */}
+          {/* Effet de pli — quelques plis larges et doux, statiques */}
           <div style={{
-            position: 'absolute', inset: 0, mixBlendMode: 'soft-light', opacity: 0.65,
-            background: 'repeating-linear-gradient(100deg, rgba(0,0,0,0.32) 0px, rgba(0,0,0,0) 9px, rgba(255,255,255,0.22) 16px, rgba(0,0,0,0) 24px)',
+            position: 'absolute', inset: 0, mixBlendMode: 'soft-light', opacity: 0.5,
+            background: 'repeating-linear-gradient(100deg, rgba(0,0,0,0.14) 0px, rgba(0,0,0,0) 70px, rgba(255,255,255,0.10) 120px, rgba(0,0,0,0) 170px)',
           }} />
           {/* Centre noir entre les deux drapeaux */}
           <div style={{
