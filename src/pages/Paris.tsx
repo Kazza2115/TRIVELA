@@ -59,6 +59,19 @@ function inLiveWindow(id: string, now: number): boolean {
   const k = KICKOFF_MS.get(id)
   return k != null && now >= k && now < k + LIVE_MS
 }
+
+// Cache local des scores live → réaffiche le dernier score immédiatement au rechargement
+const LIVE_CACHE_KEY = 'trivela-live'
+function loadCachedLive(): Record<string, LiveScore> {
+  try {
+    const obj = JSON.parse(localStorage.getItem(LIVE_CACHE_KEY) || '{}') as Record<string, LiveScore>
+    const now = Date.now()
+    const out: Record<string, LiveScore> = {}
+    for (const [id, l] of Object.entries(obj)) if (inLiveWindow(id, now)) out[id] = l
+    return out
+  } catch { return {} }
+}
+
 function isMatchLive(match: Match, now: number): boolean {
   const utc = parseUTC(match.date, match.time)
   return utc !== null && now >= utc && now < utc + LIVE_MS
@@ -174,10 +187,10 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
   }, [])
 
   // Scores en direct + détection des buts (→ flamme sur l'équipe qui marque)
-  const [live, setLive] = useState<Record<string, LiveScore>>({})
+  const [live, setLive] = useState<Record<string, LiveScore>>(loadCachedLive)
   const [goalFlash, setGoalFlash] = useState<Record<string, 'home' | 'away'>>({})
   const prevLive = useRef<Record<string, LiveScore>>({})
-  const liveRef  = useRef<Record<string, LiveScore>>({})   // dernier affichage (anti-flicker)
+  const liveRef  = useRef<Record<string, LiveScore>>(live)   // dernier affichage (anti-flicker), initialisé depuis le cache
 
   const loadLive = useCallback(async () => {
     const arr = await getLive()
@@ -204,6 +217,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
     }
     liveRef.current = display
     setLive(display)
+    try { localStorage.setItem(LIVE_CACHE_KEY, JSON.stringify(display)) } catch { /* quota */ }
   }, [])
 
   useEffect(() => {
