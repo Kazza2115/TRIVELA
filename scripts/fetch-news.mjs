@@ -3,6 +3,7 @@
 // Pour chaque article on résout l'Open Graph (og:image + og:description) afin
 // d'afficher une vraie image et un vrai résumé (et jamais le fouillis du flux).
 // Tolérant aux pannes : journalise et sort en succès (pas de run rouge).
+// (colonne image active)
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
