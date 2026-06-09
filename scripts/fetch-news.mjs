@@ -33,10 +33,26 @@ const tag = (b, n) => {
   return m ? m[1].replace(/<!\[CDATA\[/g, '').replace(/\]\]>/g, '').trim() : ''
 }
 const stripHtml = s => (s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+// Décodage robuste des entités HTML (hex, décimal, et entités nommées courantes)
+const NAMED = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  eacute: 'é', egrave: 'è', ecirc: 'ê', euml: 'ë',
+  agrave: 'à', acirc: 'â', auml: 'ä', aring: 'å', aelig: 'æ',
+  ugrave: 'ù', uacute: 'ú', ucirc: 'û', uuml: 'ü',
+  igrave: 'ì', iacute: 'í', icirc: 'î', iuml: 'ï',
+  ograve: 'ò', oacute: 'ó', ocirc: 'ô', ouml: 'ö', oslash: 'ø',
+  ccedil: 'ç', ntilde: 'ñ', yacute: 'ý', szlig: 'ß',
+  Eacute: 'É', Egrave: 'È', Ecirc: 'Ê', Agrave: 'À', Acirc: 'Â',
+  Ccedil: 'Ç', Ocirc: 'Ô', Ouml: 'Ö', Uuml: 'Ü', Ntilde: 'Ñ',
+  oelig: 'œ', OElig: 'Œ', aelig2: 'æ',
+  laquo: '«', raquo: '»', rsquo: '’', lsquo: '‘', ldquo: '“', rdquo: '”',
+  sbquo: '‚', bdquo: '„', hellip: '…', deg: '°', euro: '€',
+  ndash: '–', mdash: '—', middot: '·', bull: '•', copy: '©', reg: '®', trade: '™',
+}
 const decode = s => (s || '')
-  .replace(/&amp;/g, '&').replace(/&#0?39;/g, "'").replace(/&#x27;/gi, "'").replace(/&apos;/g, "'")
-  .replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ')
-  .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(+d))
+  .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => { try { return String.fromCodePoint(parseInt(h, 16)) } catch { return '' } })
+  .replace(/&#(\d+);/g, (_, d) => { try { return String.fromCodePoint(+d) } catch { return '' } })
+  .replace(/&([a-zA-Z][a-zA-Z0-9]*);/g, (m, n) => NAMED[n] ?? m)
   .replace(/\s+/g, ' ').trim()
 
 function meta(text) {
