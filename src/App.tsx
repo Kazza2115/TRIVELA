@@ -385,34 +385,30 @@ export default function App() {
         activeSection={section}
       />
 
-      {/* ── Bandeau de mention ────────────────────────────────── */}
-      {/* ── Bouton EN DIRECT (toujours présent, discret quand inactif) ── */}
-      {(() => {
-        const isLive = liveIds.length > 0
-        return (
-          <button onClick={goToLive} title={isLive ? 'Voir le match en direct' : 'Aucun match en direct'} style={{
-            position: 'fixed', top: 'calc(var(--header-h) + var(--sat) + 8px)',
-            left: '50%', transform: 'translateX(-50%)', zIndex: 50,
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: isLive ? '6px 12px' : '5px 10px', borderRadius: 999, cursor: 'pointer',
-            background: isLive ? 'linear-gradient(135deg,#e11d48,#dc2626)' : 'var(--bg-card)',
-            border: isLive ? 'none' : '1px solid var(--border)',
-            color: isLive ? '#fff' : 'var(--text-3)',
-            fontSize: isLive ? 11 : 10, fontWeight: 800, letterSpacing: 0.4,
-            boxShadow: isLive ? '0 6px 20px rgba(220,38,38,0.45)' : 'var(--shadow-sm)',
-            opacity: isLive ? 1 : 0.7,
-            animation: isLive ? 'livePulse 1.6s ease-in-out infinite' : 'none',
-            transition: 'all 0.25s',
-          }}>
-            <span style={{
-              width: isLive ? 8 : 6, height: isLive ? 8 : 6, borderRadius: '50%',
-              background: isLive ? '#fff' : 'var(--text-3)',
-              animation: isLive ? 'liveDot 1s ease-in-out infinite' : 'none',
-            }} />
-            {isLive ? `EN DIRECT${liveIds.length > 1 ? ` · ${liveIds.length}` : ''}` : 'Direct'}
-          </button>
-        )
-      })()}
+      {/* ── Bouton EN DIRECT — uniquement sur le Globe, et seulement quand un match est en direct (rouge) ── */}
+      {/* Sur la page Paris le match en direct est déjà mis en avant tout en haut, inutile d'y remettre le bouton. */}
+      {section === 'globe' && liveIds.length > 0 && (
+        <button onClick={goToLive} title="Voir le match en direct" style={{
+          position: 'fixed', top: 'calc(var(--header-h) + var(--sat) + 8px)',
+          left: '50%', transform: 'translateX(-50%)', zIndex: 50,
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '6px 12px', borderRadius: 999, cursor: 'pointer',
+          background: 'linear-gradient(135deg,#e11d48,#dc2626)',
+          border: 'none', color: '#fff',
+          fontSize: 11, fontWeight: 800, letterSpacing: 0.4,
+          boxShadow: '0 6px 20px rgba(220,38,38,0.45)',
+          opacity: 1,
+          animation: 'livePulse 1.6s ease-in-out infinite',
+          transition: 'all 0.25s',
+        }}>
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%',
+            background: '#fff',
+            animation: 'liveDot 1s ease-in-out infinite',
+          }} />
+          {`EN DIRECT${liveIds.length > 1 ? ` · ${liveIds.length}` : ''}`}
+        </button>
+      )}
 
       {mentionToast && (
         <div
