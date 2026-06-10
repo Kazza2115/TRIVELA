@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 import { FEATURED } from './Globe'
+import { COMPETITIONS } from '../data/continentStats'
 
 interface Props {
   countryId: number
-  onNavigate: (section: string) => void
+  onNavigate: (conf: string) => void
   onClose: () => void
 }
 
 export default function CountryPopup({ countryId, onNavigate, onClose }: Props) {
   const country = FEATURED[countryId]
+  const comp = country ? COMPETITIONS[country.conf] : undefined
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
@@ -99,13 +101,13 @@ export default function CountryPopup({ countryId, onNavigate, onClose }: Props) 
             border: `1px solid ${country.color}33`,
             marginBottom: 14,
           }}>
-            <span style={{ fontSize: 18 }}>{country.icon}</span>
+            <span style={{ fontSize: 18 }}>{comp?.emoji ?? country.icon}</span>
             <div>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', letterSpacing: 1, marginBottom: 1 }}>
-                SECTION
+                {comp ? comp.region.toUpperCase() : 'STATISTIQUES'}
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>
-                {country.sectionName}
+                {comp?.competition ?? 'Statistiques'}
               </div>
             </div>
           </div>
@@ -113,7 +115,7 @@ export default function CountryPopup({ countryId, onNavigate, onClose }: Props) 
           {/* Actions */}
           <div style={{ display: 'flex', gap: 8 }}>
             <button
-              onClick={() => onNavigate(country.sectionId)}
+              onClick={() => onNavigate(country.conf)}
               style={{
                 flex: 1,
                 padding: '10px 16px',

@@ -7,17 +7,18 @@ import { todaysMatches, matchKickoffUTC, teamColor } from '../data/wc2026Matches
 import type { Match, Team } from '../data/wc2026Matches'
 import { getBets, getLive } from '../services/auth'
 import type { UserProfile } from '../services/auth'
+import { COMPETITIONS } from '../data/continentStats'
 
 // ─── Featured countries — vivid national flag colours ─────────────────────
 // svgFill overrides the SVG path fill (allows gradients).
 // color is used everywhere else (popup, CSS borders, brighten()).
 export const FEATURED: Record<number, {
   name: string; code: string; color: string; svgFill?: string
-  sectionId: string; sectionName: string; icon: string
+  conf: string; icon: string
 }> = {
-  686: { name:'Sénégal', code:'sn', color:'#FCDD09',                              sectionId:'classement', sectionName:'Classement',  icon:'🏆' },
-  392: { name:'Japon',   code:'jp', color:'#BC002D', svgFill:'url(#japan-grad)', sectionId:'echange',    sectionName:'Échange',     icon:'🔄' },
-  840: { name:'USA',     code:'us', color:'#3C3B6E',                              sectionId:'paris',      sectionName:'Paris 2026',  icon:'⚡' },
+  686: { name:'Sénégal', code:'sn', color:'#FCDD09',                              conf:'CAF',      icon:'🏆' },
+  392: { name:'Japon',   code:'jp', color:'#BC002D', svgFill:'url(#japan-grad)', conf:'AFC',      icon:'🌏' },
+  840: { name:'USA',     code:'us', color:'#3C3B6E',                              conf:'CONCACAF', icon:'⚡' },
 }
 
 /** All non-featured countries: paper-white so continents are clearly readable. */
@@ -153,16 +154,6 @@ const CONF_CENTER: Record<string, [number, number]> = {
   OFC:      [170, -25],
 }
 
-// Which app section each confederation links to
-const CONF_SECTION: Record<string, { sectionId: string; sectionName: string; icon: string }> = {
-  CONMEBOL: { sectionId: 'paris',      sectionName: 'Paris 2026',  icon: '⚡' },
-  UEFA:     { sectionId: 'classement', sectionName: 'Classement',  icon: '🏆' },
-  CONCACAF: { sectionId: 'paris',      sectionName: 'Paris 2026',  icon: '⚡' },
-  CAF:      { sectionId: 'classement', sectionName: 'Classement',  icon: '🏆' },
-  AFC:      { sectionId: 'paris',      sectionName: 'Paris 2026',  icon: '⚡' },
-  OFC:      { sectionId: 'paris',      sectionName: 'Paris 2026',  icon: '⚡' },
-}
-
 // FIFA rank range across all qualified countries (for global normalisation)
 const _fifaRanks   = Object.values(QUALIFIED).map(q => q.fifaRank)
 const FIFA_RANK_MIN = Math.min(..._fifaRanks)   // 1  (Argentina)
@@ -200,6 +191,7 @@ const C = {
 
 interface GlobeProps {
   onNavigate: (section: string) => void
+  onSelectContinent: (conf: string) => void
   isActive?: boolean
   continentRequest?: { conf: string; ts: number } | null
   onContinentShown?: () => void
@@ -217,7 +209,7 @@ function shortestPath(from: number, to: number): number {
 }
 
 // ─── Component ────────────────────────────────────────────────────────────
-export default function Globe({ onNavigate, isActive, continentRequest, onContinentShown, currentUser }: GlobeProps) {
+export default function Globe({ onNavigate, onSelectContinent, isActive, continentRequest, onContinentShown, currentUser }: GlobeProps) {
   const containerRef    = useRef<HTMLDivElement>(null)
   const svgRef          = useRef<SVGSVGElement>(null)
   const [matchCard,     setMatchCard]     = useState<Match | null>(null)
@@ -251,6 +243,7 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
   // Dive animation — set when Explorer is clicked; drives D3 projection zoom
   const diveAnimRef       = useRef<{ start: number; target: string; fromScale: number } | null>(null)
   const onNavigateRef     = useRef(onNavigate)
+  const onSelectContinentRef   = useRef(onSelectContinent)
   const continentCountriesRef  = useRef<number[]>([])
   const onContinentShownRef    = useRef(onContinentShown)
   const triggerContinentRef    = useRef<(conf: string) => void>(() => {})
@@ -387,6 +380,7 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
   triggerCenterRef.current     = triggerCenter
   triggerContinentRef.current  = triggerContinentForConf
   onNavigateRef.current        = onNavigate
+  onSelectContinentRef.current = onSelectContinent
   onContinentShownRef.current  = onContinentShown
   openMatchCardRef.current     = (m: Match) => {
     handleClose()
@@ -406,14 +400,14 @@ export default function Globe({ onNavigate, isActive, continentRequest, onContin
 
   // When Explorer is clicked: hide the React popup card but keep selectedRef + SVG flag,
   // then run the D3 projection zoom. navigate is called after the animation.
-  const diveFromPopup = useCallback((sectionId: string) => {
+  const diveFromPopup = useCallback((conf: string) => {
     popupRef.current = null
     setPopup(null)
     postZoomAnimRef.current = null
     // Capture the current scale so the animation starts from exactly where the
     // user is — avoids the de-zoom glitch when they had already pinched in.
     const fromScale = projRef.current?.scale() ?? baseRRef.current
-    diveAnimRef.current = { start: performance.now(), target: sectionId, fromScale }
+    diveAnimRef.current = { start: performance.now(), target: conf, fromScale }
   }, [])
 
   // Wait for the container to have real pixel dimensions before initialising D3.
@@ -779,7 +773,7 @@ setIsLoaded(true)
             }
             if (progress >= 1) {
               diveAnimRef.current = null
-              onNavigateRef.current(target)
+              onSelectContinentRef.current(target)
             }
             rafRef.current = requestAnimationFrame(animate)
             return
@@ -1094,8 +1088,8 @@ setIsLoaded(true)
       )}
 
       {/* Continent popup — compact card, slides up from bottom */}
-      {continentPopup && CONF_SECTION[continentPopup.conf] && (() => {
-        const sec  = CONF_SECTION[continentPopup.conf]
+      {continentPopup && COMPETITIONS[continentPopup.conf] && (() => {
+        const comp = COMPETITIONS[continentPopup.conf]
         const [r, g, b] = CONF_COLOR[continentPopup.conf] ?? [200, 155, 60]
         const confHex   = `rgb(${r},${g},${b})`
         return (
@@ -1130,16 +1124,16 @@ setIsLoaded(true)
               }} />
 
               {/* Icon + labels */}
-              <span style={{ fontSize: 24, lineHeight: 1 }}>{sec.icon}</span>
+              <span style={{ fontSize: 24, lineHeight: 1 }}>{comp.emoji}</span>
               <div>
                 <div style={{
                   fontSize: 9, fontWeight: 700, letterSpacing: 1.8,
                   color: `rgba(${r},${g},${b},0.85)`, textTransform: 'uppercase', marginBottom: 2,
                 }}>
-                  {continentPopup.conf}
+                  {comp.region}
                 </div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>
-                  {sec.sectionName}
+                  {comp.competition}
                 </div>
               </div>
 
@@ -1147,7 +1141,7 @@ setIsLoaded(true)
               <button
                 onClick={() => {
                   setContinentPopup(null)
-                  onNavigateRef.current(sec.sectionId)
+                  onSelectContinentRef.current(continentPopup.conf)
                 }}
                 onPointerDown={e => (e.currentTarget.style.opacity = '0.75')}
                 onPointerUp={e   => (e.currentTarget.style.opacity = '1')}

@@ -4,6 +4,7 @@ import Paris        from './pages/Paris'
 import Classement   from './pages/Classement'
 import PlayerProfile from './pages/PlayerProfile'
 import Actualites   from './pages/Actualites'
+import Competition   from './pages/Competition'
 import ChatSheet    from './components/ChatSheet'
 import ChatPreview  from './components/ChatPreview'
 import AuthModal    from './components/AuthModal'
@@ -19,7 +20,7 @@ import {
 } from './components/NavIcons'
 import './index.css'
 
-export type SectionId = 'globe' | 'paris' | 'classement' | 'actualites' | 'chat'
+export type SectionId = 'globe' | 'paris' | 'classement' | 'actualites' | 'chat' | 'competition'
 
 const NAV_ITEMS: {
   id: SectionId; Icon: React.FC<{ size?: number; color?: string }>
@@ -64,6 +65,15 @@ export default function App() {
   const [online, setOnline] = useState<PresenceUser[]>([])
   const [liveIds, setLiveIds] = useState<string[]>([])
   const [parisFocus, setParisFocus] = useState<{ id: string; nonce: number } | null>(null)
+  const [competitionConf, setCompetitionConf] = useState<string | null>(null)
+
+  // Depuis le globe : touche un continent / pays vedette → page stats de la compétition
+  const showCompetition = (conf: string) => {
+    setViewedPlayer(null)
+    setCompetitionConf(conf)
+    setSection('competition')
+    setActiveNav('globe')
+  }
 
   // Matchs en direct (pour le bouton flottant "EN DIRECT")
   // = présents dans match_live OU dans leur créneau horaire (coup d'envoi → +135 min)
@@ -299,7 +309,7 @@ export default function App() {
           width: '100%', height: '100%', position: 'relative', background: 'var(--bg)',
           display: section === 'globe' ? 'block' : 'none',
         }}>
-          <Globe onNavigate={navigateTo} isActive={section === 'globe'} currentUser={currentUser} />
+          <Globe onNavigate={navigateTo} onSelectContinent={showCompetition} isActive={section === 'globe'} currentUser={currentUser} />
 
           <p style={{
             position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',
@@ -315,6 +325,7 @@ export default function App() {
         </div>
 
         {section === 'actualites' && <Actualites  onBack={back} />}
+        {section === 'competition' && competitionConf && <Competition conf={competitionConf} onBack={back} />}
         {section === 'paris'      && <Paris        onBack={back} currentUser={currentUser} onOpenAuth={openAuth} focus={parisFocus} />}
         {section === 'classement' && (
           viewedPlayer
