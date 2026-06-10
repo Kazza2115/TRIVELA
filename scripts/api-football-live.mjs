@@ -18,32 +18,6 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 let validIds = new Set()
 let fxMap = new Map()   // fixture_id API → notre match_id (groupes + élimination directe)
 
-// Match test : amical France (team id 2) du 8 juin 2026 — suivi comme un live.
-const TEST_INPLAY = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP'])
-async function trackFriendly(rows, goalJobs) {
-  try {
-    const d = await api('/fixtures?date=2026-06-08')
-    const all = d.response || []
-    const f = all.find(x => {
-      const n = [x.teams?.home?.name, x.teams?.away?.name]
-      return n.includes('France') && n.includes('Northern Ireland')
-    })
-    console.log('amical France–NIR:', f
-      ? JSON.stringify({ id: f.fixture?.id, st: f.fixture?.status?.short, h: f.teams?.home?.name, a: f.teams?.away?.name, g: `${f.goals?.home}-${f.goals?.away}` })
-      : `introuvable (${all.length} matchs ce jour)`)
-    const st = f?.fixture?.status?.short
-    if (!f || !TEST_INPLAY.has(st)) return   // pas en jeu → réglé par le job résultats si terminé
-    rows.push({
-      match_id: 'fr-nir', status: st, elapsed: f.fixture?.status?.elapsed ?? null,
-      home_score: f.goals?.home ?? 0, away_score: f.goals?.away ?? 0,
-      updated_at: new Date().toISOString(),
-    })
-    if ((f.goals?.home ?? 0) + (f.goals?.away ?? 0) > 0) {
-      goalJobs.push(writeGoals('fr-nir', f.fixture?.id, f.teams?.home?.id))
-    }
-  } catch (e) { console.warn('amical:', String(e)) }
-}
-
 // Extrait les buteurs d'un fixture (type "Goal"), avec côté domicile/extérieur.
 function scorersFrom(events, homeId) {
   return (events || [])
@@ -93,7 +67,6 @@ async function tick() {
       goalJobs.push(writeGoals(id, f.fixture?.id, f.teams?.home?.id))
     }
   }
-  await trackFriendly(rows, goalJobs)
   const ids = rows.map(r => r.match_id)
   // Retire de match_live les matchs qui ne sont plus en direct
   if (ids.length) await sb(`match_live?match_id=not.in.(${ids.join(',')})`, { method: 'DELETE' })

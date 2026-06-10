@@ -106,10 +106,6 @@ export const GROUPS: Record<string, [Team, Team, Team, Team]> = {
 // ─── Group stage — 72 matches (hardcoded, verified against official schedule) ─
 export const GROUP_MATCHES: Match[] = [
 
-  // ── Match test (amical France – Irlande du Nord, traité comme un match CdM) ──
-  { id:'fr-nir', group:'Amical', round:'group', matchday:1, home:T.FRA, away:T.NIR,
-    date:'8 Juin', time:'19:10', venue:'Stade Pierre-Mauroy', city:'Lille', status:'upcoming' },
-
   // ── GROUP A ─────────────────────────────────────────────────────────────────
   // MD1 — 11 juin 3pm ET / 11 jun 10pm ET
   { id:'gA-md1-mex-zaf', group:'A', round:'group', matchday:1, home:T.MEX, away:T.ZAF,

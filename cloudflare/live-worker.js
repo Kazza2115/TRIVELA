@@ -6,7 +6,6 @@ import { buildFixtureMap } from '../scripts/wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const API = 'https://v3.football.api-sports.io'
-const INPLAY = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP'])
 const FINISHED = new Set(['FT', 'AET', 'PEN'])
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
@@ -68,18 +67,6 @@ async function settleAll(api, sb, all, fxMap) {
       jobs.push(settleOne(api, sb, id, f, haveGoals))
     }
   }
-  // Amical France–Irlande du Nord (par date + noms)
-  try {
-    const d = await api('/fixtures?date=2026-06-08')
-    const f = (d.response || []).find(x => {
-      const n = [x.teams?.home?.name, x.teams?.away?.name]
-      return n.includes('France') && n.includes('Northern Ireland')
-    })
-    const st = f?.fixture?.status?.short
-    if (f && FINISHED.has(st) && f.goals?.home != null && !have.has('fr-nir')) {
-      jobs.push(settleOne(api, sb, 'fr-nir', f, haveGoals))
-    }
-  } catch { /* ignore */ }
   if (jobs.length) await Promise.all(jobs)
 }
 
@@ -107,23 +94,6 @@ async function poll(api, sb, fxMap) {
     })
     if ((f.goals?.home ?? 0) + (f.goals?.away ?? 0) > 0) goalJobs.push(writeGoals(id, f.fixture?.id, f.teams?.home?.id))
   }
-
-  // Match test : amical France–Irlande du Nord du 8 juin 2026 (par date + noms)
-  try {
-    const d = await api('/fixtures?date=2026-06-08')
-    const f = (d.response || []).find(x => {
-      const n = [x.teams?.home?.name, x.teams?.away?.name]
-      return n.includes('France') && n.includes('Northern Ireland')
-    })
-    const st = f?.fixture?.status?.short
-    if (f && INPLAY.has(st)) {
-      rows.push({
-        match_id: 'fr-nir', status: st, elapsed: f.fixture?.status?.elapsed ?? null,
-        home_score: f.goals?.home ?? 0, away_score: f.goals?.away ?? 0, updated_at: new Date().toISOString(),
-      })
-      if ((f.goals?.home ?? 0) + (f.goals?.away ?? 0) > 0) goalJobs.push(writeGoals('fr-nir', f.fixture?.id, f.teams?.home?.id))
-    }
-  } catch { /* ignore */ }
 
   const ids = rows.map(r => r.match_id)
   if (ids.length) await sb(`match_live?match_id=not.in.(${ids.join(',')})`, { method: 'DELETE' })

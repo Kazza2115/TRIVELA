@@ -47,9 +47,7 @@ function toGenevaTime(dateStr: string, timeStr: string): string {
 function isMatchLocked(match: Match): boolean {
   const utc = parseUTC(match.date, match.time)
   if (utc === null) return false
-  // Match test : pari ouvert jusqu'au coup d'envoi (pas de verrou 1h30 avant).
-  const lead = match.id === 'fr-nir' ? 0 : 90 * 60 * 1000
-  return Date.now() >= utc - lead
+  return Date.now() >= utc - 90 * 60 * 1000
 }
 
 /** Fenêtre « en direct » : du coup d'envoi à +2h15 (tant qu'aucun résultat final). */
