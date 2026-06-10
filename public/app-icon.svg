@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="TRIVELA">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F2DE9C"/>
+      <stop offset="0.45" stop-color="#C89B3C"/>
+      <stop offset="1" stop-color="#9A7322"/>
+    </linearGradient>
+    <radialGradient id="bg" cx="50%" cy="36%" r="78%">
+      <stop offset="0" stop-color="#16273F"/>
+      <stop offset="0.55" stop-color="#0B1626"/>
+      <stop offset="1" stop-color="#050B14"/>
+    </radialGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- Backplate -->
+  <rect x="16" y="16" width="480" height="480" rx="116" fill="url(#bg)"/>
+  <rect x="16.5" y="16.5" width="479" height="479" rx="115.5" fill="none" stroke="url(#gold)" stroke-width="5" opacity="0.55"/>
+
+  <!-- Trivela curve : trajectoire courbée de la frappe -->
+  <path d="M150 384 C 150 250, 232 156, 388 150"
+        fill="none" stroke="url(#gold)" stroke-width="16" stroke-linecap="round"
+        stroke-dasharray="0.1 30" opacity="0.95" filter="url(#soft)"/>
+
+  <!-- Étoile (Coupe du Monde) au bout de la trajectoire -->
+  <g transform="translate(388,150)" fill="url(#gold)" filter="url(#soft)">
+    <path d="M0,-24 L5.8,-8 L22.8,-7.4 L9.4,3 L14.1,19.4 L0,9.8 L-14.1,19.4 L-9.4,3 L-22.8,-7.4 L-5.8,-8 Z"/>
+  </g>
+
+  <!-- Ballon -->
+  <g transform="translate(150,384)" filter="url(#soft)">
+    <circle r="58" fill="#F6F7F9" stroke="#C9CED6" stroke-width="2"/>
+    <g fill="none" stroke="#15263F" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M0,-20 L19,-6.2 L11.8,16.2 L-11.8,16.2 L-19,-6.2 Z" fill="#15263F"/>
+      <path d="M0,-20 L0,-55"/>
+      <path d="M19,-6.2 L52.3,-17"/>
+      <path d="M11.8,16.2 L32.3,44.5"/>
+      <path d="M-11.8,16.2 L-32.3,44.5"/>
+      <path d="M-19,-6.2 L-52.3,-17"/>
+    </g>
+  </g>
+</svg>
