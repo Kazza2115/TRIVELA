@@ -5,7 +5,7 @@ import type { Match } from '../data/wc2026Matches'
 import {
   getPublicBets, getResults, getRatings, getComments, getCommentReactions,
   rateBet, addComment, deleteComment, reactToComment, unreactToComment,
-  subscribeToPlayerSocial, setUserAdmin,
+  subscribeToPlayerSocial, setUserAdmin, deleteUserProfile,
 } from '../services/auth'
 import type {
   UserProfile, PublicBet, MatchResult, BetRating, BetComment, CommentReaction,
@@ -57,6 +57,7 @@ export default function PlayerProfile({ player, rank, currentUser, onBack, onEdi
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [targetAdmin, setTargetAdmin] = useState(player.isAdmin)
   const [adminBusy, setAdminBusy] = useState(false)
+  const [delBusy, setDelBusy] = useState(false)
 
   const isSelf = currentUser?.id === player.id
 
@@ -66,6 +67,20 @@ export default function PlayerProfile({ player, rank, currentUser, onBack, onEdi
     const { error } = await setUserAdmin(player.id, !targetAdmin)
     if (error) alert(error); else setTargetAdmin(v => !v)
     setAdminBusy(false)
+  }
+
+  const deleteProfile = async () => {
+    if (delBusy) return
+    const ok = window.confirm(
+      `Supprimer définitivement le profil de « ${player.pseudo} » ?\n\n` +
+      `Cette action est irréversible : compte, pronostics, notes et commentaires seront effacés.`,
+    )
+    if (!ok) return
+    setDelBusy(true)
+    const { error } = await deleteUserProfile(player.id)
+    setDelBusy(false)
+    if (error) { alert(error); return }
+    onBack()
   }
 
   const loadSocial = useCallback(async () => {
@@ -184,20 +199,28 @@ export default function PlayerProfile({ player, rank, currentUser, onBack, onEdi
       {/* ── Barre admin (visible par les admins, sur les autres joueurs) ── */}
       {currentUser?.isAdmin && !isSelf && (
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12,
+          display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12,
           padding: '10px 14px', borderRadius: 12,
           background: 'rgba(200,155,60,0.07)', border: '1px solid rgba(200,155,60,0.25)',
         }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)' }}>
-            {targetAdmin ? '👑 Administrateur' : 'Joueur standard'}
-          </span>
-          <button onClick={toggleAdmin} disabled={adminBusy} style={{
-            marginLeft: 'auto', padding: '7px 12px', borderRadius: 10, cursor: 'pointer',
-            border: targetAdmin ? '1px solid rgba(239,68,68,0.3)' : 'none',
-            background: targetAdmin ? 'rgba(239,68,68,0.08)' : 'linear-gradient(135deg,#C89B3C,#E8D080)',
-            color: targetAdmin ? '#dc2626' : '#0D0800', fontSize: 12, fontWeight: 700,
-            opacity: adminBusy ? 0.6 : 1,
-          }}>{targetAdmin ? 'Retirer admin' : 'Promouvoir admin'}</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)' }}>
+              {targetAdmin ? '👑 Administrateur' : 'Joueur standard'}
+            </span>
+            <button onClick={toggleAdmin} disabled={adminBusy} style={{
+              marginLeft: 'auto', padding: '7px 12px', borderRadius: 10, cursor: 'pointer',
+              border: targetAdmin ? '1px solid rgba(239,68,68,0.3)' : 'none',
+              background: targetAdmin ? 'rgba(239,68,68,0.08)' : 'linear-gradient(135deg,#C89B3C,#E8D080)',
+              color: targetAdmin ? '#dc2626' : '#0D0800', fontSize: 12, fontWeight: 700,
+              opacity: adminBusy ? 0.6 : 1,
+            }}>{targetAdmin ? 'Retirer admin' : 'Promouvoir admin'}</button>
+          </div>
+          <button onClick={deleteProfile} disabled={delBusy} style={{
+            width: '100%', padding: '9px 12px', borderRadius: 10, cursor: 'pointer',
+            border: '1px solid rgba(220,38,38,0.35)', background: 'rgba(220,38,38,0.08)',
+            color: '#dc2626', fontSize: 12, fontWeight: 700,
+            opacity: delBusy ? 0.6 : 1,
+          }}>{delBusy ? 'Suppression…' : '🗑️ Supprimer ce profil'}</button>
         </div>
       )}
 

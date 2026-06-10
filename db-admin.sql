@@ -49,5 +49,17 @@ drop policy if exists chat_delete on chat_messages;
 create policy chat_delete on chat_messages for delete
   using (auth.uid() = user_id or public.is_admin());
 
+-- 6b. Supprimer entièrement un profil + son compte (réservé aux admins).
+--     Toutes les tables liées sont en ON DELETE CASCADE depuis profiles, et
+--     profiles est en cascade depuis auth.users : la suppression est propre.
+create or replace function public.admin_delete_profile(p_target uuid)
+returns void language plpgsql security definer set search_path = public, auth as $$
+begin
+  if not public.is_admin() then raise exception 'Réservé aux administrateurs'; end if;
+  if p_target = auth.uid() then raise exception 'Vous ne pouvez pas supprimer votre propre compte'; end if;
+  delete from public.profiles where id = p_target;   -- cascade : paris, notes, commentaires, chat…
+  delete from auth.users     where id = p_target;     -- supprime aussi le compte d'authentification
+end $$;
+
 -- 7. Bootstrap : KAZA devient admin
 update public.profiles set is_admin = true where pseudo = 'KAZA';

@@ -758,6 +758,15 @@ export async function setUserAdmin(targetId: string, value: boolean): Promise<{ 
   return { error: `Action refusée (${res.status}). ${detail}`.trim() }
 }
 
+/** Supprime définitivement un profil (et son compte). Réservé aux admins. */
+export async function deleteUserProfile(targetId: string): Promise<{ error?: string }> {
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+  const res = await authFetch('POST', 'rpc/admin_delete_profile', { p_target: targetId })
+  if (res.ok) return {}
+  const detail = await res.text().catch(() => '')
+  return { error: `Suppression refusée (${res.status}). ${detail}`.trim() }
+}
+
 /** Supprime tous les messages du chat. Réservé aux admins. */
 export async function clearChat(): Promise<{ error?: string }> {
   if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
