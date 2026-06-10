@@ -54,9 +54,21 @@ create policy chat_delete on chat_messages for delete
 --     profiles est en cascade depuis auth.users : la suppression est propre.
 create or replace function public.admin_delete_profile(p_target uuid)
 returns void language plpgsql security definer set search_path = public, auth as $$
+declare
+  v_target_is_admin boolean;
+  v_caller_is_kaza  boolean;
 begin
   if not public.is_admin() then raise exception 'Réservé aux administrateurs'; end if;
   if p_target = auth.uid() then raise exception 'Vous ne pouvez pas supprimer votre propre compte'; end if;
+
+  select coalesce(is_admin, false) into v_target_is_admin from public.profiles where id = p_target;
+  select (pseudo = 'KAZA')         into v_caller_is_kaza  from public.profiles where id = auth.uid();
+
+  -- Seul KAZA peut supprimer un autre administrateur.
+  if v_target_is_admin and not coalesce(v_caller_is_kaza, false) then
+    raise exception 'Seul KAZA peut supprimer un administrateur';
+  end if;
+
   delete from public.profiles where id = p_target;   -- cascade : paris, notes, commentaires, chat…
   delete from auth.users     where id = p_target;     -- supprime aussi le compte d'authentification
 end $$;

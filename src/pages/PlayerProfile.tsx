@@ -215,12 +215,16 @@ export default function PlayerProfile({ player, rank, currentUser, onBack, onEdi
               opacity: adminBusy ? 0.6 : 1,
             }}>{targetAdmin ? 'Retirer admin' : 'Promouvoir admin'}</button>
           </div>
-          <button onClick={deleteProfile} disabled={delBusy} style={{
-            width: '100%', padding: '9px 12px', borderRadius: 10, cursor: 'pointer',
-            border: '1px solid rgba(220,38,38,0.35)', background: 'rgba(220,38,38,0.08)',
-            color: '#dc2626', fontSize: 12, fontWeight: 700,
-            opacity: delBusy ? 0.6 : 1,
-          }}>{delBusy ? 'Suppression…' : '🗑️ Supprimer ce profil'}</button>
+          {/* Suppression : un admin standard peut supprimer un joueur ;
+              seul KAZA peut supprimer un autre administrateur. */}
+          {(!targetAdmin || currentUser?.pseudo === 'KAZA') && (
+            <button onClick={deleteProfile} disabled={delBusy} style={{
+              width: '100%', padding: '9px 12px', borderRadius: 10, cursor: 'pointer',
+              border: '1px solid rgba(220,38,38,0.35)', background: 'rgba(220,38,38,0.08)',
+              color: '#dc2626', fontSize: 12, fontWeight: 700,
+              opacity: delBusy ? 0.6 : 1,
+            }}>{delBusy ? 'Suppression…' : '🗑️ Supprimer ce profil'}</button>
+          )}
         </div>
       )}
 
