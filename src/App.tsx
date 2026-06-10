@@ -393,6 +393,7 @@ export default function App() {
         open={showMenu}
         onClose={() => setShowMenu(false)}
         onNavigate={navigateMenu}
+        onSelectCompetition={showCompetition}
         activeSection={section}
       />
 

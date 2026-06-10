@@ -1,14 +1,21 @@
+import { useState } from 'react'
 import type { SectionId } from '../App'
+import { COMPETITIONS } from '../data/continentStats'
+
+// Ordre d'affichage des continents dans le sous-menu
+const CONTINENT_ORDER = ['UEFA', 'CONMEBOL', 'CONCACAF', 'CAF', 'AFC', 'OFC']
 
 interface MenuDrawerProps {
   open: boolean
   onClose: () => void
   onNavigate: (s: SectionId) => void
+  onSelectCompetition: (conf: string) => void
   activeSection: SectionId
 }
 
-export default function MenuDrawer({ open, onClose, onNavigate, activeSection }: MenuDrawerProps) {
+export default function MenuDrawer({ open, onClose, onNavigate, onSelectCompetition, activeSection }: MenuDrawerProps) {
   const gold = '#C89B3C'
+  const [compOpen, setCompOpen] = useState(activeSection === 'competition')
 
   return (
     <>
@@ -135,6 +142,66 @@ export default function MenuDrawer({ open, onClose, onNavigate, activeSection }:
             active={activeSection === 'chat'}
             onClick={() => { onNavigate('chat'); onClose() }}
           />
+
+          {/* ── Rubrique Compétitions (avec sous-rubrique par continent) ── */}
+          <div style={{
+            fontSize: 9, fontWeight: 700, letterSpacing: 1.8,
+            color: 'var(--text-3)', textTransform: 'uppercase',
+            padding: '16px 8px 8px',
+          }}>Compétitions</div>
+
+          <MenuItem
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+                <path d="M4 22h16"/>
+                <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+                <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+                <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>
+              </svg>
+            }
+            label="Par continent"
+            active={activeSection === 'competition'}
+            chevron={compOpen ? 'down' : 'right'}
+            onClick={() => setCompOpen(o => !o)}
+          />
+
+          {compOpen && (
+            <div style={{
+              paddingLeft: 14, marginTop: 2,
+              borderLeft: '1px solid var(--border)', marginLeft: 18,
+            }}>
+              {CONTINENT_ORDER.map(conf => {
+                const c = COMPETITIONS[conf]
+                if (!c) return null
+                return (
+                  <button
+                    key={conf}
+                    onClick={() => { onSelectCompetition(conf); onClose() }}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                      padding: '9px 10px', background: 'transparent',
+                      border: '1px solid transparent', borderRadius: 10,
+                      cursor: 'pointer', textAlign: 'left', color: 'var(--text-1)',
+                      transition: 'background 0.15s',
+                    }}
+                    onPointerDown={e => (e.currentTarget.style.opacity = '0.6')}
+                    onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
+                  >
+                    <span style={{ fontSize: 17, flexShrink: 0 }}>{c.emoji}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: 13, fontWeight: 600 }}>{c.region}</span>
+                      <span style={{ display: 'block', fontSize: 10, color: 'var(--text-3)', marginTop: 1 }}>
+                        {c.competition}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -152,13 +219,14 @@ export default function MenuDrawer({ open, onClose, onNavigate, activeSection }:
 }
 
 function MenuItem({
-  icon, label, badge, active, onClick,
+  icon, label, badge, active, onClick, chevron,
 }: {
   icon: React.ReactNode
   label: string
   badge?: string
   active: boolean
   onClick: () => void
+  chevron?: 'down' | 'right'
 }) {
   return (
     <button
@@ -184,6 +252,17 @@ function MenuItem({
           border: '1px solid rgba(200,155,60,0.3)',
           color: '#C89B3C', borderRadius: 5, padding: '2px 5px',
         }}>{badge}</span>
+      )}
+      {chevron && (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          style={{
+            flexShrink: 0, opacity: 0.5,
+            transform: chevron === 'down' ? 'rotate(90deg)' : 'none',
+            transition: 'transform 0.2s',
+          }}>
+          <path d="M9 18l6-6-6-6"/>
+        </svg>
       )}
     </button>
   )
