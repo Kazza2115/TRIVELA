@@ -12,9 +12,10 @@ import ResetPasswordModal from './components/ResetPasswordModal'
 import ProfileModal from './components/ProfileModal'
 import MenuDrawer   from './components/MenuDrawer'
 import ErrorBoundary from './components/ErrorBoundary'
+import NotificationInbox from './components/NotificationInbox'
 import TrivelaLogo  from './components/TrivelaLogo'
-import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages, getLive, subscribeToLive, getResults, subscribeToResults, beginPasswordRecovery } from './services/auth'
-import type { UserProfile, PresenceUser } from './services/auth'
+import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages, getLive, subscribeToLive, getResults, subscribeToResults, beginPasswordRecovery, getNotifications, markNotificationsRead, subscribeToNotifications } from './services/auth'
+import type { UserProfile, PresenceUser, AppNotification } from './services/auth'
 import { ALL_MATCHES, matchKickoffUTC } from './data/wc2026Matches'
 import { playMentionSound } from './utils/sound'
 import {
@@ -76,6 +77,8 @@ export default function App() {
   const [viewedPlayer, setViewedPlayer] = useState<{ player: UserProfile; rank: number } | null>(null)
   const [chatOpen, setChatOpen] = useState(false)
   const [online, setOnline] = useState<PresenceUser[]>([])
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [inboxOpen, setInboxOpen] = useState(false)
   const [liveIds, setLiveIds] = useState<string[]>([])
   const [parisFocus, setParisFocus] = useState<{ id: string; nonce: number } | null>(null)
   const [competitionConf, setCompetitionConf] = useState<string | null>(null)
@@ -135,6 +138,32 @@ export default function App() {
       : null
     return subscribeToPresence(me, setOnline)
   }, [currentUser])
+
+  // Boîte de réception : charge + écoute les notifications du joueur en temps réel
+  useEffect(() => {
+    if (!currentUser) { setNotifications([]); return }
+    const load = () => getNotifications(currentUser.id).then(setNotifications)
+    load()
+    const unsub = subscribeToNotifications(currentUser.id, load)
+    const iv = setInterval(load, 60000)   // filet de sécurité si un push est manqué
+    return () => { unsub(); clearInterval(iv) }
+  }, [currentUser])
+
+  const unreadCount = notifications.reduce((n, x) => n + (x.read ? 0 : 1), 0)
+
+  const openInbox = () => {
+    setInboxOpen(true)
+    if (currentUser && unreadCount > 0) {
+      markNotificationsRead(currentUser.id).catch(() => {})
+      setNotifications(ns => ns.map(n => ({ ...n, read: true })))   // badge effacé immédiatement
+    }
+  }
+
+  const onSelectNotification = (n: AppNotification) => {
+    setInboxOpen(false)
+    if (n.type === 'mention') openChat()
+    else openOwnProfile()
+  }
 
   // Notification quand on est mentionné (@pseudo) dans le chat
   useEffect(() => {
@@ -281,6 +310,37 @@ export default function App() {
               </svg>
             )}
           </button>
+
+          {/* Cloche notifications (badge rouge) — seulement si connecté */}
+          {currentUser && (
+            <button
+              onClick={openInbox}
+              title="Notifications"
+              style={{
+                position: 'relative', width: 34, height: 34, flexShrink: 0,
+                background: 'var(--bg-fill)', border: '1px solid var(--border-ui)',
+                borderRadius: 10, cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'opacity 0.15s',
+              }}
+              onPointerDown={e => (e.currentTarget.style.opacity = '0.5')}
+              onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                stroke={dimCol} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              {unreadCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: -5, right: -5, minWidth: 17, height: 17,
+                  padding: '0 4px', borderRadius: 9, background: '#dc2626', color: '#fff',
+                  fontSize: 10, fontWeight: 800, lineHeight: '17px', textAlign: 'center',
+                  boxShadow: '0 1px 4px rgba(220,38,38,0.5)', border: '1.5px solid var(--bg-header)',
+                }}>{unreadCount > 9 ? '9+' : unreadCount}</span>
+              )}
+            </button>
+          )}
 
           {/* User / login */}
           {currentUser ? (
@@ -478,6 +538,14 @@ export default function App() {
         onOpenAuth={openAuth}
         onOpenProfile={openProfileFromChat}
         online={online}
+      />
+
+      {/* ── Boîte de réception ────────────────────────────────── */}
+      <NotificationInbox
+        open={inboxOpen}
+        onClose={() => setInboxOpen(false)}
+        notifications={notifications}
+        onSelect={onSelectNotification}
       />
 
       {/* ── Auth modal ────────────────────────────────────────── */}

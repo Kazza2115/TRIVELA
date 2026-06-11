@@ -635,6 +635,53 @@ export function subscribeToPlayerSocial(targetUserId: string, cb: () => void): (
   return () => { supabase!.removeChannel(channel) }
 }
 
+// ── Boîte de réception / notifications ───────────────────────────────────────
+export interface AppNotification {
+  id: string
+  type: 'comment' | 'rating' | 'mention'
+  actorPseudo: string
+  matchId: string | null
+  body: string | null
+  read: boolean
+  createdAt: number
+}
+
+function mapNotification(n: any): AppNotification {
+  return {
+    id: n.id as string,
+    type: (n.type as AppNotification['type']) ?? 'comment',
+    actorPseudo: (n.actor_pseudo as string) ?? '',
+    matchId: (n.match_id as string) ?? null,
+    body: (n.body as string) ?? null,
+    read: !!n.read,
+    createdAt: new Date(n.created_at as string).getTime(),
+  }
+}
+
+export async function getNotifications(userId: string, limit = 50): Promise<AppNotification[]> {
+  if (!supabaseConfigured) return []
+  const res = await authFetch('GET', `notifications?user_id=eq.${userId}&order=created_at.desc&limit=${limit}`)
+  if (!res.ok) return []
+  return (await res.json() as any[]).map(mapNotification)
+}
+
+/** Marque toutes les notifications non lues du joueur comme lues. */
+export async function markNotificationsRead(userId: string): Promise<void> {
+  if (!supabaseConfigured) return
+  await authFetch('PATCH', `notifications?user_id=eq.${userId}&read=eq.false`, { read: true })
+}
+
+/** Réagit en temps réel à toute nouvelle notification du joueur. */
+export function subscribeToNotifications(userId: string, cb: () => void): () => void {
+  if (!supabase) return () => {}
+  const channel = supabase
+    .channel(`notif-${Math.random().toString(36).slice(2)}`)
+    .on('postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, cb)
+    .subscribe()
+  return () => { supabase!.removeChannel(channel) }
+}
+
 // ── Chat global en direct ────────────────────────────────────────────────────
 export interface ChatMessage {
   id: string; userId: string; pseudo: string; countryCode: string; body: string; createdAt: number
