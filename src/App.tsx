@@ -236,6 +236,7 @@ export default function App() {
         borderBottom: '1px solid var(--border-ui)',
       }}>
         {/* Left: hamburger */}
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-start', minWidth: 0 }}>
         <button
           onClick={() => setShowMenu(true)}
           style={{
@@ -254,12 +255,10 @@ export default function App() {
             <rect y="11" width="18" height="2" rx="1" fill={dimCol}/>
           </svg>
         </button>
+        </div>
 
-        {/* Center: logo — absolutely centered */}
-        <div style={{
-          position: 'absolute', left: '50%', transform: 'translateX(-50%)',
-          pointerEvents: 'auto',
-        }}>
+        {/* Center: logo — en flux normal, jamais en chevauchement */}
+        <div style={{ flexShrink: 0 }}>
           <button
             onClick={() => { setSection('globe'); setActiveNav('globe') }}
             style={{
@@ -270,12 +269,12 @@ export default function App() {
             onPointerDown={e => (e.currentTarget.style.opacity = '0.5')}
             onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
           >
-            <TrivelaLogo size={110} color={gold} />
+            <TrivelaLogo size={88} color={gold} />
           </button>
         </div>
 
-        {/* Right: theme toggle + user */}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+        {/* Right: theme toggle + cloche + user */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, minWidth: 0 }}>
           {/* Theme toggle */}
           <button
             onClick={toggleTheme}
@@ -342,24 +341,21 @@ export default function App() {
             </button>
           )}
 
-          {/* User / login */}
+          {/* User / login — avatar-drapeau compact (le pseudo est sur la page profil) */}
           {currentUser ? (
-            <button onClick={openOwnProfile} style={{
-              display: 'flex', alignItems: 'center', gap: 7,
-              background: 'none', border: '1px solid var(--border)',
-              borderRadius: 20, padding: '5px 10px 5px 6px',
-              cursor: 'pointer', transition: 'opacity 0.15s',
+            <button onClick={openOwnProfile} title={currentUser.pseudo} style={{
+              width: 34, height: 34, flexShrink: 0, padding: 0,
+              background: 'var(--bg-fill)', border: '1px solid var(--border-ui)',
+              borderRadius: 10, cursor: 'pointer', overflow: 'hidden',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'opacity 0.15s',
             }}
               onPointerDown={e => (e.currentTarget.style.opacity = '0.5')}
               onPointerUp={e   => (e.currentTarget.style.opacity = '1')}
             >
               <img src={`https://flagcdn.com/w40/${currentUser.countryCode}.png`}
                 alt={currentUser.countryName}
-                style={{ width: 20, height: 14, borderRadius: 2, objectFit: 'cover' }} />
-              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)', maxWidth: 72,
-                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {currentUser.pseudo}
-              </span>
+                style={{ width: 24, height: 16, borderRadius: 3, objectFit: 'cover' }} />
             </button>
           ) : (
             <button onClick={openAuth} style={{
