@@ -18,6 +18,24 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 let validIds = new Set()
 let fxMap = new Map()   // fixture_id API → notre match_id (groupes + élimination directe)
 let tickN = 0           // compteur de ticks (throttle des appels events à 0-0)
+const FINISHED = new Set(['FT', 'AET', 'PEN'])
+const settled = new Set()    // match_id déjà réglés (évite les doublons en mémoire)
+let prevLiveIds = new Set()  // fixture_id en direct au tick précédent
+
+// Règle un match terminé : résultat (points + verrou des paris via settle_match,
+// idempotent) puis buteurs finaux. Le classement se met à jour en temps réel côté app.
+async function settleFinished(f, matchId) {
+  const st = f.fixture?.status?.short
+  const h = f.goals?.home, a = f.goals?.away
+  if (!FINISHED.has(st) || h == null || a == null) return false
+  const r = await sb('rpc/settle_match', {
+    method: 'POST',
+    body: JSON.stringify({ p_match_id: matchId, p_home_score: h, p_away_score: a }),
+  })
+  if (!r.ok) { console.warn(`  ⚠️ settle ${matchId}: ${r.status} ${await r.text().catch(() => '')}`); return false }
+  await writeEvents(matchId, f.fixture?.id, f.teams?.home?.id, h + a)
+  return true
+}
 
 // Extrait les buteurs d'un fixture (type "Goal"), avec côté domicile/extérieur.
 function scorersFrom(events, homeId) {
@@ -97,6 +115,26 @@ async function tick() {
       goalJobs.push(writeEvents(id, f.fixture?.id, f.teams?.home?.id, totalGoals))
     }
   }
+  // Fin de match « à la minute » : un fixture en direct au tick précédent mais
+  // absent maintenant vient de se terminer → on le règle aussitôt (résultat +
+  // points + verrou). Ainsi le « en direct » disparaît et le match est grisé sans
+  // attendre le cron résultats.
+  const curLiveIds = new Set(fixtures.map(f => f.fixture?.id).filter(Boolean))
+  const ended = [...prevLiveIds].filter(id => !curLiveIds.has(id))
+  prevLiveIds = curLiveIds
+  for (const fid of ended) {
+    const mid = fxMap.get(fid)
+    if (!mid || settled.has(mid)) continue
+    try {
+      const one = await api(`/fixtures?id=${fid}`)
+      const ff = one.response?.[0]
+      if (ff && await settleFinished(ff, mid)) {
+        settled.add(mid)
+        console.log(`✅ terminé & réglé : ${mid} (${ff.goals?.home}-${ff.goals?.away})`)
+      }
+    } catch (e) { console.warn(`  ⚠️ fin ${mid}:`, String(e)) }
+  }
+
   const ids = rows.map(r => r.match_id)
   // Retire de match_live les matchs qui ne sont plus en direct
   if (ids.length) await sb(`match_live?match_id=not.in.(${ids.join(',')})`, { method: 'DELETE' })
@@ -118,13 +156,30 @@ async function main() {
   if (sched.ok) validIds = new Set((await sched.json()).map(r => r.match_id))
 
   // Mapping fiable de TOUTE la compétition (groupes + élimination directe) par fixture_id.
+  let allFixtures = []
   try {
     const allRes = await api('/fixtures?league=1&season=2026')
-    const { map, unmatched } = buildFixtureMap(allRes.response || [], validIds)
+    allFixtures = allRes.response || []
+    const { map, unmatched } = buildFixtureMap(allFixtures, validIds)
     fxMap = map
     console.log(`Mapping fixtures : ${fxMap.size} mappés${unmatched.length ? ` · ${unmatched.length} NON mappés` : ''}`)
     if (unmatched.length) console.log(' - ' + unmatched.join('\n - '))
   } catch (e) { console.warn('build map erreur:', String(e)) }
+
+  // Règle d'emblée les matchs déjà terminés mais pas encore réglés (couvre ceux
+  // finis entre deux exécutions du worker, ou ratés par le cron résultats).
+  try {
+    const rr = await sb('match_results?select=match_id')
+    if (rr.ok) for (const r of await rr.json()) settled.add(r.match_id)
+    for (const f of allFixtures) {
+      const mid = fxMap.get(f.fixture?.id)
+      if (!mid || settled.has(mid)) continue
+      if (await settleFinished(f, mid)) {
+        settled.add(mid)
+        console.log(`✅ réglé au démarrage : ${mid} (${f.goals?.home}-${f.goals?.away})`)
+      }
+    }
+  } catch (e) { console.warn('settle démarrage erreur:', String(e)) }
 
   // Boucle ~5,5 min en interrogeant toutes les 15 s (le cron */5 relance →
   // couverture quasi continue). Arrêt anticipé si aucun match en direct.

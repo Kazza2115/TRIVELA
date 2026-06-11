@@ -454,7 +454,7 @@ export function subscribeToResults(cb: (results: MatchResult[]) => void): () => 
   fetchAll()
 
   const channel = supabase
-    .channel('match-results-rt')
+    .channel(`match-results-rt-${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'match_results' }, fetchAll)
     .subscribe()
 
@@ -470,7 +470,7 @@ export function subscribeToLeaderboard(cb: (players: UserProfile[]) => void): ()
   getLeaderboard().then(cb)
 
   const channel = supabase
-    .channel('profiles-rt')
+    .channel(`profiles-rt-${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' },
       () => getLeaderboard().then(cb)
     )
@@ -627,7 +627,7 @@ export async function unreactToComment(commentId: string, userId: string): Promi
 export function subscribeToPlayerSocial(targetUserId: string, cb: () => void): () => void {
   if (!supabase) return () => {}
   const channel = supabase
-    .channel(`social-${targetUserId}`)
+    .channel(`social-${targetUserId}-${Math.random().toString(36).slice(2)}`)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bet_comments', filter: `target_user_id=eq.${targetUserId}` }, cb)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bet_ratings',  filter: `target_user_id=eq.${targetUserId}` }, cb)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'comment_reactions' }, cb)

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import PageLayout from './PageLayout'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS, ALL_MATCHES, matchKickoffUTC } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { saveBet, saveFavorites, getBets, subscribeToResults, getLive, subscribeToLive, getMatchGoals, getMatchCards, subscribeToMatchGoals } from '../services/auth'
+import { saveBet, saveFavorites, getBets, subscribeToResults, getResults, getLive, subscribeToLive, getMatchGoals, getMatchCards, subscribeToMatchGoals } from '../services/auth'
 import type { UserProfile, MatchResult, LiveScore, Scorer, RedCard } from '../services/auth'
 
 const INPLAY = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP'])
@@ -171,11 +171,17 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
     })
   }, [currentUser])
 
-  useEffect(() => subscribeToResults(arr => {
-    const map: Record<string, MatchResult> = {}
-    arr.forEach(r => { map[r.matchId] = r })
-    setResults(map)
-  }), [])
+  useEffect(() => {
+    const apply = (arr: MatchResult[]) => {
+      const map: Record<string, MatchResult> = {}
+      arr.forEach(r => { map[r.matchId] = r })
+      setResults(map)
+    }
+    const unsub = subscribeToResults(apply)
+    // Filet de sécurité si un push Realtime est manqué (websocket tombé, etc.)
+    const iv = setInterval(() => { getResults().then(apply) }, 30000)
+    return () => { unsub(); clearInterval(iv) }
+  }, [])
 
   // Horloge — rafraîchit l'état "en direct / terminé" des matchs
   const [now, setNow] = useState(Date.now())
