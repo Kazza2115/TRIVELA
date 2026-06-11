@@ -26,16 +26,26 @@ function scorersFrom(events, homeId) {
     })
 }
 
+// Cartons rouges (rouge direct OU 2e jaune) d'un fixture.
+function redCardsFrom(events, homeId) {
+  return (events || [])
+    .filter(e => e.type === 'Card' && (e.detail === 'Red Card' || e.detail === 'Second Yellow card'))
+    .map(e => ({ p: e.player?.name || '?', s: e.team?.id === homeId ? 'home' : 'away', t: e.time?.elapsed ?? null }))
+}
+
 async function main() {
   const sched = await sb('match_schedule?select=match_id')
   const validIds = sched.ok ? new Set((await sched.json()).map(r => r.match_id)) : new Set()
 
-  // Nb de buteurs DÉJÀ enregistrés par match (pour ne re-télécharger que si incomplet).
-  const gExisting = await sb('match_goals?select=match_id,scorers')
+  // Nb de buteurs déjà enregistrés + cartons déjà synchronisés (cards non null),
+  // pour ne re-télécharger les événements que si buteurs incomplets OU cartons jamais synchronisés.
+  const gExisting = await sb('match_goals?select=match_id,scorers,cards')
   const storedCount = new Map()
+  const cardsKnown = new Set()
   if (gExisting.ok) {
     for (const r of await gExisting.json()) {
       storedCount.set(r.match_id, Array.isArray(r.scorers) ? r.scorers.length : 0)
+      if (Array.isArray(r.cards)) cardsKnown.add(r.match_id)
     }
   }
 
@@ -58,7 +68,9 @@ async function main() {
       // déjà stockée) : les buteurs apparaissent vite et se complètent run après run.
       const totalGoals = f.goals.home + f.goals.away
       const have = storedCount.get(id) ?? 0
-      if (have < totalGoals) {
+      // Récupère les événements si les buteurs sont incomplets OU si les cartons
+      // n'ont jamais été synchronisés (cards null) → toutes les stats finissent à jour.
+      if (have < totalGoals || !cardsKnown.has(id)) {
         try {
           const ev = await api(`/fixtures/events?fixture=${f.fixture?.id}`)
           const events = ev?.response
@@ -71,6 +83,15 @@ async function main() {
             if (gr.ok) goalsWritten++
           } else {
             console.warn(`  ⏳ buteurs ${id} indisponibles (${scorers.length}/${totalGoals}) — réessai au prochain run`)
+          }
+          // Cartons rouges : upsert séparé (crée la ligne si besoin, même à 0-0 →
+          // évite de re-télécharger à l'infini). Marque les cartons comme synchronisés.
+          if (Array.isArray(events)) {
+            const cards = redCardsFrom(events, f.teams?.home?.id)
+            await sb('match_goals?on_conflict=match_id', {
+              method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+              body: JSON.stringify([{ match_id: id, cards }]),
+            }).catch(() => {})
           }
         } catch (e) { console.warn(`  ⚠️ events ${id}:`, String(e)) }
       }
