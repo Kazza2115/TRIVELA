@@ -30,9 +30,14 @@ async function main() {
   const sched = await sb('match_schedule?select=match_id')
   const validIds = sched.ok ? new Set((await sched.json()).map(r => r.match_id)) : new Set()
 
-  // Matchs dont les buteurs sont déjà enregistrés (pour ne pas les re-télécharger).
-  const gExisting = await sb('match_goals?select=match_id')
-  const haveGoals = gExisting.ok ? new Set((await gExisting.json()).map(r => r.match_id)) : new Set()
+  // Nb de buteurs DÉJÀ enregistrés par match (pour ne re-télécharger que si incomplet).
+  const gExisting = await sb('match_goals?select=match_id,scorers')
+  const storedCount = new Map()
+  if (gExisting.ok) {
+    for (const r of await gExisting.json()) {
+      storedCount.set(r.match_id, Array.isArray(r.scorers) ? r.scorers.length : 0)
+    }
+  }
 
   const data = await api('/fixtures?league=1&season=2026')
   const fixtures = data.response || []
@@ -48,16 +53,24 @@ async function main() {
         body: JSON.stringify({ p_match_id: id, p_home_score: f.goals.home, p_away_score: f.goals.away }) })
       if (r.ok) settled++
       else console.warn(`  ⚠️ settle ${id}: ${r.status} ${await r.text().catch(() => '')}`)
-      // Persiste les buteurs une seule fois par match terminé.
-      if (!haveGoals.has(id) && (f.goals.home + f.goals.away) > 0) {
+      // Persiste les buteurs tant que la liste stockée est incomplète (< score),
+      // et SEULEMENT si la nouvelle liste est complète. Auto-répare donc aussi les
+      // matchs déjà figés avec une liste vide/partielle suite à un creux API passé.
+      const totalGoals = f.goals.home + f.goals.away
+      if ((storedCount.get(id) ?? 0) < totalGoals) {
         try {
           const ev = await api(`/fixtures/events?fixture=${f.fixture?.id}`)
-          const scorers = scorersFrom(ev.response, f.teams?.home?.id)
-          const gr = await sb('match_goals?on_conflict=match_id', {
-            method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-            body: JSON.stringify([{ match_id: id, scorers, updated_at: new Date().toISOString() }]),
-          })
-          if (gr.ok) goalsWritten++
+          const events = ev?.response
+          const scorers = Array.isArray(events) ? scorersFrom(events, f.teams?.home?.id) : []
+          if (Array.isArray(events) && scorers.length >= totalGoals) {
+            const gr = await sb('match_goals?on_conflict=match_id', {
+              method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+              body: JSON.stringify([{ match_id: id, scorers, updated_at: new Date().toISOString() }]),
+            })
+            if (gr.ok) goalsWritten++
+          } else {
+            console.warn(`  ⏳ buteurs ${id} incomplets (${scorers.length}/${totalGoals}) — réessai au prochain run`)
+          }
         } catch (e) { console.warn(`  ⚠️ events ${id}:`, String(e)) }
       }
     }

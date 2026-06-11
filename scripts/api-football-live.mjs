@@ -49,12 +49,18 @@ function redCardsFrom(events, homeId) {
     }))
 }
 
-async function writeEvents(matchId, fixtureId, homeId) {
+async function writeEvents(matchId, fixtureId, homeId, totalGoals) {
   try {
     const ev = await api(`/fixtures/events?fixture=${fixtureId}`)
-    const scorers = scorersFrom(ev.response, homeId)
-    const cards   = redCardsFrom(ev.response, homeId)
-    // Buteurs : upsert inchangé (ne casse jamais).
+    const events = ev?.response
+    // Réponse API invalide (creux/quota/erreur) → on ne touche à rien (garde l'existant).
+    if (!Array.isArray(events)) return
+    const scorers = scorersFrom(events, homeId)
+    const cards   = redCardsFrom(events, homeId)
+    // Anti-flicker : si l'API renvoie moins de buteurs que le score réel, c'est une
+    // réponse partielle → on n'écrase pas (on réessaiera au tick suivant).
+    if (scorers.length < totalGoals) return
+    // Buteurs : upsert.
     await sb('match_goals?on_conflict=match_id', {
       method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify([{ match_id: matchId, scorers, updated_at: new Date().toISOString() }]),
@@ -86,9 +92,9 @@ async function tick() {
     })
     // Récupère buteurs + cartons rouges : à chaque but, et même à 0-0 une fois
     // par minute (~1 tick sur 4) pour capter les cartons précoces sans cramer le quota.
-    const hasGoals = (f.goals?.home ?? 0) + (f.goals?.away ?? 0) > 0
-    if (hasGoals || tickN % 4 === 0) {
-      goalJobs.push(writeEvents(id, f.fixture?.id, f.teams?.home?.id))
+    const totalGoals = (f.goals?.home ?? 0) + (f.goals?.away ?? 0)
+    if (totalGoals > 0 || tickN % 4 === 0) {
+      goalJobs.push(writeEvents(id, f.fixture?.id, f.teams?.home?.id, totalGoals))
     }
   }
   const ids = rows.map(r => r.match_id)
