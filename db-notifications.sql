@@ -81,3 +81,26 @@ begin
     alter publication supabase_realtime add table notifications;
   end if;
 end $$;
+
+-- ── Backfill : crée les notifications pour les commentaires / notes DÉJÀ reçus ──
+-- (les triggers ne couvrent que les nouveaux événements). Idempotent : ne crée
+-- pas de doublon si on relance ce script.
+insert into notifications (user_id, type, actor_id, actor_pseudo, match_id, body, read, created_at)
+select c.target_user_id, 'comment', c.author_id, c.author_pseudo, c.match_id, left(c.body, 140), false, c.created_at
+from bet_comments c
+where c.author_id is distinct from c.target_user_id
+  and not exists (
+    select 1 from notifications n
+    where n.user_id = c.target_user_id and n.type = 'comment'
+      and n.actor_id = c.author_id and n.match_id = c.match_id and n.created_at = c.created_at
+  );
+
+insert into notifications (user_id, type, actor_id, actor_pseudo, match_id, body, read, created_at)
+select r.target_user_id, 'rating', r.rater_id, coalesce(p.pseudo, 'Quelqu''un'), r.match_id, r.rating::text, false, r.created_at
+from bet_ratings r
+left join profiles p on p.id = r.rater_id
+where not exists (
+    select 1 from notifications n
+    where n.user_id = r.target_user_id and n.type = 'rating'
+      and n.actor_id = r.rater_id and n.match_id = r.match_id
+  );
