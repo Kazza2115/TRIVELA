@@ -493,7 +493,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
       {/* ══ KNOCKOUT — tableau de tournoi responsive + paris inline ═══ */}
       {tab === 'eliminatoires' && (
         <KnockoutView
-          results={results} live={live} goals={goals} goalFlash={goalFlash}
+          results={results} live={live} goals={goals} cards={cards} goalFlash={goalFlash}
           predictions={predictions} confirmed={confirmed} lockErrors={lockErrors} now={now}
           onIncrement={setPrediction} onConfirm={confirm} onEdit={edit}
         />
@@ -1002,12 +1002,12 @@ function cardShort(c: RedCard): string {
   return `${name}${min}`
 }
 
-function BracketScorers({ scorers }: { scorers: Scorer[] }) {
-  if (!scorers.length) return null
+function BracketScorers({ scorers, redCards = [] }: { scorers: Scorer[]; redCards?: RedCard[] }) {
+  if (!scorers.length && !redCards.length) return null
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 1 }}>
       {scorers.map((s, i) => (
-        <div key={i} style={{
+        <div key={`g${i}`} style={{
           display: 'flex', alignItems: 'center', gap: 3,
           justifyContent: s.side === 'home' ? 'flex-start' : 'flex-end',
           fontSize: 8, color: 'var(--text-2)', lineHeight: 1.2,
@@ -1015,6 +1015,17 @@ function BracketScorers({ scorers }: { scorers: Scorer[] }) {
           {s.side === 'away' && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span>}
           <span style={{ fontSize: 8 }}>⚽</span>
           {s.side === 'home' && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span>}
+        </div>
+      ))}
+      {redCards.map((c, i) => (
+        <div key={`r${i}`} style={{
+          display: 'flex', alignItems: 'center', gap: 3,
+          justifyContent: c.side === 'home' ? 'flex-start' : 'flex-end',
+          fontSize: 8, color: 'var(--text-2)', lineHeight: 1.2,
+        }}>
+          {c.side === 'away' && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cardShort(c)}</span>}
+          <span style={{ fontSize: 8 }}>🟥</span>
+          {c.side === 'home' && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cardShort(c)}</span>}
         </div>
       ))}
     </div>
@@ -1073,6 +1084,7 @@ interface KOData {
   results: Record<string, MatchResult>
   live: Record<string, LiveScore>
   goals: Record<string, Scorer[]>
+  cards: Record<string, RedCard[]>
   goalFlash: Record<string, 'home' | 'away'>
   predictions: Predictions
   confirmed: Set<string>
@@ -1194,7 +1206,7 @@ function BracketCell({ match, data, expanded, alwaysBet, onSelect }: {
       <MiniTeam team={match.home} score={hs} win={homeWin} dim={awayWin} fire={fireHome} />
       <div style={{ height: 1, background: 'var(--sep)' }} />
       <MiniTeam team={match.away} score={as} win={awayWin} dim={homeWin} fire={fireAway} />
-      <BracketScorers scorers={data.goals[id] ?? []} />
+      <BracketScorers scorers={data.goals[id] ?? []} redCards={data.cards[id] ?? []} />
       {result && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 2 }}>
           {pts != null ? (
@@ -1347,7 +1359,7 @@ function DesktopBracket({ data }: { data: KOData }) {
             lockError={data.lockErrors[sel.id]}
             result={data.results[sel.id]} now={data.now}
             liveData={data.live[sel.id]} goalSide={data.goalFlash[sel.id]}
-            scorers={data.goals[sel.id]}
+            scorers={data.goals[sel.id]} redCards={data.cards[sel.id]}
             delay={0}
             onIncrement={(s, d) => data.onIncrement(sel.id, s, d)}
             onConfirm={() => data.onConfirm(sel.id)}
