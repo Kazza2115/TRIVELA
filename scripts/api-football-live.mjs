@@ -84,13 +84,15 @@ async function writeEvents(matchId, fixtureId, homeId, totalGoals) {
       method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify([{ match_id: matchId, scorers, updated_at: new Date().toISOString() }]),
     })
-    // Cartons : écriture séparée, pour ne pas casser les buteurs si la colonne
-    // 'cards' n'existe pas encore (migration db-goals.sql non lancée → 400 ignoré).
-    const r = await sb(`match_goals?match_id=eq.${matchId}`, {
-      method: 'PATCH', headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ cards }),
-    })
-    if (!r.ok && r.status !== 404) { /* colonne cards probablement absente — ignoré */ }
+    // Cartons : on écrit UNIQUEMENT s'il y a au moins un carton rouge — jamais une
+    // liste vide (un carton ne se retire pas, et un creux API ne doit pas l'effacer).
+    if (cards.length > 0) {
+      const r = await sb(`match_goals?match_id=eq.${matchId}`, {
+        method: 'PATCH', headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ cards }),
+      })
+      if (!r.ok && r.status !== 404) { /* colonne cards probablement absente — ignoré */ }
+    }
   } catch (e) { console.warn(`  ⚠️ events ${matchId}:`, String(e)) }
 }
 

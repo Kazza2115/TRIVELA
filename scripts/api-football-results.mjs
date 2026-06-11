@@ -42,10 +42,11 @@ async function main() {
   const gExisting = await sb('match_goals?select=match_id,scorers,cards')
   const storedCount = new Map()
   const cardsKnown = new Set()
+  const storedCards = new Map()   // nb de cartons déjà enregistrés (pour ne jamais réduire)
   if (gExisting.ok) {
     for (const r of await gExisting.json()) {
       storedCount.set(r.match_id, Array.isArray(r.scorers) ? r.scorers.length : 0)
-      if (Array.isArray(r.cards)) cardsKnown.add(r.match_id)
+      if (Array.isArray(r.cards)) { cardsKnown.add(r.match_id); storedCards.set(r.match_id, r.cards.length) }
     }
   }
 
@@ -84,14 +85,17 @@ async function main() {
           } else {
             console.warn(`  ⏳ buteurs ${id} indisponibles (${scorers.length}/${totalGoals}) — réessai au prochain run`)
           }
-          // Cartons rouges : upsert séparé (crée la ligne si besoin, même à 0-0 →
-          // évite de re-télécharger à l'infini). Marque les cartons comme synchronisés.
+          // Cartons rouges : upsert séparé. On n'écrit que si on ne RÉDUIT pas la
+          // liste déjà stockée (un creux API ne doit jamais effacer un carton). Le
+          // premier passage marque la synchro (cards = [] si aucun carton).
           if (Array.isArray(events)) {
             const cards = redCardsFrom(events, f.teams?.home?.id)
-            await sb('match_goals?on_conflict=match_id', {
-              method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-              body: JSON.stringify([{ match_id: id, cards }]),
-            }).catch(() => {})
+            if (cards.length >= (storedCards.get(id) ?? 0)) {
+              await sb('match_goals?on_conflict=match_id', {
+                method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+                body: JSON.stringify([{ match_id: id, cards }]),
+              }).catch(() => {})
+            }
           }
         } catch (e) { console.warn(`  ⚠️ events ${id}:`, String(e)) }
       }
