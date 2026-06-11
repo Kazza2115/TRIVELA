@@ -11,6 +11,7 @@ import AuthModal    from './components/AuthModal'
 import ResetPasswordModal from './components/ResetPasswordModal'
 import ProfileModal from './components/ProfileModal'
 import MenuDrawer   from './components/MenuDrawer'
+import ErrorBoundary from './components/ErrorBoundary'
 import TrivelaLogo  from './components/TrivelaLogo'
 import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages, getLive, subscribeToLive, getResults, subscribeToResults, beginPasswordRecovery } from './services/auth'
 import type { UserProfile, PresenceUser } from './services/auth'
@@ -326,7 +327,9 @@ export default function App() {
           width: '100%', height: '100%', position: 'relative', background: 'var(--bg)',
           display: section === 'globe' ? 'block' : 'none',
         }}>
-          <Globe onNavigate={navigateTo} onSelectContinent={showCompetition} isActive={section === 'globe'} currentUser={currentUser} />
+          <ErrorBoundary label="globe">
+            <Globe onNavigate={navigateTo} onSelectContinent={showCompetition} isActive={section === 'globe'} currentUser={currentUser} />
+          </ErrorBoundary>
 
           <p style={{
             position: 'absolute', top: 14, left: 0, right: 0, textAlign: 'center',
@@ -341,18 +344,20 @@ export default function App() {
           <ChatPreview onOpen={openChat} />
         </div>
 
-        {section === 'actualites' && <Actualites  onBack={back} />}
-        {section === 'competition' && competitionConf && <Competition conf={competitionConf} onBack={back} />}
-        {section === 'paris'      && <Paris        onBack={back} currentUser={currentUser} onOpenAuth={openAuth} focus={parisFocus} />}
+        {section === 'actualites' && <ErrorBoundary label="actualites"><Actualites onBack={back} /></ErrorBoundary>}
+        {section === 'competition' && competitionConf && <ErrorBoundary label="competition"><Competition conf={competitionConf} onBack={back} /></ErrorBoundary>}
+        {section === 'paris'      && <ErrorBoundary label="paris"><Paris onBack={back} currentUser={currentUser} onOpenAuth={openAuth} focus={parisFocus} /></ErrorBoundary>}
         {section === 'classement' && (
-          viewedPlayer
-            ? <PlayerProfile
-                player={viewedPlayer.player} rank={viewedPlayer.rank}
-                currentUser={currentUser} onBack={() => setViewedPlayer(null)}
-                onEditProfile={() => setShowProfile(true)} />
-            : <Classement
-                onBack={back} currentUser={currentUser} onOpenAuth={openAuth}
-                onSelectPlayer={(player, rank) => setViewedPlayer({ player, rank })} />
+          <ErrorBoundary label="classement">
+            {viewedPlayer
+              ? <PlayerProfile
+                  player={viewedPlayer.player} rank={viewedPlayer.rank}
+                  currentUser={currentUser} onBack={() => setViewedPlayer(null)}
+                  onEditProfile={() => setShowProfile(true)} />
+              : <Classement
+                  onBack={back} currentUser={currentUser} onOpenAuth={openAuth}
+                  onSelectPlayer={(player, rank) => setViewedPlayer({ player, rank })} />}
+          </ErrorBoundary>
         )}
       </div>
 
