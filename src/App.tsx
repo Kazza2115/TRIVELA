@@ -12,7 +12,7 @@ import ResetPasswordModal from './components/ResetPasswordModal'
 import ProfileModal from './components/ProfileModal'
 import MenuDrawer   from './components/MenuDrawer'
 import TrivelaLogo  from './components/TrivelaLogo'
-import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages, getLive, subscribeToLive, beginPasswordRecovery } from './services/auth'
+import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages, getLive, subscribeToLive, getResults, subscribeToResults, beginPasswordRecovery } from './services/auth'
 import type { UserProfile, PresenceUser } from './services/auth'
 import { ALL_MATCHES, matchKickoffUTC } from './data/wc2026Matches'
 import { playMentionSound } from './utils/sound'
@@ -88,22 +88,27 @@ export default function App() {
   }
 
   // Matchs en direct (pour le bouton flottant "EN DIRECT")
-  // = présents dans match_live OU dans leur créneau horaire (coup d'envoi → +135 min)
+  // = présents dans match_live OU dans leur créneau horaire (coup d'envoi → +135 min),
+  //   MAIS jamais un match qui a déjà un résultat final (sinon il resterait "rouge").
   useEffect(() => {
     const compute = async () => {
-      const fromDb = (await getLive()).map(l => l.matchId)
+      const [liveRows, results] = await Promise.all([getLive(), getResults()])
+      const settled = new Set(results.map(r => r.matchId))
+      const fromDb = liveRows.map(l => l.matchId).filter(id => !settled.has(id))
       const now = Date.now()
       const timeLive = ALL_MATCHES.filter(m => {
         if (m.home.code === 'un') return false
+        if (settled.has(m.id)) return false   // match terminé → plus "en direct"
         const k = matchKickoffUTC(m)
         return k !== null && now >= k && now < k + 135 * 60 * 1000
       }).map(m => m.id)
       setLiveIds([...new Set([...fromDb, ...timeLive])])
     }
     compute()
-    const unsub = subscribeToLive(compute)
+    const unsubLive = subscribeToLive(compute)
+    const unsubRes  = subscribeToResults(compute)
     const iv = setInterval(compute, 30000)
-    return () => { unsub(); clearInterval(iv) }
+    return () => { unsubLive(); unsubRes(); clearInterval(iv) }
   }, [])
 
   const goToLive = () => {

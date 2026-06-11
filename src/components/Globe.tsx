@@ -5,7 +5,7 @@ import type { Topology } from 'topojson-specification'
 import CountryPopup from './CountryPopup'
 import { todaysMatches, matchKickoffUTC, teamColor } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { getBets, getLive } from '../services/auth'
+import { getBets, getLive, getResults } from '../services/auth'
 import type { UserProfile } from '../services/auth'
 import { COMPETITIONS } from '../data/continentStats'
 
@@ -215,6 +215,7 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
   const [matchCard,     setMatchCard]     = useState<Match | null>(null)
   const matchArcsRef    = useRef<MatchArc[]>([])
   const todayByCountryRef = useRef<Map<number, Match>>(new Map())
+  const arcScoreRef     = useRef<Map<string, string>>(new Map())   // matchId → "2-0" (final ou live)
   const openMatchCardRef  = useRef<(m: Match) => void>(() => {})
   const [popup,              setPopup]              = useState<PopupState | null>(null)
   const [isLoaded,           setIsLoaded]           = useState(false)
@@ -408,6 +409,24 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
     // user is — avoids the de-zoom glitch when they had already pinched in.
     const fromScale = projRef.current?.scale() ?? baseRRef.current
     diveAnimRef.current = { start: performance.now(), target: conf, fromScale }
+  }, [])
+
+  // Scores des matchs du jour pour l'étiquette d'arc (résultat final prioritaire, sinon live).
+  useEffect(() => {
+    let on = true
+    const load = async () => {
+      try {
+        const [liveRows, results] = await Promise.all([getLive(), getResults()])
+        if (!on) return
+        const m = new Map<string, string>()
+        for (const r of results)  m.set(r.matchId, `${r.homeScore}-${r.awayScore}`)
+        for (const l of liveRows) if (!m.has(l.matchId)) m.set(l.matchId, `${l.homeScore}-${l.awayScore}`)
+        arcScoreRef.current = m
+      } catch { /* ignore */ }
+    }
+    load()
+    const iv = setInterval(load, 20000)
+    return () => { on = false; clearInterval(iv) }
   }, [])
 
   // Wait for the container to have real pixel dimensions before initialising D3.
@@ -719,7 +738,9 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
             if (tops[0] && tops[1]) {
               const [a, b] = [tops[0], tops[1]]
               link.attr('x1', a[0]).attr('y1', a[1]).attr('x2', b[0]).attr('y2', b[1]).attr('opacity', 0.8)
-              vs.attr('x', (a[0] + b[0]) / 2).attr('y', (a[1] + b[1]) / 2).attr('opacity', 1)
+              // Affiche le score (final ou live) si connu, sinon "VS".
+              vs.text(arcScoreRef.current.get(arc.match.id) ?? 'VS')
+                .attr('x', (a[0] + b[0]) / 2).attr('y', (a[1] + b[1]) / 2).attr('opacity', 1)
             } else {
               link.attr('opacity', 0); vs.attr('opacity', 0)
             }
@@ -1191,6 +1212,7 @@ function MatchPreCard({ match, currentUser, onClose, onNavigate }: {
     } catch { return null }
   })
   const [vis,   setVis]   = useState(false)
+  const [result, setResult] = useState<{ home: number; away: number } | null>(null)
 
   useEffect(() => { const t = setTimeout(() => setVis(true), 60); return () => clearTimeout(t) }, [])
   useEffect(() => {
@@ -1202,6 +1224,12 @@ function MatchPreCard({ match, currentUser, onClose, onNavigate }: {
         if (b) setProno({ home: b.homeScore, away: b.awayScore })
       }).catch(() => {})
     }
+    // Résultat final (le match est terminé → on ne le montre plus "en direct")
+    getResults().then(rs => {
+      if (!on) return
+      const r = rs.find(x => x.matchId === match.id)
+      if (r) setResult({ home: r.homeScore, away: r.awayScore })
+    }).catch(() => {})
     const poll = () => getLive().then(arr => {
       if (!on) return
       const l = arr.find(x => x.matchId === match.id)
@@ -1216,10 +1244,12 @@ function MatchPreCard({ match, currentUser, onClose, onNavigate }: {
   const time = kickoff != null
     ? new Date(kickoff).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Zurich' })
     : match.time
-  // En direct = données API en jeu OU dans le créneau horaire du match
+  // En direct = données API en jeu OU dans le créneau horaire — mais JAMAIS si le
+  // match a déjà un résultat final (sinon il resterait "en direct / VS").
+  const finished = result != null
   const now = Date.now()
   const inWindow = kickoff != null && now >= kickoff && now < kickoff + 135 * 60 * 1000
-  const isLive = (!!live && ['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE'].includes(live.status)) || inWindow
+  const isLive = !finished && ((!!live && ['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE'].includes(live.status)) || inWindow)
   const stage = match.round === 'group'
     ? (match.group === 'Amical' ? 'Match amical' : `Groupe ${match.group}`)
     : match.group
@@ -1265,7 +1295,9 @@ function MatchPreCard({ match, currentUser, onClose, onNavigate }: {
           textAlign: 'center', fontSize: 9, fontWeight: 800, letterSpacing: 1.6,
           color: isLive ? '#ff5a5a' : 'rgba(200,155,60,0.95)', textTransform: 'uppercase', marginBottom: 12,
         }}>
-          {isLive ? `● EN DIRECT${live?.elapsed != null ? ` · ${live.elapsed}'` : ''}` : `Aujourd'hui · ${stage}`}
+          {isLive
+            ? `● EN DIRECT${live?.elapsed != null ? ` · ${live.elapsed}'` : ''}`
+            : finished ? `Terminé · ${stage}` : `Aujourd'hui · ${stage}`}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1274,6 +1306,10 @@ function MatchPreCard({ match, currentUser, onClose, onNavigate }: {
             {isLive ? (
               <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, color: '#ff5a5a', lineHeight: 1 }}>
                 {live?.home ?? 0}<span style={{ opacity: 0.5, margin: '0 4px' }}>:</span>{live?.away ?? 0}
+              </div>
+            ) : finished ? (
+              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, color: '#fff', lineHeight: 1 }}>
+                {result!.home}<span style={{ opacity: 0.5, margin: '0 4px' }}>:</span>{result!.away}
               </div>
             ) : (
               <>
