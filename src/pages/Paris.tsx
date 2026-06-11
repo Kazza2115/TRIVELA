@@ -221,7 +221,10 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
   useEffect(() => {
     loadLive()
     const unsub = subscribeToLive(loadLive)
-    return unsub
+    // Filet de sécurité : si un push Realtime est manqué (onglet en arrière-plan,
+    // coupure réseau, souscription tombée), on resynchronise le score régulièrement.
+    const iv = setInterval(loadLive, 15000)
+    return () => { unsub(); clearInterval(iv) }
   }, [loadLive])
 
   // Buteurs (⚽) — live + matchs terminés
@@ -230,7 +233,8 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
   useEffect(() => {
     loadGoals()
     const unsub = subscribeToMatchGoals(loadGoals)
-    return unsub
+    const iv = setInterval(loadGoals, 20000)   // même filet de sécurité pour les buteurs
+    return () => { unsub(); clearInterval(iv) }
   }, [loadGoals])
 
   // Saut vers un match (bouton "EN DIRECT")
