@@ -747,6 +747,56 @@ export async function updatePassword(password: string): Promise<{ error?: string
   return { error: b.error_description || b.msg || b.message || 'Échec de la mise à jour du mot de passe.' }
 }
 
+// ── Récupération de mot de passe (e-mail Supabase / GoTrue) ───────────────────
+
+/** Envoie un e-mail de réinitialisation contenant un lien de retour vers l'app. */
+export async function requestPasswordReset(email: string): Promise<{ error?: string }> {
+  const addr = email.trim()
+  if (!addr) return { error: 'Entrez votre adresse e-mail.' }
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+  try {
+    const redirectTo = `${window.location.origin}/`
+    const res = await fetch(
+      `${SUPA_URL}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`,
+      {
+        method: 'POST',
+        headers: { 'apikey': SUPA_ANON, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: addr }),
+      },
+    )
+    if (res.ok) return {}
+    const b = await res.json().catch(() => ({}))
+    return { error: b.error_description || b.msg || b.message || 'Envoi impossible — réessaie.' }
+  } catch {
+    return { error: 'Erreur réseau — réessaie.' }
+  }
+}
+
+/** À l'ouverture de l'app : détecte un lien de récupération dans l'URL (#type=recovery…).
+ *  Si présent, installe la session de récupération et renvoie { active: true }. */
+export function beginPasswordRecovery(): { active: boolean; error?: string } {
+  if (!supabaseConfigured) return { active: false }
+  try {
+    const raw = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : ''
+    if (!raw) return { active: false }
+    const p = new URLSearchParams(raw)
+    const clean = () => {
+      try { history.replaceState(null, '', window.location.pathname + window.location.search) } catch { /* ignore */ }
+    }
+    if (p.get('error') || p.get('error_description')) {
+      clean()
+      return { active: false, error: p.get('error_description') || 'Lien invalide ou expiré.' }
+    }
+    if (p.get('type') === 'recovery' && p.get('access_token')) {
+      persistSession(p.get('access_token'), p.get('refresh_token'), true)
+      startRefreshTimer()
+      clean()
+      return { active: true }
+    }
+  } catch { /* ignore */ }
+  return { active: false }
+}
+
 // ── Administration ───────────────────────────────────────────────────────────
 
 /** Promeut (true) ou rétrograde (false) un joueur en admin. Réservé aux admins. */

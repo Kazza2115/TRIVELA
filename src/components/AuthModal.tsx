@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { register, login } from '../services/auth'
+import { register, login, requestPasswordReset } from '../services/auth'
 import type { UserProfile } from '../services/auth'
 import { COUNTRIES } from '../data/countries'
 
@@ -8,7 +8,7 @@ interface AuthModalProps {
   onClose: () => void
 }
 
-type Mode = 'login' | 'register'
+type Mode = 'login' | 'register' | 'recover'
 
 export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
   const [mode,       setMode]       = useState<Mode>('login')
@@ -17,14 +17,32 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
   const [pseudo,     setPseudo]     = useState('')
   const [country,    setCountry]    = useState(COUNTRIES[0])
   const [error,      setError]      = useState('')
+  const [info,       setInfo]       = useState('')
   const [loading,    setLoading]    = useState(false)
   const [remember,   setRemember]   = useState(true)
   const mouseDownTarget = useRef<EventTarget | null>(null)
 
-  const switchMode = (m: Mode) => { setMode(m); setError('') }
+  const switchMode = (m: Mode) => { setMode(m); setError(''); setInfo('') }
 
   const submit = async () => {
-    setError('')
+    setError(''); setInfo('')
+
+    // ── Récupération de mot de passe ──
+    if (mode === 'recover') {
+      if (!email.trim()) { setError('Entre ton adresse email.'); return }
+      setLoading(true)
+      try {
+        const { error } = await requestPasswordReset(email.trim())
+        if (error) { setError(error); return }
+        setInfo('Si un compte existe pour cette adresse, un e-mail de réinitialisation vient d\'être envoyé. Pensez à vérifier les spams.')
+      } catch {
+        setError('Erreur réseau — réessaie.')
+      } finally {
+        setLoading(false)
+      }
+      return
+    }
+
     if (!email.trim() || !password.trim()) { setError('Remplis tous les champs.'); return }
     if (mode === 'register' && !pseudo.trim()) { setError('Choisis un pseudo.'); return }
     setLoading(true)
@@ -91,27 +109,31 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
           textAlign: 'center', fontSize: 13, color: 'var(--text-2)',
           marginBottom: 24,
         }}>
-          {mode === 'login' ? 'Connexion à votre compte' : 'Créer un compte joueur'}
+          {mode === 'login' ? 'Connexion à votre compte'
+            : mode === 'register' ? 'Créer un compte joueur'
+            : 'Réinitialiser votre mot de passe'}
         </p>
 
-        {/* Mode toggle */}
-        <div style={{
-          display: 'flex', background: 'var(--bg-fill)',
-          borderRadius: 12, padding: 3, marginBottom: 20,
-        }}>
-          {(['login', 'register'] as Mode[]).map(m => (
-            <button key={m} onClick={() => switchMode(m)} style={{
-              flex: 1, padding: '9px 0', borderRadius: 10, border: 'none',
-              fontSize: 13, fontWeight: 600, cursor: 'pointer',
-              transition: 'all 0.18s',
-              background: mode === m ? 'var(--bg-card)' : 'transparent',
-              color: mode === m ? 'var(--text-1)' : 'var(--text-3)',
-              boxShadow: mode === m ? 'var(--shadow-sm)' : 'none',
-            }}>
-              {m === 'login' ? 'Connexion' : 'Inscription'}
-            </button>
-          ))}
-        </div>
+        {/* Mode toggle (masqué pendant la récupération) */}
+        {mode !== 'recover' && (
+          <div style={{
+            display: 'flex', background: 'var(--bg-fill)',
+            borderRadius: 12, padding: 3, marginBottom: 20,
+          }}>
+            {(['login', 'register'] as Mode[]).map(m => (
+              <button key={m} onClick={() => switchMode(m)} style={{
+                flex: 1, padding: '9px 0', borderRadius: 10, border: 'none',
+                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                transition: 'all 0.18s',
+                background: mode === m ? 'var(--bg-card)' : 'transparent',
+                color: mode === m ? 'var(--text-1)' : 'var(--text-3)',
+                boxShadow: mode === m ? 'var(--shadow-sm)' : 'none',
+              }}>
+                {m === 'login' ? 'Connexion' : 'Inscription'}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Fields */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -121,12 +143,32 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
             onKeyDown={e => e.key === 'Enter' && submit()}
             style={input}
           />
-          <input
-            type="password" placeholder="Mot de passe" value={password}
-            onChange={e => setPassword(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && submit()}
-            style={input}
-          />
+          {mode !== 'recover' && (
+            <input
+              type="password" placeholder="Mot de passe" value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && submit()}
+              style={input}
+            />
+          )}
+
+          {mode === 'login' && (
+            <button
+              type="button"
+              onClick={() => switchMode('recover')}
+              style={{
+                alignSelf: 'flex-end', background: 'none', border: 'none',
+                color: '#C89B3C', fontSize: 12, fontWeight: 600,
+                cursor: 'pointer', padding: '2px 2px',
+              }}
+            >Mot de passe oublié ?</button>
+          )}
+
+          {mode === 'recover' && (
+            <p style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5, margin: '2px 2px' }}>
+              Entrez l'adresse e-mail de votre compte : nous vous enverrons un lien pour définir un nouveau mot de passe.
+            </p>
+          )}
 
           {mode === 'register' && (
             <>
@@ -186,7 +228,20 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
           </div>
         )}
 
+        {/* Info (succès d'envoi) */}
+        {info && (
+          <div style={{
+            marginTop: 12, padding: '10px 14px',
+            background: 'rgba(34,197,94,0.08)',
+            border: '1px solid rgba(34,197,94,0.25)',
+            borderRadius: 10, fontSize: 13, color: '#16a34a', lineHeight: 1.5,
+          }}>
+            {info}
+          </div>
+        )}
+
         {/* Rester connecté */}
+        {mode !== 'recover' && (
         <button
           type="button"
           onClick={() => setRemember(r => !r)}
@@ -214,6 +269,7 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
             Rester connecté
           </span>
         </button>
+        )}
 
         {/* Submit */}
         <button
@@ -242,9 +298,24 @@ export default function AuthModal({ onSuccess, onClose }: AuthModalProps) {
               Chargement…
             </>
           ) : (
-            mode === 'login' ? 'Se connecter' : "Créer mon compte"
+            mode === 'login' ? 'Se connecter'
+              : mode === 'register' ? 'Créer mon compte'
+              : 'Envoyer le lien'
           )}
         </button>
+
+        {/* Retour à la connexion (mode récupération) */}
+        {mode === 'recover' && (
+          <button
+            type="button"
+            onClick={() => switchMode('login')}
+            style={{
+              width: '100%', marginTop: 10, padding: '10px 0',
+              background: 'none', border: 'none', color: 'var(--text-3)',
+              fontSize: 13, fontWeight: 600, cursor: 'pointer',
+            }}
+          >‹ Retour à la connexion</button>
+        )}
       </div>
     </div>
   )

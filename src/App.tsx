@@ -8,10 +8,11 @@ import Competition   from './pages/Competition'
 import ChatSheet    from './components/ChatSheet'
 import ChatPreview  from './components/ChatPreview'
 import AuthModal    from './components/AuthModal'
+import ResetPasswordModal from './components/ResetPasswordModal'
 import ProfileModal from './components/ProfileModal'
 import MenuDrawer   from './components/MenuDrawer'
 import TrivelaLogo  from './components/TrivelaLogo'
-import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages, getLive, subscribeToLive } from './services/auth'
+import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages, getLive, subscribeToLive, beginPasswordRecovery } from './services/auth'
 import type { UserProfile, PresenceUser } from './services/auth'
 import { ALL_MATCHES, matchKickoffUTC } from './data/wc2026Matches'
 import { playMentionSound } from './utils/sound'
@@ -40,11 +41,22 @@ export default function App() {
   const [showAuth,    setShowAuth]    = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showMenu,    setShowMenu]    = useState(false)
+  // Détecte un lien de réinitialisation de mot de passe dès l'ouverture (synchrone, avant l'effet d'auth)
+  const [recovery,    setRecovery]    = useState(() => beginPasswordRecovery())
   const [darkMode,    setDarkMode]    = useState(() => {
     try { return localStorage.getItem('trivela-theme') === 'dark' } catch { return false }
   })
 
   useEffect(() => subscribeToAuth(setCurrentUser), [])
+
+  // Lien de récupération invalide/expiré : prévenir et proposer une nouvelle demande
+  useEffect(() => {
+    if (recovery.error) {
+      alert(`${recovery.error}\n\nLe lien a peut-être expiré — redemandez un e-mail de réinitialisation.`)
+      setShowAuth(true)
+      setRecovery({ active: false })
+    }
+  }, [recovery.error])
 
   useEffect(() => {
     if (darkMode) document.documentElement.classList.add('dark')
@@ -461,6 +473,11 @@ export default function App() {
       {/* ── Auth modal ────────────────────────────────────────── */}
       {showAuth && (
         <AuthModal onSuccess={handleAuth} onClose={() => setShowAuth(false)} />
+      )}
+
+      {/* ── Réinitialisation du mot de passe (arrivée depuis le lien e-mail) ── */}
+      {recovery.active && (
+        <ResetPasswordModal onClose={() => setRecovery({ active: false })} />
       )}
 
       {/* ── Profile modal ─────────────────────────────────────── */}
