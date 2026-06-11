@@ -75,9 +75,10 @@ async function writeEvents(matchId, fixtureId, homeId, totalGoals) {
     if (!Array.isArray(events)) return
     const scorers = scorersFrom(events, homeId)
     const cards   = redCardsFrom(events, homeId)
-    // Anti-flicker : si l'API renvoie moins de buteurs que le score réel, c'est une
-    // réponse partielle → on n'écrase pas (on réessaiera au tick suivant).
-    if (scorers.length < totalGoals) return
+    // Anti-flicker : ne JAMAIS écraser par une liste de buteurs VIDE alors qu'il y
+    // a des buts (réponse API en creux). En revanche, on affiche les buteurs dès
+    // qu'au moins un est connu (les manquants se compléteront au tick suivant).
+    if (totalGoals > 0 && scorers.length === 0) return
     // Buteurs : upsert.
     await sb('match_goals?on_conflict=match_id', {
       method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },

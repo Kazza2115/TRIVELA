@@ -53,23 +53,24 @@ async function main() {
         body: JSON.stringify({ p_match_id: id, p_home_score: f.goals.home, p_away_score: f.goals.away }) })
       if (r.ok) settled++
       else console.warn(`  ⚠️ settle ${id}: ${r.status} ${await r.text().catch(() => '')}`)
-      // Persiste les buteurs tant que la liste stockée est incomplète (< score),
-      // et SEULEMENT si la nouvelle liste est complète. Auto-répare donc aussi les
-      // matchs déjà figés avec une liste vide/partielle suite à un creux API passé.
+      // Persiste les buteurs tant que la liste stockée est incomplète (< score).
+      // On écrit dès qu'au moins un buteur est connu (sans jamais RÉDUIRE la liste
+      // déjà stockée) : les buteurs apparaissent vite et se complètent run après run.
       const totalGoals = f.goals.home + f.goals.away
-      if ((storedCount.get(id) ?? 0) < totalGoals) {
+      const have = storedCount.get(id) ?? 0
+      if (have < totalGoals) {
         try {
           const ev = await api(`/fixtures/events?fixture=${f.fixture?.id}`)
           const events = ev?.response
           const scorers = Array.isArray(events) ? scorersFrom(events, f.teams?.home?.id) : []
-          if (Array.isArray(events) && scorers.length >= totalGoals) {
+          if (scorers.length > 0 && scorers.length >= have) {
             const gr = await sb('match_goals?on_conflict=match_id', {
               method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
               body: JSON.stringify([{ match_id: id, scorers, updated_at: new Date().toISOString() }]),
             })
             if (gr.ok) goalsWritten++
           } else {
-            console.warn(`  ⏳ buteurs ${id} incomplets (${scorers.length}/${totalGoals}) — réessai au prochain run`)
+            console.warn(`  ⏳ buteurs ${id} indisponibles (${scorers.length}/${totalGoals}) — réessai au prochain run`)
           }
         } catch (e) { console.warn(`  ⚠️ events ${id}:`, String(e)) }
       }
