@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import PageLayout from './PageLayout'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS, ALL_MATCHES, matchKickoffUTC } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { saveBet, saveFavorites, getBets, subscribeToResults, getLive, subscribeToLive, getMatchGoals, subscribeToMatchGoals } from '../services/auth'
-import type { UserProfile, MatchResult, LiveScore, Scorer } from '../services/auth'
+import { saveBet, saveFavorites, getBets, subscribeToResults, getLive, subscribeToLive, getMatchGoals, getMatchCards, subscribeToMatchGoals } from '../services/auth'
+import type { UserProfile, MatchResult, LiveScore, Scorer, RedCard } from '../services/auth'
 
 const INPLAY = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP'])
 
@@ -227,13 +227,17 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
     return () => { unsub(); clearInterval(iv) }
   }, [loadLive])
 
-  // Buteurs (⚽) — live + matchs terminés
+  // Buteurs (⚽) + cartons rouges (🟥) — live + matchs terminés
   const [goals, setGoals] = useState<Record<string, Scorer[]>>({})
-  const loadGoals = useCallback(async () => { setGoals(await getMatchGoals()) }, [])
+  const [cards, setCards] = useState<Record<string, RedCard[]>>({})
+  const loadGoals = useCallback(async () => {
+    const [g, c] = await Promise.all([getMatchGoals(), getMatchCards()])
+    setGoals(g); setCards(c)
+  }, [])
   useEffect(() => {
     loadGoals()
     const unsub = subscribeToMatchGoals(loadGoals)
-    const iv = setInterval(loadGoals, 20000)   // même filet de sécurité pour les buteurs
+    const iv = setInterval(loadGoals, 20000)   // même filet de sécurité pour buteurs + cartons
     return () => { unsub(); clearInterval(iv) }
   }, [loadGoals])
 
@@ -325,7 +329,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
             {liveList.map(m => (
               <LiveHeroCard key={`live-${m.id}`} match={m} domId={`live-${m.id}`}
                 live={live[m.id] ?? { matchId: m.id, status: 'LIVE', elapsed: null, homeScore: 0, awayScore: 0 }}
-                goalSide={goalFlash[m.id]} scorers={goals[m.id]}
+                goalSide={goalFlash[m.id]} scorers={goals[m.id]} redCards={cards[m.id]}
                 prediction={predictions[m.id]} confirmed={confirmed.has(m.id)} />
             ))}
           </div>
@@ -470,7 +474,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
                           lockError={lockErrors[m.id]}
                           result={results[m.id]} now={now}
                           liveData={live[m.id]} goalSide={goalFlash[m.id]}
-                          scorers={goals[m.id]}
+                          scorers={goals[m.id]} redCards={cards[m.id]}
                           delay={i * 30}
                           onIncrement={(s, d) => setPrediction(m.id, s, d)}
                           onConfirm={() => confirm(m.id)}
@@ -607,6 +611,7 @@ interface MatchCardProps {
   liveData?: LiveScore
   goalSide?: 'home' | 'away'
   scorers?: Scorer[]
+  redCards?: RedCard[]
   now?: number
   domId?: string
   delay: number
@@ -615,7 +620,7 @@ interface MatchCardProps {
   onEdit: () => void
 }
 
-function MatchCard({ match, prediction, confirmed, lockError, result, liveData, goalSide, scorers, now, domId, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
+function MatchCard({ match, prediction, confirmed, lockError, result, liveData, goalSide, scorers, redCards, now, domId, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
   const pred   = prediction ?? { home: 0, away: 0 }
   const isTBD  = match.home.code === 'un'
   const locked = isMatchLocked(match)
@@ -772,27 +777,41 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
         <TeamBlock team={match.away} align="right" fire={awayFlame} />
       </div>
 
-      {/* Buteurs ⚽ */}
-      {scorers && scorers.length > 0 && (
+      {/* Buteurs ⚽ + cartons rouges 🟥 */}
+      {((scorers && scorers.length > 0) || (redCards && redCards.length > 0)) && (
         <div style={{
           display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px',
           padding: '0 16px 12px', alignItems: 'start',
         }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {scorers.filter(s => s.side === 'home').map((s, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5,
+            {scorers?.filter(s => s.side === 'home').map((s, i) => (
+              <div key={`g${i}`} style={{ display: 'flex', alignItems: 'center', gap: 5,
                 fontSize: 11, color: 'var(--text-2)', fontWeight: 600 }}>
                 <span style={{ fontSize: 12 }}>⚽</span>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span>
               </div>
             ))}
+            {redCards?.filter(c => c.side === 'home').map((c, i) => (
+              <div key={`r${i}`} style={{ display: 'flex', alignItems: 'center', gap: 5,
+                fontSize: 11, color: 'var(--text-2)', fontWeight: 600 }}>
+                <span style={{ fontSize: 11 }}>🟥</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cardShort(c)}</span>
+              </div>
+            ))}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
-            {scorers.filter(s => s.side === 'away').map((s, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5,
+            {scorers?.filter(s => s.side === 'away').map((s, i) => (
+              <div key={`g${i}`} style={{ display: 'flex', alignItems: 'center', gap: 5,
                 fontSize: 11, color: 'var(--text-2)', fontWeight: 600 }}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span>
                 <span style={{ fontSize: 12 }}>⚽</span>
+              </div>
+            ))}
+            {redCards?.filter(c => c.side === 'away').map((c, i) => (
+              <div key={`r${i}`} style={{ display: 'flex', alignItems: 'center', gap: 5,
+                fontSize: 11, color: 'var(--text-2)', fontWeight: 600 }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cardShort(c)}</span>
+                <span style={{ fontSize: 11 }}>🟥</span>
               </div>
             ))}
           </div>
@@ -973,6 +992,14 @@ function scorerShort(s: Scorer): string {
   const tag = s.og ? ' csc' : s.pen ? ' (P)' : ''
   const min = s.minute != null ? ` ${s.minute}'` : ''
   return `${name}${tag}${min}`
+}
+
+// ─── Cartons rouges — affichage compact « 🟥 Nom min' » ─────────────────────
+function cardShort(c: RedCard): string {
+  const parts = c.player.trim().split(/\s+/)
+  const name = parts.length > 1 ? parts[parts.length - 1] : c.player
+  const min = c.minute != null ? ` ${c.minute}'` : ''
+  return `${name}${min}`
 }
 
 function BracketScorers({ scorers }: { scorers: Scorer[] }) {
@@ -1420,8 +1447,8 @@ function HeroTeam({ team, align, fire }: { team: Team; align: 'left' | 'right'; 
   )
 }
 
-function LiveHeroCard({ match, live, goalSide, scorers, prediction, confirmed, domId }: {
-  match: Match; live: LiveScore; goalSide?: 'home' | 'away'; scorers?: Scorer[]
+function LiveHeroCard({ match, live, goalSide, scorers, redCards, prediction, confirmed, domId }: {
+  match: Match; live: LiveScore; goalSide?: 'home' | 'away'; scorers?: Scorer[]; redCards?: RedCard[]
   prediction?: { home: number; away: number }; confirmed: boolean; domId?: string
 }) {
   const pred = prediction ?? { home: 0, away: 0 }
@@ -1453,19 +1480,29 @@ function LiveHeroCard({ match, live, goalSide, scorers, prediction, confirmed, d
         <HeroTeam team={match.away} align="right" fire={goalSide === 'away'} />
       </div>
 
-      {scorers && scorers.length > 0 && (
+      {((scorers && scorers.length > 0) || (redCards && redCards.length > 0)) && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px', margin: '8px 0 4px', alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {scorers.filter(s => s.side === 'home').map((s, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-2)', fontWeight: 600 }}>
+            {scorers?.filter(s => s.side === 'home').map((s, i) => (
+              <div key={`g${i}`} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-2)', fontWeight: 600 }}>
                 <span>⚽</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span>
+              </div>
+            ))}
+            {redCards?.filter(c => c.side === 'home').map((c, i) => (
+              <div key={`r${i}`} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-2)', fontWeight: 600 }}>
+                <span>🟥</span><span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cardShort(c)}</span>
               </div>
             ))}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end' }}>
-            {scorers.filter(s => s.side === 'away').map((s, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-2)', fontWeight: 600 }}>
+            {scorers?.filter(s => s.side === 'away').map((s, i) => (
+              <div key={`g${i}`} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-2)', fontWeight: 600 }}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span><span>⚽</span>
+              </div>
+            ))}
+            {redCards?.filter(c => c.side === 'away').map((c, i) => (
+              <div key={`r${i}`} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-2)', fontWeight: 600 }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cardShort(c)}</span><span>🟥</span>
               </div>
             ))}
           </div>

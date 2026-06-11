@@ -8,6 +8,8 @@ create table if not exists match_goals (
   scorers    jsonb       not null default '[]',  -- [{p:"Nom", s:"home"|"away", t:23, og:bool, pen:bool}]
   updated_at timestamptz not null default now()
 );
+-- Cartons rouges : [{p:"Nom", s:"home"|"away", t:55}]
+alter table match_goals add column if not exists cards jsonb not null default '[]'::jsonb;
 alter table match_goals enable row level security;
 
 drop policy if exists match_goals_select on match_goals;

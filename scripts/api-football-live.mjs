@@ -17,6 +17,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 let validIds = new Set()
 let fxMap = new Map()   // fixture_id API → notre match_id (groupes + élimination directe)
+let tickN = 0           // compteur de ticks (throttle des appels events à 0-0)
 
 // Extrait les buteurs d'un fixture (type "Goal"), avec côté domicile/extérieur.
 function scorersFrom(events, homeId) {
@@ -37,18 +38,39 @@ function scorersFrom(events, homeId) {
     })
 }
 
-async function writeGoals(matchId, fixtureId, homeId) {
+// Extrait les cartons rouges (carton rouge direct OU 2e jaune).
+function redCardsFrom(events, homeId) {
+  return (events || [])
+    .filter(e => e.type === 'Card' && (e.detail === 'Red Card' || e.detail === 'Second Yellow card'))
+    .map(e => ({
+      p: e.player?.name || '?',
+      s: e.team?.id === homeId ? 'home' : 'away',
+      t: e.time?.elapsed ?? null,
+    }))
+}
+
+async function writeEvents(matchId, fixtureId, homeId) {
   try {
     const ev = await api(`/fixtures/events?fixture=${fixtureId}`)
     const scorers = scorersFrom(ev.response, homeId)
+    const cards   = redCardsFrom(ev.response, homeId)
+    // Buteurs : upsert inchangé (ne casse jamais).
     await sb('match_goals?on_conflict=match_id', {
       method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify([{ match_id: matchId, scorers, updated_at: new Date().toISOString() }]),
     })
+    // Cartons : écriture séparée, pour ne pas casser les buteurs si la colonne
+    // 'cards' n'existe pas encore (migration db-goals.sql non lancée → 400 ignoré).
+    const r = await sb(`match_goals?match_id=eq.${matchId}`, {
+      method: 'PATCH', headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ cards }),
+    })
+    if (!r.ok && r.status !== 404) { /* colonne cards probablement absente — ignoré */ }
   } catch (e) { console.warn(`  ⚠️ events ${matchId}:`, String(e)) }
 }
 
 async function tick() {
+  tickN++
   const data = await api('/fixtures?league=1&season=2026&live=all')
   const fixtures = data.response || []
   const rows = []
@@ -62,9 +84,11 @@ async function tick() {
       home_score: f.goals?.home ?? 0, away_score: f.goals?.away ?? 0,
       updated_at: new Date().toISOString(),
     })
-    // Récupère les buteurs dès qu'au moins un but est marqué.
-    if ((f.goals?.home ?? 0) + (f.goals?.away ?? 0) > 0) {
-      goalJobs.push(writeGoals(id, f.fixture?.id, f.teams?.home?.id))
+    // Récupère buteurs + cartons rouges : à chaque but, et même à 0-0 une fois
+    // par minute (~1 tick sur 4) pour capter les cartons précoces sans cramer le quota.
+    const hasGoals = (f.goals?.home ?? 0) + (f.goals?.away ?? 0) > 0
+    if (hasGoals || tickN % 4 === 0) {
+      goalJobs.push(writeEvents(id, f.fixture?.id, f.teams?.home?.id))
     }
   }
   const ids = rows.map(r => r.match_id)

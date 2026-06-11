@@ -973,6 +973,29 @@ export async function getMatchGoals(): Promise<Record<string, Scorer[]>> {
   return map
 }
 
+// ─── Cartons rouges (match_goals.cards) ─────────────────────────────────────
+export interface RedCard {
+  player: string
+  side: 'home' | 'away'
+  minute: number | null
+}
+
+export async function getMatchCards(): Promise<Record<string, RedCard[]>> {
+  if (!supabaseConfigured) return {}
+  const res = await authFetch('GET', 'match_goals?select=match_id,cards')
+  if (!res.ok) return {}   // colonne 'cards' absente (migration non lancée) → aucun carton
+  const map: Record<string, RedCard[]> = {}
+  for (const r of (await res.json() as any[])) {
+    const arr = Array.isArray(r.cards) ? r.cards : []
+    map[r.match_id as string] = arr.map((c: any) => ({
+      player: String(c.p ?? '?'),
+      side: c.s === 'away' ? 'away' : 'home',
+      minute: typeof c.t === 'number' ? c.t : null,
+    }))
+  }
+  return map
+}
+
 export function subscribeToMatchGoals(cb: () => void): () => void {
   if (!supabase) return () => {}
   const channel = supabase
