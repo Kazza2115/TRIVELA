@@ -1,0 +1,11 @@
+# Cloudflare Pages — politique de cache
+# Les fichiers JS/CSS sont hachés (nom unique par build) → cache long immuable.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Le shell HTML ne doit JAMAIS être figé en cache, sinon le navigateur garde une
+# ancienne version qui pointe vers d'anciens assets → « je ne vois pas le changement ».
+/
+  Cache-Control: no-cache, must-revalidate
+/index.html
+  Cache-Control: no-cache, must-revalidate
