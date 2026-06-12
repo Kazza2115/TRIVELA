@@ -24,6 +24,10 @@ jobs:
           VITE_BASE: '/'
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Analytics PostHog (optionnel) : injecté au build. Si le secret est absent,
+          # PostHog reste désactivé et seul l'analytics Supabase tourne.
+          VITE_POSTHOG_KEY: ${{ secrets.VITE_POSTHOG_KEY }}
+          VITE_POSTHOG_HOST: ${{ secrets.VITE_POSTHOG_HOST }}
       - name: Create Pages project (idempotent)
         run: npx wrangler@3 pages project create trivela --production-branch="${GITHUB_REF_NAME}" || true
         env:
