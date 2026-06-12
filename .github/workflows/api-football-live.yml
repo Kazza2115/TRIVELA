@@ -1,9 +1,12 @@
 name: API-Football live
 
+# ⚠️ Poller live DOUBLON du worker Cloudflare (cloudflare/live-worker.js, cron 1 min).
+# Le worker est désormais l'unique poller live programmé (plus ponctuel, ~12 s de
+# granularité, gate quota intégré). Ce workflow reste en SECOURS manuel
+# (workflow_dispatch) — son cron est volontairement désactivé pour ne pas doubler
+# le quota API pendant les matchs.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '*/5 * * * *'   # chaque exécution boucle ~5,5 min en interrogeant toutes les 15 s
   push:
     branches: [claude/resume-codebase-work-i3uAg]
     paths: ['scripts/api-football-live.mjs', 'scripts/wc-map.mjs', '.github/workflows/api-football-live.yml']

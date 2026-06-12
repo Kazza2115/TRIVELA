@@ -14,10 +14,10 @@ const API = 'https://v3.football.api-sports.io'
 const FINISHED = new Set(['FT', 'AET', 'PEN'])
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
-// Fenêtre de jeu d'un match : on commence à suivre 2 min avant le coup d'envoi,
+// Fenêtre de jeu d'un match : on commence à suivre 5 min avant le coup d'envoi,
 // et jusqu'à 150 min après (couvre prolongations + tirs au but + arrêts de jeu).
 // Un match déjà réglé (présent dans match_results) sort de la fenêtre immédiatement.
-const PREROLL_MS = 2 * 60 * 1000
+const PREROLL_MS = 5 * 60 * 1000
 const MAX_DURATION_MS = 150 * 60 * 1000
 
 // Y a-t-il au moins un match à suivre MAINTENANT ?
@@ -136,7 +136,8 @@ async function poll(api, sb, fxMap) {
   return rows.length
 }
 
-// Boucle ~4 passages espacés de 14 s → couvre la minute du cron (≈14 s de granularité)
+// Boucle ~5 passages espacés de 12 s → couvre toute la minute du cron sans trou
+// (≈12 s de granularité) pour des scores/buts/cartons en direct sans accroc.
 async function runLoop(env) {
   const { api, sb, ok } = clients(env)
   if (!ok) return
@@ -144,9 +145,9 @@ async function runLoop(env) {
   if (!(await hasActiveMatch(sb))) return
   const { map: fxMap, all } = await buildContext(api, sb)
   try { await settleAll(api, sb, all, fxMap) } catch (e) { console.log('settle err', String(e)) }
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 5; i++) {
     try { await poll(api, sb, fxMap) } catch (e) { console.log('poll err', String(e)) }
-    if (i < 3) await sleep(14000)
+    if (i < 4) await sleep(12000)
   }
 }
 

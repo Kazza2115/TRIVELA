@@ -3,7 +3,7 @@
 // ── Fenêtres d'activité (protection du quota API) ───────────────────────────
 // Un poller ne doit appeler l'API football QUE si un match est dans sa fenêtre.
 // Fenêtres exprimées en millisecondes à partir du coup d'envoi (kickoff).
-export const LIVE_PREROLL_MS  = 2 * 60 * 1000        // on suit dès 2 min avant le coup d'envoi
+export const LIVE_PREROLL_MS  = 5 * 60 * 1000        // on suit dès 5 min avant le coup d'envoi
 export const LIVE_MAX_MS      = 150 * 60 * 1000      // jusqu'à 150 min après (prolongations + tab)
 export const RESULTS_MAX_MS   = 4 * 60 * 60 * 1000   // règlements + buteurs : jusqu'à 4 h après le coup d'envoi
 
