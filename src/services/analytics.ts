@@ -6,6 +6,10 @@
 //
 // Tout est défensif : l'analytics ne doit JAMAIS casser ni bloquer l'UI.
 // Sans clé PostHog (VITE_POSTHOG_KEY absente) → PostHog est ignoré, Supabase continue.
+//
+// ⚠️ PÉRIMÈTRE : on ne collecte QUE sur le site de production trivela.ch.
+// En local (localhost), sur les URL de prévisualisation Cloudflare ou tout autre
+// domaine, l'analytics est totalement inactif → seul trivela.ch est « affecté ».
 
 import posthog from 'posthog-js'
 import { supabase } from './supabase'
@@ -13,7 +17,14 @@ import { supabase } from './supabase'
 const POSTHOG_KEY  = import.meta.env.VITE_POSTHOG_KEY as string | undefined
 const POSTHOG_HOST = (import.meta.env.VITE_POSTHOG_HOST as string | undefined) ?? 'https://eu.i.posthog.com'
 
+// Seuls ces domaines déclenchent la collecte (PostHog + Supabase).
+const PROD_HOSTS = new Set(['trivela.ch', 'www.trivela.ch'])
+function isProductionSite(): boolean {
+  try { return PROD_HOSTS.has(location.hostname) } catch { return false }
+}
+
 let started      = false
+let enabled      = false   // vrai uniquement sur trivela.ch
 let posthogReady = false
 let currentUserId: string | null = null
 
@@ -39,6 +50,9 @@ function sessionId(): string {
 export function initAnalytics(): void {
   if (started) return
   started = true
+  // Hors trivela.ch (dev, prévisualisation, autre domaine) → analytics désactivé.
+  if (!isProductionSite()) return
+  enabled = true
   if (!POSTHOG_KEY) return
   try {
     posthog.init(POSTHOG_KEY, {
@@ -56,6 +70,7 @@ export function initAnalytics(): void {
 
 /** Lie l'activité à un utilisateur connecté (ou réinitialise à la déconnexion). */
 export function identify(user: { id: string; pseudo?: string; countryCode?: string } | null): void {
+  if (!enabled) return
   if (user) {
     currentUserId = user.id
     if (posthogReady) {
@@ -69,6 +84,7 @@ export function identify(user: { id: string; pseudo?: string; countryCode?: stri
 
 /** Envoie un évènement vers PostHog + Supabase. Ne lève jamais. */
 export function track(event: string, properties: Record<string, unknown> = {}): void {
+  if (!enabled) return   // hors trivela.ch → aucune collecte (ni PostHog, ni Supabase)
   if (posthogReady) {
     try { posthog.capture(event, properties) } catch { /* ignore */ }
   }
