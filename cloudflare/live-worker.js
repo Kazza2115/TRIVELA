@@ -2,12 +2,43 @@
 // Cron 1 min, avec une boucle interne (~14 s) → mise à jour quasi temps réel.
 // Mapping FIABLE par fixture_id (groupes + élimination directe) via buildFixtureMap.
 // Secrets (wrangler secret put) : API_FOOTBALL_KEY, SUPABASE_SERVICE_ROLE_KEY
+//
+// ⚠️ QUOTA API : on n'appelle l'API football QUE si au moins un match est dans sa
+// fenêtre de jeu (coup d'envoi → fin). Hors match, le cron sort immédiatement après
+// 2 lectures Supabase (gratuites) → ZÉRO appel à l'API football. Cette fenêtre est
+// déterminée à partir de match_schedule (kickoff) et de match_results (déjà réglé).
 import { buildFixtureMap } from '../scripts/wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const API = 'https://v3.football.api-sports.io'
 const FINISHED = new Set(['FT', 'AET', 'PEN'])
 const sleep = ms => new Promise(r => setTimeout(r, ms))
+
+// Fenêtre de jeu d'un match : on commence à suivre 2 min avant le coup d'envoi,
+// et jusqu'à 150 min après (couvre prolongations + tirs au but + arrêts de jeu).
+// Un match déjà réglé (présent dans match_results) sort de la fenêtre immédiatement.
+const PREROLL_MS = 2 * 60 * 1000
+const MAX_DURATION_MS = 150 * 60 * 1000
+
+// Y a-t-il au moins un match à suivre MAINTENANT ?
+// N'utilise QUE Supabase (REST) → aucun appel à l'API football, donc aucun quota consommé.
+// Échec de lecture (Supabase indisponible) → on NE lance PAS le suivi : sans accès au
+// planning on ne saurait de toute façon pas où écrire, et on protège le quota.
+async function hasActiveMatch(sb) {
+  try {
+    const now = Date.now()
+    const sres = await sb('match_schedule?select=match_id,kickoff')
+    if (!sres.ok) return false
+    const sched = await sres.json()
+    const rres = await sb('match_results?select=match_id')
+    const settled = rres.ok ? new Set((await rres.json()).map(r => r.match_id)) : new Set()
+    return sched.some(s => {
+      if (settled.has(s.match_id)) return false
+      const k = Date.parse(s.kickoff)
+      return Number.isFinite(k) && now >= k - PREROLL_MS && now <= k + MAX_DURATION_MS
+    })
+  } catch { return false }
+}
 
 function scorersFrom(events, homeId) {
   return (events || [])
@@ -109,6 +140,8 @@ async function poll(api, sb, fxMap) {
 async function runLoop(env) {
   const { api, sb, ok } = clients(env)
   if (!ok) return
+  // Aucun match dans sa fenêtre de jeu → on s'arrête AVANT tout appel à l'API football.
+  if (!(await hasActiveMatch(sb))) return
   const { map: fxMap, all } = await buildContext(api, sb)
   try { await settleAll(api, sb, all, fxMap) } catch (e) { console.log('settle err', String(e)) }
   for (let i = 0; i < 4; i++) {
@@ -119,9 +152,15 @@ async function runLoop(env) {
 
 export default {
   async scheduled(_event, env, ctx) { ctx.waitUntil(runLoop(env)) },
-  async fetch(_req, env) {
+  async fetch(req, env) {
     const { api, sb, ok } = clients(env)
     if (!ok) return new Response('secrets manquants', { status: 500 })
+    // Par défaut on respecte la fenêtre de jeu (zéro appel API hors match).
+    // ?force=1 force un passage pour un test manuel.
+    const force = new URL(req.url).searchParams.get('force') === '1'
+    if (!force && !(await hasActiveMatch(sb))) {
+      return new Response('aucun match en cours — appel API ignoré (ajoute ?force=1 pour forcer)')
+    }
     const { map: fxMap, all } = await buildContext(api, sb)
     await settleAll(api, sb, all, fxMap)
     const n = await poll(api, sb, fxMap)

@@ -1,6 +1,6 @@
 // Résultats via API-Football : règle les matchs de groupe TERMINÉS
 // (settle_match → points + classements). Mapping partagé via wc-map.mjs.
-import { buildFixtureMap } from './wc-map.mjs'
+import { buildFixtureMap, anyMatchInWindow, RESULTS_MAX_MS } from './wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -34,8 +34,17 @@ function redCardsFrom(events, homeId) {
 }
 
 async function main() {
-  const sched = await sb('match_schedule?select=match_id')
-  const validIds = sched.ok ? new Set((await sched.json()).map(r => r.match_id)) : new Set()
+  const sched = await sb('match_schedule?select=match_id,kickoff')
+  const schedRows = sched.ok ? await sched.json() : []
+  const validIds = new Set(schedRows.map(r => r.match_id))
+
+  // ── GATE QUOTA ────────────────────────────────────────────────────────────
+  // On ne règle (et ne complète buteurs/cartons) que dans les 4 h suivant un coup
+  // d'envoi. Hors de cette fenêtre : sortie immédiate, ZÉRO requête API football.
+  if (!anyMatchInWindow(schedRows, 0, RESULTS_MAX_MS)) {
+    console.log('⏸️  Aucun match récent à régler — aucune requête API football.')
+    return
+  }
 
   // Nb de buteurs déjà enregistrés + cartons déjà synchronisés (cards non null),
   // pour ne re-télécharger les événements que si buteurs incomplets OU cartons jamais synchronisés.
