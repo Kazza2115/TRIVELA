@@ -24,7 +24,7 @@ stable
 as $$
   select
     p.id, p.pseudo, p.country_code, p.country_name,
-    p.score, p.created_at, p.favorites, coalesce(p.is_admin, false),
+    p.score, p.created_at, to_jsonb(p.favorites), coalesce(p.is_admin, false),
     coalesce(sum((b.points = 5)::int), 0)::int                         as exact_count,
     coalesce(sum((b.points is not null and b.points > 0)::int), 0)::int as good_count
   from public.profiles p
