@@ -124,19 +124,6 @@ function bestThirds(results: Record<string, MatchResult>): Set<string> {
   return new Set(played.slice(0, 8).map(r => r.team.short))
 }
 
-// Vrai sur écran large (ordinateur) → tableau à double face ; sinon vue mobile.
-function useIsWide(threshold = 820): boolean {
-  const [wide, setWide] = useState(
-    () => typeof window !== 'undefined' && window.innerWidth >= threshold,
-  )
-  useEffect(() => {
-    const onResize = () => setWide(window.innerWidth >= threshold)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [threshold])
-  return wide
-}
-
 // ─── Component ─────────────────────────────────────────────────────────────
 export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
   onBack: () => void
@@ -1423,21 +1410,38 @@ function MobileRounds({ data }: { data: KOData }) {
 }
 
 function KnockoutView(data: KOData) {
-  const wide = useIsWide()
+  const [view, setView] = useState<'bracket' | 'list'>('bracket')
   return (
     <>
       <div style={{
-        padding: '11px 14px', margin: '0 0 14px',
+        padding: '11px 14px', margin: '0 0 12px',
         background: 'rgba(200,155,60,0.07)',
         border: '1px solid rgba(200,155,60,0.2)',
         borderRadius: 12, fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6,
       }}>
-        {wide
-          ? 'Cliquez sur un match du tableau pour pronostiquer juste en dessous.'
+        {view === 'bracket'
+          ? 'Touchez un match du tableau (faites défiler ◀ ▶) pour pronostiquer juste en dessous.'
           : 'Choisissez un tour, puis pariez sur chaque match.'}{' '}
         Les drapeaux des qualifiés apparaissent après la phase de groupes.
       </div>
-      {wide ? <DesktopBracket data={data} /> : <MobileRounds data={data} />}
+
+      {/* Bascule Tableau (branche de tournoi) / Liste */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+        {([['bracket', '🏆 Tableau'], ['list', '☰ Liste']] as const).map(([k, lbl]) => {
+          const on = view === k
+          return (
+            <button key={k} onClick={() => setView(k)} style={{
+              padding: '7px 16px', borderRadius: 20, cursor: 'pointer',
+              border: `1px solid ${on ? '#C89B3C' : 'var(--border)'}`,
+              background: on ? 'rgba(200,155,60,0.12)' : 'var(--bg-card)',
+              color: on ? '#A07828' : 'var(--text-2)',
+              fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
+            }}>{lbl}</button>
+          )
+        })}
+      </div>
+
+      {view === 'bracket' ? <DesktopBracket data={data} /> : <MobileRounds data={data} />}
     </>
   )
 }
