@@ -18,6 +18,7 @@ import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMes
 import type { UserProfile, PresenceUser, AppNotification } from './services/auth'
 import { ALL_MATCHES, matchKickoffUTC } from './data/wc2026Matches'
 import { playMentionSound } from './utils/sound'
+import { initAnalytics, identify as analyticsIdentify, track, trackPageview } from './services/analytics'
 import {
   IconGlobe, IconTrophy, IconBolt,
 } from './components/NavIcons'
@@ -50,6 +51,19 @@ export default function App() {
   })
 
   useEffect(() => subscribeToAuth(setCurrentUser), [])
+
+  // Analytics : init au démarrage (PostHog + Supabase)
+  useEffect(() => { initAnalytics() }, [])
+
+  // Lie / délie l'activité à l'utilisateur connecté (pour la rétention par compte)
+  useEffect(() => {
+    analyticsIdentify(currentUser
+      ? { id: currentUser.id, pseudo: currentUser.pseudo, countryCode: currentUser.countryCode }
+      : null)
+  }, [currentUser])
+
+  // Page vue à chaque changement de section
+  useEffect(() => { trackPageview(section) }, [section])
 
   // Lien de récupération invalide/expiré : prévenir et proposer une nouvelle demande
   useEffect(() => {
@@ -85,6 +99,7 @@ export default function App() {
 
   // Depuis le globe : touche un continent / pays vedette → page stats de la compétition
   const showCompetition = (conf: string) => {
+    track('competition_open', { conf })
     setViewedPlayer(null)
     setCompetitionConf(conf)
     setSection('competition')
@@ -116,6 +131,7 @@ export default function App() {
   }, [])
 
   const goToLive = () => {
+    track('live_click', { matchId: liveIds[0] ?? null })
     setViewedPlayer(null)
     setSection('paris'); setActiveNav('paris')
     if (liveIds[0]) setParisFocus({ id: liveIds[0], nonce: Date.now() })
@@ -126,6 +142,7 @@ export default function App() {
 
   // Ouvre le chat (et demande une fois l'autorisation de notification)
   const openChat = () => {
+    track('chat_open')
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {})
     }
@@ -152,6 +169,7 @@ export default function App() {
   const unreadCount = notifications.reduce((n, x) => n + (x.read ? 0 : 1), 0)
 
   const openInbox = () => {
+    track('notifications_open', { unread: unreadCount })
     setInboxOpen(true)
     if (currentUser && unreadCount > 0) {
       markNotificationsRead(currentUser.id).catch(() => {})
@@ -184,11 +202,12 @@ export default function App() {
   }, [currentUser])
 
   const back       = () => { setViewedPlayer(null); setSection('globe'); setActiveNav('globe') }
-  const openAuth   = () => setShowAuth(true)
+  const openAuth   = () => { track('auth_open'); setShowAuth(true) }
   const handleAuth = (user: UserProfile) => { setCurrentUser(user); setShowAuth(false) }
   const handleLogout = () => { setCurrentUser(null); setShowProfile(false) }
-  const navigateTo   = (s: string) => { setViewedPlayer(null); setSection(s as SectionId); setActiveNav(s as SectionId) }
+  const navigateTo   = (s: string) => { track('nav_click', { to: s, from: 'globe' }); setViewedPlayer(null); setSection(s as SectionId); setActiveNav(s as SectionId) }
   const navigateMenu = (s: SectionId) => {
+    track('nav_click', { to: s, from: 'menu' })
     if (s === 'chat') { openChat(); return }   // chat = panneau sur l'accueil, pas une page
     setViewedPlayer(null); setSection(s); setActiveNav(s)
   }
