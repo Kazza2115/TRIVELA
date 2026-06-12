@@ -5,7 +5,7 @@ import type { Topology } from 'topojson-specification'
 import CountryPopup from './CountryPopup'
 import { todaysMatches, matchKickoffUTC, teamColor } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { getBets, getLive, getResults } from '../services/auth'
+import { getBets, getLive, getResults, subscribeToLive } from '../services/auth'
 import type { UserProfile } from '../services/auth'
 import { COMPETITIONS } from '../data/continentStats'
 
@@ -412,21 +412,24 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
   }, [])
 
   // Scores des matchs du jour pour l'étiquette d'arc (résultat final prioritaire, sinon live).
+  // Anti-flicker : on FUSIONNE (on ne supprime jamais un score déjà connu) → un sondage
+  // momentanément vide ne fait plus « sauter » le score vers « VS ». + temps réel.
   useEffect(() => {
     let on = true
     const load = async () => {
       try {
         const [liveRows, results] = await Promise.all([getLive(), getResults()])
         if (!on) return
-        const m = new Map<string, string>()
-        for (const r of results)  m.set(r.matchId, `${r.homeScore}-${r.awayScore}`)
-        for (const l of liveRows) if (!m.has(l.matchId)) m.set(l.matchId, `${l.homeScore}-${l.awayScore}`)
-        arcScoreRef.current = m
+        const next = new Map(arcScoreRef.current)
+        for (const l of liveRows) next.set(l.matchId, `${l.homeScore}-${l.awayScore}`)
+        for (const r of results)  next.set(r.matchId, `${r.homeScore}-${r.awayScore}`)  // final = prioritaire
+        arcScoreRef.current = next
       } catch { /* ignore */ }
     }
     load()
-    const iv = setInterval(load, 20000)
-    return () => { on = false; clearInterval(iv) }
+    const unsub = subscribeToLive(load)   // mise à jour dès qu'un score change
+    const iv = setInterval(load, 12000)   // filet de sécurité
+    return () => { on = false; unsub(); clearInterval(iv) }
   }, [])
 
   // Wait for the container to have real pixel dimensions before initialising D3.
