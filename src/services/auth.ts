@@ -347,6 +347,11 @@ export async function saveFavorites(userId: string, favorites: string[]): Promis
 
 // ─── Leaderboard ──────────────────────────────────────────────────────────────
 
+// À score égal, on classe par pseudo dans l'ordre alphabétique (insensible à la casse/accents).
+function byScoreThenPseudo(a: UserProfile, b: UserProfile): number {
+  return b.score - a.score || a.pseudo.localeCompare(b.pseudo, 'fr', { sensitivity: 'base' })
+}
+
 export async function getLeaderboard(): Promise<UserProfile[]> {
   if (supabaseConfigured && supabase) {
     const { data } = await supabase
@@ -361,9 +366,9 @@ export async function getLeaderboard(): Promise<UserProfile[]> {
       createdAt: new Date(p.created_at as string).getTime(),
       favorites: (p.favorites as string[]) ?? [],
       isAdmin: (p.is_admin as boolean) ?? false,
-    }))
+    })).sort(byScoreThenPseudo)
   }
-  return lsUsers().map(toProfile).sort((a, b) => b.score - a.score)
+  return lsUsers().map(toProfile).sort(byScoreThenPseudo)
 }
 
 // ─── Bets ─────────────────────────────────────────────────────────────────────
