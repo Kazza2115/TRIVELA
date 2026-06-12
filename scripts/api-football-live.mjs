@@ -138,16 +138,21 @@ async function tick() {
     } catch (e) { console.warn(`  ⚠️ fin ${mid}:`, String(e)) }
   }
 
-  const ids = rows.map(r => r.match_id)
-  // Retire de match_live les matchs qui ne sont plus en direct
-  if (ids.length) await sb(`match_live?match_id=not.in.(${ids.join(',')})`, { method: 'DELETE' })
-  else await sb('match_live?match_id=not.is.null', { method: 'DELETE' })
   if (rows.length) {
     await sb('match_live?on_conflict=match_id', {
       method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify(rows),
     })
   }
+  // On NE supprime PAS une ligne juste parce qu'elle est absente de live=all
+  // (mi-temps, creux API) → le score reste affiché pendant toute la durée du match,
+  // pauses comprises. On retire seulement les matchs réglés + les lignes périmées (>3 h).
+  const er = await sb('match_results?select=match_id')
+  const settledRows = er.ok ? (await er.json()).map(r => r.match_id) : []
+  if (settledRows.length) await sb(`match_live?match_id=in.(${settledRows.join(',')})`, { method: 'DELETE' })
+  const stale = new Date(Date.now() - 3 * 3600 * 1000).toISOString()
+  await sb(`match_live?updated_at=lt.${stale}`, { method: 'DELETE' })
+  const ids = rows.map(r => r.match_id)
   if (goalJobs.length) await Promise.all(goalJobs)
   const t = new Date().toISOString().slice(11, 19)
   console.log(`[${t}] en direct : ${rows.length}${rows.length ? ' → ' + ids.join(', ') : ''}`)

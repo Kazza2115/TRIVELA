@@ -126,12 +126,18 @@ async function poll(api, sb, fxMap) {
     if ((f.goals?.home ?? 0) + (f.goals?.away ?? 0) > 0) goalJobs.push(writeGoals(id, f.fixture?.id, f.teams?.home?.id))
   }
 
-  const ids = rows.map(r => r.match_id)
-  if (ids.length) await sb(`match_live?match_id=not.in.(${ids.join(',')})`, { method: 'DELETE' })
-  else await sb('match_live?match_id=not.is.null', { method: 'DELETE' })
   if (rows.length) await sb('match_live?on_conflict=match_id', {
     method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(rows),
   })
+  // ⚠️ On ne supprime PAS une ligne juste parce qu'elle est absente de live=all
+  // (mi-temps, creux API) → le score reste affiché toute la durée du match, pauses
+  // comprises. Nettoyage ciblé : matchs déjà réglés (basculent en résultat final)
+  // + lignes périmées (>3 h sans mise à jour) pour ne rien laisser traîner.
+  const er = await sb('match_results?select=match_id')
+  const settled = er.ok ? (await er.json()).map(r => r.match_id) : []
+  if (settled.length) await sb(`match_live?match_id=in.(${settled.join(',')})`, { method: 'DELETE' })
+  const stale = new Date(Date.now() - 3 * 3600 * 1000).toISOString()
+  await sb(`match_live?updated_at=lt.${stale}`, { method: 'DELETE' })
   if (goalJobs.length) await Promise.all(goalJobs)
   return rows.length
 }
