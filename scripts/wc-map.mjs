@@ -1,4 +1,25 @@
 // Mapping partagé : fixtures API-Football (ligue 1, saison 2026) ↔ nos match_id.
+
+// ── Fenêtres d'activité (protection du quota API) ───────────────────────────
+// Un poller ne doit appeler l'API football QUE si un match est dans sa fenêtre.
+// Fenêtres exprimées en millisecondes à partir du coup d'envoi (kickoff).
+export const LIVE_PREROLL_MS  = 5 * 60 * 1000        // on suit dès 5 min avant le coup d'envoi
+export const LIVE_MAX_MS      = 150 * 60 * 1000      // jusqu'à 150 min après (prolongations + tab)
+export const RESULTS_MAX_MS   = 4 * 60 * 60 * 1000   // règlements + buteurs : jusqu'à 4 h après le coup d'envoi
+
+/**
+ * Vrai si au moins un match du planning est MAINTENANT dans sa fenêtre.
+ * @param schedule  lignes match_schedule : [{ match_id, kickoff }]
+ * @param prerollMs marge avant le coup d'envoi
+ * @param maxMs     durée de la fenêtre après le coup d'envoi
+ */
+export function anyMatchInWindow(schedule, prerollMs, maxMs, now = Date.now()) {
+  return (schedule || []).some(s => {
+    const k = Date.parse(s.kickoff)
+    return Number.isFinite(k) && now >= k - prerollMs && now <= k + maxMs
+  })
+}
+
 export const GROUPS = {
   A: ['MEX','KOR','ZAF','CZE'], B: ['CAN','SUI','QAT','BIH'], C: ['BRA','MAR','SCO','HAI'],
   D: ['USA','PAR','AUS','TUR'], E: ['GER','ECU','CIV','CUR'], F: ['NED','JPN','SWE','TUN'],

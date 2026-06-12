@@ -4,6 +4,7 @@ import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS, ALL_MATCHES, matchKickoffUTC }
 import type { Match, Team } from '../data/wc2026Matches'
 import { saveBet, saveFavorites, getBets, subscribeToResults, getResults, getLive, subscribeToLive, getMatchGoals, getMatchCards, subscribeToMatchGoals } from '../services/auth'
 import type { UserProfile, MatchResult, LiveScore, Scorer, RedCard } from '../services/auth'
+import { track } from '../services/analytics'
 
 const INPLAY = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP'])
 
@@ -288,6 +289,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
       setLockErrors(prev => ({ ...prev, [id]: error }))
       setTimeout(() => setLockErrors(prev => { const s = { ...prev }; delete s[id]; return s }), 3500)
     } else {
+      track('bet_placed', { matchId: id, stage: match.round, home: pred.home, away: pred.away })
       setConfirmed(prev => new Set(prev).add(id))
     }
   }

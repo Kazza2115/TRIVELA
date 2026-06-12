@@ -1,7 +1,7 @@
 // Scores en direct : interroge l'API toutes les 30 s pendant ~5 min (le cron
 // relance toutes les 5 min) et écrit l'état des matchs en cours dans match_live.
 // S'arrête tôt s'il n'y a aucun match en direct (économise le quota).
-import { buildFixtureMap } from './wc-map.mjs'
+import { buildFixtureMap, anyMatchInWindow, LIVE_PREROLL_MS, LIVE_MAX_MS } from './wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -155,8 +155,21 @@ async function tick() {
 }
 
 async function main() {
-  const sched = await sb('match_schedule?select=match_id')
-  if (sched.ok) validIds = new Set((await sched.json()).map(r => r.match_id))
+  const sched = await sb('match_schedule?select=match_id,kickoff')
+  const schedRows = sched.ok ? await sched.json() : []
+  validIds = new Set(schedRows.map(r => r.match_id))
+
+  // ── GATE QUOTA ────────────────────────────────────────────────────────────
+  // On n'appelle l'API football QUE si un match est dans sa fenêtre de jeu et pas
+  // encore réglé. Sinon : sortie immédiate, ZÉRO requête API. (Lecture Supabase only.)
+  const rr0 = await sb('match_results?select=match_id')
+  const settled0 = rr0.ok ? new Set((await rr0.json()).map(r => r.match_id)) : new Set()
+  const activeRows = schedRows.filter(r => !settled0.has(r.match_id))
+  if (!anyMatchInWindow(activeRows, LIVE_PREROLL_MS, LIVE_MAX_MS)) {
+    console.log('⏸️  Aucun match dans sa fenêtre de jeu — aucune requête API football.')
+    return
+  }
+  for (const m of settled0) settled.add(m)   // réutilise le set pour le dedup des règlements
 
   // Mapping fiable de TOUTE la compétition (groupes + élimination directe) par fixture_id.
   let allFixtures = []
