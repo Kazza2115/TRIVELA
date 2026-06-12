@@ -123,6 +123,21 @@ export default function Classement({ onBack, currentUser, onOpenAuth, onSelectPl
             })}
           </div>
 
+          {/* ── Règle de départage ─────────────────────────────── */}
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', gap: 8,
+            padding: '10px 14px', marginBottom: 12,
+            background: 'rgba(200,155,60,0.07)', border: '1px solid rgba(200,155,60,0.22)',
+            borderRadius: 12, fontSize: 11.5, color: 'var(--text-2)', lineHeight: 1.5,
+          }}>
+            <span style={{ fontSize: 14, flexShrink: 0 }}>⚖️</span>
+            <span>
+              En cas d'égalité de points, on départage par le nombre de{' '}
+              <b style={{ color: 'var(--text-1)' }}>scores exacts</b> 🎯, puis de{' '}
+              <b style={{ color: 'var(--text-1)' }}>bons résultats</b> ✓.
+            </span>
+          </div>
+
           {/* ── Full list ──────────────────────────────────────── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {players.map((p, i) => {
@@ -161,6 +176,12 @@ export default function Classement({ onBack, currentUser, onOpenAuth, onSelectPl
                         </span>
                       )}
                     </div>
+                    {((p.exactCount ?? 0) > 0 || (p.goodCount ?? 0) > 0) && (
+                      <div style={{ display: 'flex', gap: 9, fontSize: 10, color: 'var(--text-3)', marginTop: 2 }}>
+                        <span>🎯 {p.exactCount ?? 0} exact{(p.exactCount ?? 0) > 1 ? 's' : ''}</span>
+                        <span>✓ {p.goodCount ?? 0} bon{(p.goodCount ?? 0) > 1 ? 's' : ''}</span>
+                      </div>
+                    )}
                   </div>
                   <div style={{
                     fontFamily: "'Bebas Neue', cursive",

@@ -12,6 +12,8 @@ export interface UserProfile {
   createdAt: number
   favorites: string[]
   isAdmin: boolean
+  exactCount?: number   // nb de scores exacts (départage)
+  goodCount?: number    // nb de bons résultats (départage)
 }
 
 export interface BetRecord {
@@ -347,28 +349,43 @@ export async function saveFavorites(userId: string, favorites: string[]): Promis
 
 // ─── Leaderboard ──────────────────────────────────────────────────────────────
 
-// À score égal, on classe par pseudo dans l'ordre alphabétique (insensible à la casse/accents).
-function byScoreThenPseudo(a: UserProfile, b: UserProfile): number {
-  return b.score - a.score || a.pseudo.localeCompare(b.pseudo, 'fr', { sensitivity: 'base' })
+// Départage : score → nb de scores exacts → nb de bons résultats → pseudo (A→Z).
+function byScoreThenTiebreak(a: UserProfile, b: UserProfile): number {
+  return (b.score - a.score)
+    || ((b.exactCount ?? 0) - (a.exactCount ?? 0))
+    || ((b.goodCount ?? 0) - (a.goodCount ?? 0))
+    || a.pseudo.localeCompare(b.pseudo, 'fr', { sensitivity: 'base' })
+}
+
+function rowToProfile(p: any): UserProfile {
+  return {
+    id: p.id as string, email: '',
+    pseudo: p.pseudo as string,
+    countryCode: p.country_code as string,
+    countryName: p.country_name as string,
+    score: (p.score as number) ?? 0,
+    createdAt: new Date(p.created_at as string).getTime(),
+    favorites: (p.favorites as string[]) ?? [],
+    isAdmin: (p.is_admin as boolean) ?? false,
+    exactCount: Number(p.exact_count ?? 0),
+    goodCount: Number(p.good_count ?? 0),
+  }
 }
 
 export async function getLeaderboard(): Promise<UserProfile[]> {
   if (supabaseConfigured && supabase) {
-    const { data } = await supabase
+    // Fonction d'agrégation (score + scores exacts + bons résultats pour le départage).
+    const { data, error } = await supabase.rpc('leaderboard')
+    if (!error && Array.isArray(data)) {
+      return data.map(rowToProfile).sort(byScoreThenTiebreak)
+    }
+    // Repli si la fonction SQL n'est pas encore créée : classement par score seul.
+    const { data: prof } = await supabase
       .from('profiles').select('*').order('score', { ascending: false })
-    if (!data) return []
-    return data.map(p => ({
-      id: p.id as string, email: '',
-      pseudo: p.pseudo as string,
-      countryCode: p.country_code as string,
-      countryName: p.country_name as string,
-      score: p.score as number,
-      createdAt: new Date(p.created_at as string).getTime(),
-      favorites: (p.favorites as string[]) ?? [],
-      isAdmin: (p.is_admin as boolean) ?? false,
-    })).sort(byScoreThenPseudo)
+    if (!prof) return []
+    return prof.map(rowToProfile).sort(byScoreThenTiebreak)
   }
-  return lsUsers().map(toProfile).sort(byScoreThenPseudo)
+  return lsUsers().map(toProfile).sort(byScoreThenTiebreak)
 }
 
 // ─── Bets ─────────────────────────────────────────────────────────────────────
