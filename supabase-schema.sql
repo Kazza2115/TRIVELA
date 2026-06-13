@@ -126,6 +126,8 @@ create policy "match_results_select_all" on match_results for select using (true
 -- 1) enregistre le résultat (idempotent : ne fait rien si déjà réglé)
 -- 2) calcule les points de chaque pari sur ce match
 -- 3) ajoute les points à profiles.score et verrouille les paris
+-- Changement de type de retour (void → boolean) : on doit DROP d'abord.
+drop function if exists settle_match(text, integer, integer);
 create or replace function settle_match(
   p_match_id   text,
   p_home_score int,
