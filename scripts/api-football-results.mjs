@@ -18,12 +18,14 @@ const FINISHED = new Set(['FT', 'AET', 'PEN'])
 function scorersFrom(events, homeId) {
   return (events || [])
     .filter(e => e.type === 'Goal' && e.detail !== 'Missed Penalty')
-    .map(e => {
-      const og = e.detail === 'Own Goal'
-      const playerHome = e.team?.id === homeId
-      const side = og ? (playerHome ? 'away' : 'home') : (playerHome ? 'home' : 'away')
-      return { p: e.player?.name || '?', s: side, t: e.time?.elapsed ?? null, og, pen: e.detail === 'Penalty' }
-    })
+    .map(e => ({
+      p: e.player?.name || '?',
+      // API-Football : e.team est l'équipe CRÉDITÉE du but (csc inclus) → pas d'inversion.
+      s: e.team?.id === homeId ? 'home' : 'away',
+      t: e.time?.elapsed ?? null,
+      og: e.detail === 'Own Goal',
+      pen: e.detail === 'Penalty',
+    }))
 }
 
 // Cartons rouges (rouge direct OU 2e jaune) d'un fixture.
@@ -52,10 +54,12 @@ async function main() {
   const storedCount = new Map()
   const cardsKnown = new Set()
   const storedCards = new Map()   // nb de cartons déjà enregistrés (pour ne jamais réduire)
+  const hadOG = new Set()         // matchs avec un csc stocké (ancienne logique inversée) → ré-écrire
   if (gExisting.ok) {
     for (const r of await gExisting.json()) {
       storedCount.set(r.match_id, Array.isArray(r.scorers) ? r.scorers.length : 0)
       if (Array.isArray(r.cards)) { cardsKnown.add(r.match_id); storedCards.set(r.match_id, r.cards.length) }
+      if (Array.isArray(r.scorers) && r.scorers.some(s => s && s.og)) hadOG.add(r.match_id)
     }
   }
 
@@ -80,15 +84,20 @@ async function main() {
       // déjà stockée) : les buteurs apparaissent vite et se complètent run après run.
       const totalGoals = o.homeScore + o.awayScore
       const have = storedCount.get(id) ?? 0
+      // Un csc stocké récemment (≤ 36 h) suit peut-être l'ancienne logique inversée :
+      // on le ré-écrit depuis l'API pour placer le but du bon côté, automatiquement.
+      const finishedAt = Date.parse(f.fixture?.date)
+      const recentlyFinished = Number.isFinite(finishedAt) && (Date.now() - finishedAt) < 36 * 3600 * 1000
+      const healOG = hadOG.has(id) && recentlyFinished
       // Récupère les événements si les buteurs sont incomplets, OU si les cartons ne sont
-      // pas synchronisés, OU si le résultat vient d'être CORRIGÉ (orientation) → ré-écrit
-      // alors buteurs/cartons du bon côté automatiquement, sans intervention manuelle.
-      if (changed || have < totalGoals || !cardsKnown.has(id)) {
+      // pas synchronisés, OU si le résultat vient d'être CORRIGÉ (orientation), OU si un csc
+      // doit être réorienté → ré-écrit buteurs/cartons du bon côté automatiquement.
+      if (changed || healOG || have < totalGoals || !cardsKnown.has(id)) {
         try {
           const ev = await api(`/fixtures/events?fixture=${f.fixture?.id}`)
           const events = ev?.response
           const scorers = Array.isArray(events) ? scorersFrom(events, o.appHomeId) : []
-          if (scorers.length > 0 && (changed || scorers.length >= have)) {
+          if (scorers.length > 0 && (changed || healOG || scorers.length >= have)) {
             const gr = await sb('match_goals?on_conflict=match_id', {
               method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
               body: JSON.stringify([{ match_id: id, scorers, updated_at: new Date().toISOString() }]),
@@ -102,7 +111,7 @@ async function main() {
           // premier passage marque la synchro (cards = [] si aucun carton).
           if (Array.isArray(events)) {
             const cards = redCardsFrom(events, o.appHomeId)
-            if (changed || cards.length >= (storedCards.get(id) ?? 0)) {
+            if (changed || healOG || cards.length >= (storedCards.get(id) ?? 0)) {
               await sb('match_goals?on_conflict=match_id', {
                 method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
                 body: JSON.stringify([{ match_id: id, cards }]),

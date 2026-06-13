@@ -43,12 +43,14 @@ async function hasActiveMatch(sb) {
 function scorersFrom(events, homeId) {
   return (events || [])
     .filter(e => e.type === 'Goal' && e.detail !== 'Missed Penalty')
-    .map(e => {
-      const og = e.detail === 'Own Goal'
-      const playerHome = e.team?.id === homeId
-      const side = og ? (playerHome ? 'away' : 'home') : (playerHome ? 'home' : 'away')
-      return { p: e.player?.name || '?', s: side, t: e.time?.elapsed ?? null, og, pen: e.detail === 'Penalty' }
-    })
+    .map(e => ({
+      p: e.player?.name || '?',
+      // API-Football : e.team est l'équipe CRÉDITÉE du but (csc inclus) → pas d'inversion.
+      s: e.team?.id === homeId ? 'home' : 'away',
+      t: e.time?.elapsed ?? null,
+      og: e.detail === 'Own Goal',
+      pen: e.detail === 'Penalty',
+    }))
 }
 
 function clients(env) {
