@@ -44,6 +44,18 @@ function toGenevaTime(dateStr: string, timeStr: string): string {
   })
 }
 
+// Date d'un match EN HEURE DE GENÈVE (ex. « 15 Juin »). Les horaires sont stockés
+// en UTC ; un match à 23:00 UTC le 14 est en réalité le 15 à 01:00 à Genève → on
+// doit afficher la date locale, sinon elle ne colle pas avec l'heure affichée.
+const FR_MONTHS_CAP = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+function toGenevaDate(dateStr: string, timeStr: string): string {
+  const utc = parseUTC(dateStr, timeStr)
+  if (utc === null) return dateStr
+  const iso = new Date(utc).toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' }) // "2026-06-15"
+  const [, m, d] = iso.split('-').map(Number)
+  return `${d} ${FR_MONTHS_CAP[m - 1] ?? ''}`.trim()
+}
+
 /** Bet lockout — 1h30 before kickoff (kickoff stored as UTC). */
 function isMatchLocked(match: Match): boolean {
   const utc = parseUTC(match.date, match.time)
@@ -408,14 +420,16 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
             const mdMatches = GROUP_MATCHES
               .filter(m => m.matchday === md)
               .sort((a, b) => (parseUTC(a.date, a.time) ?? 0) - (parseUTC(b.date, b.time) ?? 0))
-            const dates = [...new Set(mdMatches.map(m => m.date))]
+            const gd = (m: Match) => toGenevaDate(m.date, m.time)   // date locale (Genève)
+            const dates = [...new Set(mdMatches.map(gd))]
             const dateRange = dates.length > 1 ? `${dates[0]} – ${dates[dates.length - 1]}` : dates[0] ?? ''
-            // Regroupe par date (en conservant l'ordre chronologique)
+            // Regroupe par date locale (en conservant l'ordre chronologique)
             const byDate: { date: string; matches: Match[] }[] = []
             mdMatches.forEach(m => {
+              const d = gd(m)
               const last = byDate[byDate.length - 1]
-              if (last && last.date === m.date) last.matches.push(m)
-              else byDate.push({ date: m.date, matches: [m] })
+              if (last && last.date === d) last.matches.push(m)
+              else byDate.push({ date: d, matches: [m] })
             })
             return (
               <div key={md} style={{ marginBottom: 26 }}>
@@ -689,7 +703,7 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
               EN DIRECT
             </span>
           )}
-          <span>{match.date}</span>
+          <span>{toGenevaDate(match.date, match.time)}</span>
           <span style={{
             background: locked ? 'rgba(110,110,115,0.1)' : 'rgba(200,155,60,0.12)',
             border: `1px solid ${locked ? 'rgba(110,110,115,0.25)' : 'rgba(200,155,60,0.25)'}`,
