@@ -1,6 +1,6 @@
 // Résultats via API-Football : règle les matchs de groupe TERMINÉS
 // (settle_match → points + classements). Mapping partagé via wc-map.mjs.
-import { buildFixtureMap, anyMatchInWindow, RESULTS_MAX_MS } from './wc-map.mjs'
+import { buildFixtureMap, orient, anyMatchInWindow, RESULTS_MAX_MS } from './wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -69,14 +69,15 @@ async function main() {
     matched++
     const status = f.fixture?.status?.short
     if (FINISHED.has(status) && f.goals?.home != null && f.goals?.away != null) {
+      const o = orient(id, f)   // score + côté buteurs ré-orientés vers notre match_id
       const r = await sb('rpc/settle_match', { method: 'POST',
-        body: JSON.stringify({ p_match_id: id, p_home_score: f.goals.home, p_away_score: f.goals.away }) })
+        body: JSON.stringify({ p_match_id: id, p_home_score: o.homeScore, p_away_score: o.awayScore }) })
       if (r.ok) settled++
       else console.warn(`  ⚠️ settle ${id}: ${r.status} ${await r.text().catch(() => '')}`)
       // Persiste les buteurs tant que la liste stockée est incomplète (< score).
       // On écrit dès qu'au moins un buteur est connu (sans jamais RÉDUIRE la liste
       // déjà stockée) : les buteurs apparaissent vite et se complètent run après run.
-      const totalGoals = f.goals.home + f.goals.away
+      const totalGoals = o.homeScore + o.awayScore
       const have = storedCount.get(id) ?? 0
       // Récupère les événements si les buteurs sont incomplets OU si les cartons
       // n'ont jamais été synchronisés (cards null) → toutes les stats finissent à jour.
@@ -84,7 +85,7 @@ async function main() {
         try {
           const ev = await api(`/fixtures/events?fixture=${f.fixture?.id}`)
           const events = ev?.response
-          const scorers = Array.isArray(events) ? scorersFrom(events, f.teams?.home?.id) : []
+          const scorers = Array.isArray(events) ? scorersFrom(events, o.appHomeId) : []
           if (scorers.length > 0 && scorers.length >= have) {
             const gr = await sb('match_goals?on_conflict=match_id', {
               method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
@@ -98,7 +99,7 @@ async function main() {
           // liste déjà stockée (un creux API ne doit jamais effacer un carton). Le
           // premier passage marque la synchro (cards = [] si aucun carton).
           if (Array.isArray(events)) {
-            const cards = redCardsFrom(events, f.teams?.home?.id)
+            const cards = redCardsFrom(events, o.appHomeId)
             if (cards.length >= (storedCards.get(id) ?? 0)) {
               await sb('match_goals?on_conflict=match_id', {
                 method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },

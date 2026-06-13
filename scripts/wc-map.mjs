@@ -49,6 +49,32 @@ for (const [short, names] of Object.entries(ALIASES)) names.forEach(n => { NAME2
 
 export function shortOf(name) { return NAME2SHORT[norm(name)] || null }
 
+// Code court (minuscule) de l'équipe à DOMICILE selon NOTRE match_id de groupe
+// (ex. 'gD-md1-usa-par' → 'usa'). null pour l'élimination directe (équipes TBD).
+export function appHomeShort(matchId) {
+  const m = /^g[A-L]-md\d+-([a-z]+)-[a-z]+$/.exec(matchId || '')
+  return m ? m[1] : null
+}
+
+/**
+ * Normalise une fixture API vers l'orientation de NOTRE match_id.
+ * Si l'API place à domicile l'équipe que nous classons à l'extérieur (orientation
+ * opposée), on inverse score ET côté des buteurs → score exact et buteurs du bon côté.
+ * Renvoie { swapped, homeScore, awayScore, appHomeId } (appHomeId = id API de l'équipe
+ * que NOUS considérons à domicile, à passer à scorersFrom/redCardsFrom).
+ */
+export function orient(matchId, f) {
+  const appH = appHomeShort(matchId)
+  const apiH = shortOf(f?.teams?.home?.name)
+  const swapped = !!(appH && apiH && appH !== apiH.toLowerCase())
+  return {
+    swapped,
+    homeScore: swapped ? (f?.goals?.away ?? 0) : (f?.goals?.home ?? 0),
+    awayScore: swapped ? (f?.goals?.home ?? 0) : (f?.goals?.away ?? 0),
+    appHomeId: swapped ? f?.teams?.away?.id : f?.teams?.home?.id,
+  }
+}
+
 /** Renvoie notre match_id pour une fixture de phase de groupes, ou null. */
 export function fixtureToMatchId(f, validIds) {
   const round = f.league?.round || ''

@@ -1,7 +1,7 @@
 // Scores en direct : interroge l'API toutes les 30 s pendant ~5 min (le cron
 // relance toutes les 5 min) et écrit l'état des matchs en cours dans match_live.
 // S'arrête tôt s'il n'y a aucun match en direct (économise le quota).
-import { buildFixtureMap, anyMatchInWindow, LIVE_PREROLL_MS, LIVE_MAX_MS } from './wc-map.mjs'
+import { buildFixtureMap, orient, anyMatchInWindow, LIVE_PREROLL_MS, LIVE_MAX_MS } from './wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -28,12 +28,13 @@ async function settleFinished(f, matchId) {
   const st = f.fixture?.status?.short
   const h = f.goals?.home, a = f.goals?.away
   if (!FINISHED.has(st) || h == null || a == null) return false
+  const o = orient(matchId, f)   // score ré-orienté vers notre match_id (points corrects)
   const r = await sb('rpc/settle_match', {
     method: 'POST',
-    body: JSON.stringify({ p_match_id: matchId, p_home_score: h, p_away_score: a }),
+    body: JSON.stringify({ p_match_id: matchId, p_home_score: o.homeScore, p_away_score: o.awayScore }),
   })
   if (!r.ok) { console.warn(`  ⚠️ settle ${matchId}: ${r.status} ${await r.text().catch(() => '')}`); return false }
-  await writeEvents(matchId, f.fixture?.id, f.teams?.home?.id, h + a)
+  await writeEvents(matchId, f.fixture?.id, o.appHomeId, o.homeScore + o.awayScore)
   return true
 }
 
@@ -105,17 +106,18 @@ async function tick() {
   for (const f of fixtures) {
     const id = fxMap.get(f.fixture?.id)
     if (!id) { console.warn(`⚠️ live non mappé: ${f.teams?.home?.name} vs ${f.teams?.away?.name} (fixture ${f.fixture?.id})`); continue }
+    const o = orient(id, f)   // score + côté buteurs ré-orientés vers notre match_id
     rows.push({
       match_id: id, status: f.fixture?.status?.short || 'LIVE',
       elapsed: f.fixture?.status?.elapsed ?? null,
-      home_score: f.goals?.home ?? 0, away_score: f.goals?.away ?? 0,
+      home_score: o.homeScore, away_score: o.awayScore,
       updated_at: new Date().toISOString(),
     })
     // Récupère buteurs + cartons rouges : à chaque but, et même à 0-0 une fois
     // par minute (~1 tick sur 4) pour capter les cartons précoces sans cramer le quota.
-    const totalGoals = (f.goals?.home ?? 0) + (f.goals?.away ?? 0)
+    const totalGoals = o.homeScore + o.awayScore
     if (totalGoals > 0 || tickN % 4 === 0) {
-      goalJobs.push(writeEvents(id, f.fixture?.id, f.teams?.home?.id, totalGoals))
+      goalJobs.push(writeEvents(id, f.fixture?.id, o.appHomeId, totalGoals))
     }
   }
   // Fin de match « à la minute » : un fixture en direct au tick précédent mais

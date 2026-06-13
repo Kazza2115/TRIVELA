@@ -7,7 +7,7 @@
 // fenêtre de jeu (coup d'envoi → fin). Hors match, le cron sort immédiatement après
 // 2 lectures Supabase (gratuites) → ZÉRO appel à l'API football. Cette fenêtre est
 // déterminée à partir de match_schedule (kickoff) et de match_results (déjà réglé).
-import { buildFixtureMap } from '../scripts/wc-map.mjs'
+import { buildFixtureMap, orient } from '../scripts/wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const API = 'https://v3.football.api-sports.io'
@@ -70,15 +70,16 @@ async function buildContext(api, sb) {
 }
 
 async function settleOne(api, sb, id, f, haveGoals) {
+  const o = orient(id, f)   // score ré-orienté vers notre match_id (points corrects)
   await sb('rpc/settle_match', {
-    method: 'POST', body: JSON.stringify({ p_match_id: id, p_home_score: f.goals.home, p_away_score: f.goals.away }),
+    method: 'POST', body: JSON.stringify({ p_match_id: id, p_home_score: o.homeScore, p_away_score: o.awayScore }),
   })
-  if (!haveGoals.has(id) && (f.goals.home + f.goals.away) > 0) {
+  if (!haveGoals.has(id) && (o.homeScore + o.awayScore) > 0) {
     try {
       const ev = await api(`/fixtures/events?fixture=${f.fixture?.id}`)
       await sb('match_goals?on_conflict=match_id', {
         method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify([{ match_id: id, scorers: scorersFrom(ev.response, f.teams?.home?.id), updated_at: new Date().toISOString() }]),
+        body: JSON.stringify([{ match_id: id, scorers: scorersFrom(ev.response, o.appHomeId), updated_at: new Date().toISOString() }]),
       })
     } catch { /* ignore */ }
   }
@@ -119,11 +120,12 @@ async function poll(api, sb, fxMap) {
   for (const f of (data.response || [])) {
     const id = fxMap.get(f.fixture?.id)
     if (!id) continue
+    const o = orient(id, f)   // score + côté buteurs ré-orientés vers notre match_id
     rows.push({
       match_id: id, status: f.fixture?.status?.short || 'LIVE', elapsed: f.fixture?.status?.elapsed ?? null,
-      home_score: f.goals?.home ?? 0, away_score: f.goals?.away ?? 0, updated_at: new Date().toISOString(),
+      home_score: o.homeScore, away_score: o.awayScore, updated_at: new Date().toISOString(),
     })
-    if ((f.goals?.home ?? 0) + (f.goals?.away ?? 0) > 0) goalJobs.push(writeGoals(id, f.fixture?.id, f.teams?.home?.id))
+    if (o.homeScore + o.awayScore > 0) goalJobs.push(writeGoals(id, f.fixture?.id, o.appHomeId))
   }
 
   if (rows.length) await sb('match_live?on_conflict=match_id', {
