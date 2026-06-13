@@ -12,6 +12,7 @@ import ResetPasswordModal from './components/ResetPasswordModal'
 import ProfileModal from './components/ProfileModal'
 import MenuDrawer   from './components/MenuDrawer'
 import ErrorBoundary from './components/ErrorBoundary'
+import UpdateBanner from './components/UpdateBanner'
 import NotificationInbox from './components/NotificationInbox'
 import TrivelaLogo  from './components/TrivelaLogo'
 import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages, getLive, subscribeToLive, getResults, subscribeToResults, beginPasswordRecovery, getNotifications, markNotificationsRead, subscribeToNotifications } from './services/auth'
@@ -562,6 +563,9 @@ export default function App() {
         notifications={notifications}
         onSelect={onSelectNotification}
       />
+
+      {/* ── Bandeau « nouvelle version disponible » ───────────── */}
+      <UpdateBanner />
 
       {/* ── Auth modal ────────────────────────────────────────── */}
       {showAuth && (
