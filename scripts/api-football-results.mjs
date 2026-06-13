@@ -72,21 +72,23 @@ async function main() {
       const o = orient(id, f)   // score + côté buteurs ré-orientés vers notre match_id
       const r = await sb('rpc/settle_match', { method: 'POST',
         body: JSON.stringify({ p_match_id: id, p_home_score: o.homeScore, p_away_score: o.awayScore }) })
-      if (r.ok) settled++
+      let changed = false
+      if (r.ok) { settled++; changed = (await r.json().catch(() => false)) === true }
       else console.warn(`  ⚠️ settle ${id}: ${r.status} ${await r.text().catch(() => '')}`)
       // Persiste les buteurs tant que la liste stockée est incomplète (< score).
       // On écrit dès qu'au moins un buteur est connu (sans jamais RÉDUIRE la liste
       // déjà stockée) : les buteurs apparaissent vite et se complètent run après run.
       const totalGoals = o.homeScore + o.awayScore
       const have = storedCount.get(id) ?? 0
-      // Récupère les événements si les buteurs sont incomplets OU si les cartons
-      // n'ont jamais été synchronisés (cards null) → toutes les stats finissent à jour.
-      if (have < totalGoals || !cardsKnown.has(id)) {
+      // Récupère les événements si les buteurs sont incomplets, OU si les cartons ne sont
+      // pas synchronisés, OU si le résultat vient d'être CORRIGÉ (orientation) → ré-écrit
+      // alors buteurs/cartons du bon côté automatiquement, sans intervention manuelle.
+      if (changed || have < totalGoals || !cardsKnown.has(id)) {
         try {
           const ev = await api(`/fixtures/events?fixture=${f.fixture?.id}`)
           const events = ev?.response
           const scorers = Array.isArray(events) ? scorersFrom(events, o.appHomeId) : []
-          if (scorers.length > 0 && scorers.length >= have) {
+          if (scorers.length > 0 && (changed || scorers.length >= have)) {
             const gr = await sb('match_goals?on_conflict=match_id', {
               method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
               body: JSON.stringify([{ match_id: id, scorers, updated_at: new Date().toISOString() }]),
@@ -100,7 +102,7 @@ async function main() {
           // premier passage marque la synchro (cards = [] si aucun carton).
           if (Array.isArray(events)) {
             const cards = redCardsFrom(events, o.appHomeId)
-            if (cards.length >= (storedCards.get(id) ?? 0)) {
+            if (changed || cards.length >= (storedCards.get(id) ?? 0)) {
               await sb('match_goals?on_conflict=match_id', {
                 method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
                 body: JSON.stringify([{ match_id: id, cards }]),

@@ -131,26 +131,42 @@ create or replace function settle_match(
   p_home_score int,
   p_away_score int
 )
-returns void
+returns boolean   -- true si le résultat a été créé OU corrigé, false si inchangé
 language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_existing match_results%rowtype;
 begin
-  -- Idempotence : si le match est déjà réglé, on ne recompte pas.
-  if exists (select 1 from match_results where match_id = p_match_id) then
-    return;
+  select * into v_existing from match_results where match_id = p_match_id;
+
+  -- Déjà réglé avec EXACTEMENT le même score → rien à faire (idempotent).
+  if found and v_existing.home_score = p_home_score and v_existing.away_score = p_away_score then
+    return false;
   end if;
 
-  insert into match_results (match_id, home_score, away_score, settled_at)
-  values (p_match_id, p_home_score, p_away_score, now());
+  -- Auto-correction : annule d'abord les points déjà attribués pour ce match
+  -- (cas d'un score précédemment faux, ex. orientation inversée).
+  update profiles pr
+     set score = pr.score - agg.total
+    from (select user_id, coalesce(sum(points), 0) as total
+            from bets where match_id = p_match_id group by user_id) agg
+   where pr.id = agg.user_id;
 
-  -- Barème identique à calcPoints() côté client :
-  --   +5 score exact · +4 bon nul (prime) · +3 bon vainqueur · 0 sinon
+  -- Enregistre ou met à jour le résultat officiel.
+  if found then
+    update match_results
+       set home_score = p_home_score, away_score = p_away_score, settled_at = now()
+     where match_id = p_match_id;
+  else
+    insert into match_results (match_id, home_score, away_score, settled_at)
+    values (p_match_id, p_home_score, p_away_score, now());
+  end if;
+
+  -- (Re)calcule les points — barème : +5 exact · +4 bon nul · +3 bon vainqueur · 0 sinon.
   with scored as (
-    select
-      b.id,
-      b.user_id,
+    select b.id, b.user_id,
       case
         when b.home_score = p_home_score and b.away_score = p_away_score then 5
         when p_home_score > p_away_score and b.home_score > b.away_score then 3
@@ -162,20 +178,16 @@ begin
     where b.match_id = p_match_id
   ),
   upd_bets as (
-    update bets b
-       set points = s.pts, locked = true
-      from scored s
-     where b.id = s.id
+    update bets b set points = s.pts, locked = true
+      from scored s where b.id = s.id
     returning s.user_id, s.pts
   )
   update profiles pr
      set score = pr.score + agg.total
-    from (
-      select user_id, sum(pts) as total
-        from upd_bets
-       group by user_id
-    ) agg
+    from (select user_id, sum(pts) as total from upd_bets group by user_id) agg
    where pr.id = agg.user_id;
+
+  return true;
 end;
 $$;
 
