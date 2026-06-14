@@ -6,6 +6,7 @@
 export const LIVE_PREROLL_MS  = 5 * 60 * 1000        // on suit dès 5 min avant le coup d'envoi
 export const LIVE_MAX_MS      = 150 * 60 * 1000      // jusqu'à 150 min après (prolongations + tab)
 export const RESULTS_MAX_MS   = 4 * 60 * 60 * 1000   // règlements + buteurs : jusqu'à 4 h après le coup d'envoi
+export const SETTLE_GRACE_MS  = 15 * 60 * 1000       // on continue de suivre 15 min APRÈS le règlement (vérif du score final)
 
 /**
  * Vrai si au moins un match du planning est MAINTENANT dans sa fenêtre.
@@ -17,6 +18,24 @@ export function anyMatchInWindow(schedule, prerollMs, maxMs, now = Date.now()) {
   return (schedule || []).some(s => {
     const k = Date.parse(s.kickoff)
     return Number.isFinite(k) && now >= k - prerollMs && now <= k + maxMs
+  })
+}
+
+/**
+ * Vrai si AU MOINS un match doit être suivi MAINTENANT :
+ *  • pas encore réglé ET dans sa fenêtre [coup d'envoi - preroll ; +maxMs], OU
+ *  • réglé depuis MOINS de SETTLE_GRACE_MS (on continue de tourner ~15 min après
+ *    la fin pour être SÛR que le match est terminé et re-vérifier le score final).
+ * @param settledAt Map ou objet { match_id → settled_at (ms epoch) }
+ */
+export function shouldTrack(schedule, settledAt, prerollMs, maxMs, now = Date.now()) {
+  const at = id => settledAt instanceof Map ? settledAt.get(id) : (settledAt || {})[id]
+  return (schedule || []).some(s => {
+    const k = Date.parse(s.kickoff)
+    if (!Number.isFinite(k)) return false
+    const sa = at(s.match_id)
+    if (sa != null && Number.isFinite(sa)) return now < sa + SETTLE_GRACE_MS
+    return now >= k - prerollMs && now <= k + maxMs
   })
 }
 

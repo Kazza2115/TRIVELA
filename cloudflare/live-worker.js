@@ -7,7 +7,7 @@
 // fenêtre de jeu (coup d'envoi → fin). Hors match, le cron sort immédiatement après
 // 2 lectures Supabase (gratuites) → ZÉRO appel à l'API football. Cette fenêtre est
 // déterminée à partir de match_schedule (kickoff) et de match_results (déjà réglé).
-import { buildFixtureMap, orient } from '../scripts/wc-map.mjs'
+import { buildFixtureMap, orient, SETTLE_GRACE_MS } from '../scripts/wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const API = 'https://v3.football.api-sports.io'
@@ -56,12 +56,17 @@ async function hasActiveMatch(sb) {
     const sres = await sb('match_schedule?select=match_id,kickoff')
     if (!sres.ok) return false
     const sched = await sres.json()
-    const rres = await sb('match_results?select=match_id')
-    const settled = rres.ok ? new Set((await rres.json()).map(r => r.match_id)) : new Set()
+    const rres = await sb('match_results?select=match_id,settled_at')
+    const settledAt = new Map()
+    if (rres.ok) for (const r of await rres.json()) settledAt.set(r.match_id, Date.parse(r.settled_at))
     return sched.some(s => {
-      if (settled.has(s.match_id)) return false
       const k = Date.parse(s.kickoff)
-      return Number.isFinite(k) && now >= k - PREROLL_MS && now <= k + MAX_DURATION_MS
+      if (!Number.isFinite(k)) return false
+      const sa = settledAt.get(s.match_id)
+      // Réglé : on continue de suivre 15 min de plus (vérif du score final, VAR…).
+      if (sa != null && Number.isFinite(sa)) return now < sa + SETTLE_GRACE_MS
+      // Pas réglé : fenêtre normale (coup d'envoi -5 min → +150 min).
+      return now >= k - PREROLL_MS && now <= k + MAX_DURATION_MS
     })
   } catch { return false }
 }
@@ -114,18 +119,27 @@ async function settleOne(api, sb, id, f, haveGoals) {
 }
 
 // Règle (débloque les pronos) les matchs terminés — dès la minute suivant la fin.
+// Et pendant 15 min après le règlement, on RE-vérifie le score final (corrections VAR,
+// score mal renvoyé par l'API à la fin) → settle_match auto-corrige et les buteurs sont
+// ré-écrits. Au-delà de ce délai de grâce, on n'y touche plus.
 async function settleAll(api, sb, all, fxMap) {
-  const er = await sb('match_results?select=match_id')
-  const have = er.ok ? new Set((await er.json()).map(r => r.match_id)) : new Set()
+  const now = Date.now()
+  const er = await sb('match_results?select=match_id,settled_at')
+  const settledAt = new Map()
+  if (er.ok) for (const r of await er.json()) settledAt.set(r.match_id, Date.parse(r.settled_at))
   const eg = await sb('match_goals?select=match_id')
   const haveGoals = eg.ok ? new Set((await eg.json()).map(r => r.match_id)) : new Set()
   const jobs = []
   for (const f of all) {
     const id = fxMap.get(f.fixture?.id)
     const st = f.fixture?.status?.short
-    if (id && !have.has(id) && FINISHED.has(st) && f.goals?.home != null && f.goals?.away != null) {
-      jobs.push(settleOne(api, sb, id, f, haveGoals))
-    }
+    if (!id || !FINISHED.has(st) || f.goals?.home == null || f.goals?.away == null) continue
+    const sa = settledAt.get(id)
+    const inGrace = sa != null && Number.isFinite(sa) && (now - sa) < SETTLE_GRACE_MS
+    // Jamais réglé → règlement normal. Réglé il y a < 15 min → re-vérification (on force
+    // la ré-écriture des buteurs en passant un set vide).
+    if (!settledAt.has(id)) jobs.push(settleOne(api, sb, id, f, haveGoals))
+    else if (inGrace)       jobs.push(settleOne(api, sb, id, f, new Set()))
   }
   if (jobs.length) await Promise.all(jobs)
 }

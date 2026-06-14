@@ -1,7 +1,7 @@
 // Scores en direct : interroge l'API toutes les 30 s pendant ~5 min (le cron
 // relance toutes les 5 min) et écrit l'état des matchs en cours dans match_live.
 // S'arrête tôt s'il n'y a aucun match en direct (économise le quota).
-import { buildFixtureMap, orient, anyMatchInWindow, LIVE_PREROLL_MS, LIVE_MAX_MS } from './wc-map.mjs'
+import { buildFixtureMap, orient, shouldTrack, LIVE_PREROLL_MS, LIVE_MAX_MS } from './wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -183,14 +183,16 @@ async function main() {
 
   // ── GATE QUOTA ────────────────────────────────────────────────────────────
   // On n'appelle l'API football QUE si un match est dans sa fenêtre de jeu et pas
-  // encore réglé. Sinon : sortie immédiate, ZÉRO requête API. (Lecture Supabase only.)
-  const rr0 = await sb('match_results?select=match_id')
-  const settled0 = rr0.ok ? new Set((await rr0.json()).map(r => r.match_id)) : new Set()
+  // encore réglé, OU réglé depuis < 15 min (on tourne ~15 min après la fin pour être
+  // sûr que le match est terminé). Sinon : sortie immédiate, ZÉRO requête API.
+  const rr0 = await sb('match_results?select=match_id,settled_at')
+  const settledAt = new Map()
+  if (rr0.ok) for (const r of await rr0.json()) settledAt.set(r.match_id, Date.parse(r.settled_at))
+  const settled0 = new Set(settledAt.keys())
   // Nettoyage du direct à CHAQUE passage (avant le gate) : un match terminé/périmé
   // ne reste jamais affiché « en direct », même hors fenêtre de jeu.
   await cleanupLive(schedRows, settled0)
-  const activeRows = schedRows.filter(r => !settled0.has(r.match_id))
-  if (!anyMatchInWindow(activeRows, LIVE_PREROLL_MS, LIVE_MAX_MS)) {
+  if (!shouldTrack(schedRows, settledAt, LIVE_PREROLL_MS, LIVE_MAX_MS)) {
     console.log('⏸️  Aucun match dans sa fenêtre de jeu — aucune requête API football.')
     return
   }
