@@ -40,17 +40,33 @@ async function main() {
   const schedRows = sched.ok ? await sched.json() : []
   const validIds = new Set(schedRows.map(r => r.match_id))
 
-  // ── GATE QUOTA ────────────────────────────────────────────────────────────
-  // On ne règle (et ne complète buteurs/cartons) que dans les 4 h suivant un coup
-  // d'envoi. Hors de cette fenêtre : sortie immédiate, ZÉRO requête API football.
-  // FORCE=1 (déclenchement manuel) ignore la fenêtre : rafraîchit les scores après
-  // un creux API (ex. un match dont le score n'a pas été correctement renvoyé).
+  // ── GATE QUOTA + BACKUP AUTOMATIQUE ────────────────────────────────────────
+  // On lance une passe API football si l'UNE de ces conditions est vraie :
+  //   1) un match est dans sa fenêtre de règlement normale (≤ 4 h après le coup d'envoi) ;
+  //   2) BACKUP : un match dont le coup d'envoi est passé (≤ 24 h) n'est TOUJOURS PAS réglé
+  //      → sa fin a été ratée (creux API pendant sa fenêtre). On le règle automatiquement,
+  //      sans aucune action manuelle. Ce cron tourne toutes les 10 min : un match terminé
+  //      mais manqué est donc rattrapé en ≤ 10 min, tout seul.
+  //   3) FORCE=1 (déclenchement manuel) : rafraîchit tout, hors fenêtre.
+  // Tant qu'il n'y a rien à régler : sortie immédiate après lectures Supabase (ZÉRO quota).
+  const now = Date.now()
+  const rrep = await sb('match_results?select=match_id')
+  const settledSet = rrep.ok ? new Set((await rrep.json()).map(r => r.match_id)) : new Set()
+  const BACKSTOP_MS = 24 * 60 * 60 * 1000
+  const unsettledPast = schedRows.filter(r => {
+    if (settledSet.has(r.match_id)) return false
+    const k = Date.parse(r.kickoff)
+    return Number.isFinite(k) && now > k && now < k + BACKSTOP_MS
+  })
   const FORCE = process.env.FORCE === '1'
-  if (!FORCE && !anyMatchInWindow(schedRows, 0, RESULTS_MAX_MS)) {
-    console.log('⏸️  Aucun match récent à régler — aucune requête API football.')
+  const inWindow = anyMatchInWindow(schedRows, 0, RESULTS_MAX_MS)
+  if (!FORCE && !inWindow && unsettledPast.length === 0) {
+    console.log('⏸️  Aucun match récent ni match passé non réglé — aucune requête API football.')
     return
   }
   if (FORCE) console.log('⚡ FORCE : règlement hors fenêtre (rafraîchissement manuel).')
+  else if (!inWindow && unsettledPast.length)
+    console.log(`🛟 Backup : ${unsettledPast.length} match(s) passé(s) non réglé(s) → ${unsettledPast.map(r => r.match_id).join(', ')}`)
 
   // Nb de buteurs déjà enregistrés + cartons déjà synchronisés (cards non null),
   // pour ne re-télécharger les événements que si buteurs incomplets OU cartons jamais synchronisés.
