@@ -39,6 +39,63 @@ export function shouldTrack(schedule, settledAt, prerollMs, maxMs, now = Date.no
   })
 }
 
+// Barème : +5 score exact · +4 bon nul · +3 bon vainqueur · 0 sinon.
+export function betPoints(predH, predA, realH, realA) {
+  if (predH === realH && predA === realA) return 5
+  if (realH > realA && predH > predA) return 3
+  if (realH < realA && predH < predA) return 3
+  if (realH === realA && predH === predA) return 4
+  return 0
+}
+
+/**
+ * Règle un match ENTIÈREMENT via REST (sans la fonction SQL settle_match, peu fiable) :
+ *   1) upsert du résultat officiel dans match_results ;
+ *   2) calcul + écriture des points de chaque pari (verrouillés) ;
+ *   3) recalcul du score total de chaque joueur concerné = somme de SES points
+ *      (auto-correcteur : corrige tout score faux/dérivé, idempotent).
+ * Idempotent : si le résultat stocké est déjà identique → ne refait rien (changed:false).
+ * @param sb  fonction REST : (path, init) => fetch(...) avec la clé service role
+ * @returns { changed: boolean }
+ */
+export async function settleViaRest(sb, matchId, homeScore, awayScore) {
+  // Idempotence : résultat déjà identique → rien à faire.
+  const ex = await sb(`match_results?match_id=eq.${matchId}&select=home_score,away_score`)
+  const exist = ex.ok ? (await ex.json())[0] : null
+  if (exist && exist.home_score === homeScore && exist.away_score === awayScore) return { changed: false }
+
+  // 1) Résultat officiel (upsert).
+  await sb('match_results?on_conflict=match_id', {
+    method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify([{ match_id: matchId, home_score: homeScore, away_score: awayScore, settled_at: new Date().toISOString() }]),
+  })
+
+  // 2) Points de chaque pari sur ce match.
+  const br = await sb(`bets?match_id=eq.${matchId}&select=id,user_id,home_score,away_score`)
+  const bets = br.ok ? await br.json() : []
+  const users = new Set()
+  for (const b of bets) {
+    const pts = betPoints(b.home_score, b.away_score, homeScore, awayScore)
+    await sb(`bets?id=eq.${b.id}`, {
+      method: 'PATCH', headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ points: pts, locked: true }),
+    })
+    users.add(b.user_id)
+  }
+
+  // 3) Score total de chaque joueur concerné = somme de TOUS ses points (auto-correcteur).
+  for (const uid of users) {
+    const pr = await sb(`bets?user_id=eq.${uid}&select=points`)
+    const rows = pr.ok ? await pr.json() : []
+    const total = rows.reduce((s, r) => s + (r.points || 0), 0)
+    await sb(`profiles?id=eq.${uid}`, {
+      method: 'PATCH', headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ score: total }),
+    })
+  }
+  return { changed: true }
+}
+
 export const GROUPS = {
   A: ['MEX','KOR','ZAF','CZE'], B: ['CAN','SUI','QAT','BIH'], C: ['BRA','MAR','SCO','HAI'],
   D: ['USA','PAR','AUS','TUR'], E: ['GER','ECU','CIV','CUR'], F: ['NED','JPN','SWE','TUN'],

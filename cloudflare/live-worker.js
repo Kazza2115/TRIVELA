@@ -7,7 +7,7 @@
 // fenêtre de jeu (coup d'envoi → fin). Hors match, le cron sort immédiatement après
 // 2 lectures Supabase (gratuites) → ZÉRO appel à l'API football. Cette fenêtre est
 // déterminée à partir de match_schedule (kickoff) et de match_results (déjà réglé).
-import { buildFixtureMap, orient, SETTLE_GRACE_MS } from '../scripts/wc-map.mjs'
+import { buildFixtureMap, orient, settleViaRest, SETTLE_GRACE_MS } from '../scripts/wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const API = 'https://v3.football.api-sports.io'
@@ -104,9 +104,8 @@ async function buildContext(api, sb) {
 
 async function settleOne(api, sb, id, f, haveGoals) {
   const o = orient(id, f)   // score ré-orienté vers notre match_id (points corrects)
-  await sb('rpc/settle_match', {
-    method: 'POST', body: JSON.stringify({ p_match_id: id, p_home_score: o.homeScore, p_away_score: o.awayScore }),
-  })
+  // Règlement 100 % REST (résultat + points + classement, auto-correcteur).
+  await settleViaRest(sb, id, o.homeScore, o.awayScore)
   if (!haveGoals.has(id) && (o.homeScore + o.awayScore) > 0) {
     try {
       const ev = await api(`/fixtures/events?fixture=${f.fixture?.id}`)

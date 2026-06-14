@@ -1,7 +1,7 @@
 // Scores en direct : interroge l'API toutes les 30 s pendant ~5 min (le cron
 // relance toutes les 5 min) et écrit l'état des matchs en cours dans match_live.
 // S'arrête tôt s'il n'y a aucun match en direct (économise le quota).
-import { buildFixtureMap, orient, shouldTrack, LIVE_PREROLL_MS, LIVE_MAX_MS } from './wc-map.mjs'
+import { buildFixtureMap, orient, shouldTrack, settleViaRest, LIVE_PREROLL_MS, LIVE_MAX_MS } from './wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -29,11 +29,8 @@ async function settleFinished(f, matchId) {
   const h = f.goals?.home, a = f.goals?.away
   if (!FINISHED.has(st) || h == null || a == null) return false
   const o = orient(matchId, f)   // score ré-orienté vers notre match_id (points corrects)
-  const r = await sb('rpc/settle_match', {
-    method: 'POST',
-    body: JSON.stringify({ p_match_id: matchId, p_home_score: o.homeScore, p_away_score: o.awayScore }),
-  })
-  if (!r.ok) { console.warn(`  ⚠️ settle ${matchId}: ${r.status} ${await r.text().catch(() => '')}`); return false }
+  // Règlement 100 % REST (résultat + points + classement, auto-correcteur).
+  await settleViaRest(sb, matchId, o.homeScore, o.awayScore)
   await writeEvents(matchId, f.fixture?.id, o.appHomeId, o.homeScore + o.awayScore)
   return true
 }

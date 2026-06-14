@@ -1,6 +1,6 @@
 // Résultats via API-Football : règle les matchs de groupe TERMINÉS
 // (settle_match → points + classements). Mapping partagé via wc-map.mjs.
-import { buildFixtureMap, orient, anyMatchInWindow, RESULTS_MAX_MS } from './wc-map.mjs'
+import { buildFixtureMap, orient, anyMatchInWindow, settleViaRest, RESULTS_MAX_MS } from './wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -94,11 +94,11 @@ async function main() {
     const status = f.fixture?.status?.short
     if (FINISHED.has(status) && f.goals?.home != null && f.goals?.away != null) {
       const o = orient(id, f)   // score + côté buteurs ré-orientés vers notre match_id
-      const r = await sb('rpc/settle_match', { method: 'POST',
-        body: JSON.stringify({ p_match_id: id, p_home_score: o.homeScore, p_away_score: o.awayScore }) })
-      let changed = false
-      if (r.ok) { settled++; changed = (await r.json().catch(() => false)) === true }
-      else console.warn(`  ⚠️ settle ${id}: ${r.status} ${await r.text().catch(() => '')}`)
+      // Règlement 100 % REST (la fonction SQL settle_match ne persistait pas) : résultat
+      // officiel + points + classement, auto-correcteur.
+      const res = await settleViaRest(sb, id, o.homeScore, o.awayScore)
+      settled++
+      const changed = res.changed
       // Persiste les buteurs tant que la liste stockée est incomplète (< score).
       // On écrit dès qu'au moins un buteur est connu (sans jamais RÉDUIRE la liste
       // déjà stockée) : les buteurs apparaissent vite et se complètent run après run.
