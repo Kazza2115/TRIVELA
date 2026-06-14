@@ -20,6 +20,32 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 const PREROLL_MS = 5 * 60 * 1000
 const MAX_DURATION_MS = 150 * 60 * 1000
 
+// Nettoyage du « en direct » — lecture Supabase UNIQUEMENT (zéro appel API football,
+// donc aucun quota consommé). Tourne à CHAQUE minute, même hors fenêtre de match :
+// retire de match_live tout match déjà réglé OU dont la durée max (kickoff + 150 min)
+// est dépassée. Garantit qu'aucun match ne reste « en direct » après sa fin, même si
+// l'API a eu un creux ou si le règlement a échoué/raté.
+async function cleanupLive(sb) {
+  try {
+    const lr = await sb('match_live?select=match_id')
+    if (!lr.ok) return
+    const liveIds = new Set((await lr.json()).map(r => r.match_id))
+    if (!liveIds.size) return
+    const toDelete = new Set()
+    const rr = await sb('match_results?select=match_id')
+    if (rr.ok) for (const r of await rr.json()) if (liveIds.has(r.match_id)) toDelete.add(r.match_id)
+    const sr = await sb('match_schedule?select=match_id,kickoff')
+    if (sr.ok) {
+      const now = Date.now()
+      for (const s of await sr.json()) {
+        const k = Date.parse(s.kickoff)
+        if (liveIds.has(s.match_id) && Number.isFinite(k) && now > k + MAX_DURATION_MS) toDelete.add(s.match_id)
+      }
+    }
+    if (toDelete.size) await sb(`match_live?match_id=in.(${[...toDelete].join(',')})`, { method: 'DELETE' })
+  } catch { /* ignore */ }
+}
+
 // Y a-t-il au moins un match à suivre MAINTENANT ?
 // N'utilise QUE Supabase (REST) → aucun appel à l'API football, donc aucun quota consommé.
 // Échec de lecture (Supabase indisponible) → on NE lance PAS le suivi : sans accès au
@@ -151,6 +177,9 @@ async function poll(api, sb, fxMap) {
 async function runLoop(env) {
   const { api, sb, ok } = clients(env)
   if (!ok) return
+  // Nettoyage du direct À CHAQUE passage (Supabase only, zéro quota), AVANT le gate :
+  // un match terminé ou périmé ne reste jamais « en direct », même hors fenêtre.
+  await cleanupLive(sb)
   // Aucun match dans sa fenêtre de jeu → on s'arrête AVANT tout appel à l'API football.
   if (!(await hasActiveMatch(sb))) return
   const { map: fxMap, all } = await buildContext(api, sb)

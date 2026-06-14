@@ -156,6 +156,26 @@ async function tick() {
   return rows.length
 }
 
+// Nettoyage du « en direct » — Supabase UNIQUEMENT (zéro appel API football). Retire de
+// match_live tout match déjà réglé OU dont la durée max (kickoff + 150 min) est dépassée.
+// Tourne avant le gate, donc même hors fenêtre : aucun match ne reste « en direct » à tort.
+async function cleanupLive(schedRows, settledSet) {
+  try {
+    const lr = await sb('match_live?select=match_id')
+    if (!lr.ok) return
+    const liveIds = new Set((await lr.json()).map(r => r.match_id))
+    if (!liveIds.size) return
+    const now = Date.now()
+    const toDelete = new Set()
+    for (const id of liveIds) if (settledSet.has(id)) toDelete.add(id)
+    for (const s of schedRows) {
+      const k = Date.parse(s.kickoff)
+      if (liveIds.has(s.match_id) && Number.isFinite(k) && now > k + LIVE_MAX_MS) toDelete.add(s.match_id)
+    }
+    if (toDelete.size) await sb(`match_live?match_id=in.(${[...toDelete].join(',')})`, { method: 'DELETE' })
+  } catch { /* ignore */ }
+}
+
 async function main() {
   const sched = await sb('match_schedule?select=match_id,kickoff')
   const schedRows = sched.ok ? await sched.json() : []
@@ -166,6 +186,9 @@ async function main() {
   // encore réglé. Sinon : sortie immédiate, ZÉRO requête API. (Lecture Supabase only.)
   const rr0 = await sb('match_results?select=match_id')
   const settled0 = rr0.ok ? new Set((await rr0.json()).map(r => r.match_id)) : new Set()
+  // Nettoyage du direct à CHAQUE passage (avant le gate) : un match terminé/périmé
+  // ne reste jamais affiché « en direct », même hors fenêtre de jeu.
+  await cleanupLive(schedRows, settled0)
   const activeRows = schedRows.filter(r => !settled0.has(r.match_id))
   if (!anyMatchInWindow(activeRows, LIVE_PREROLL_MS, LIVE_MAX_MS)) {
     console.log('⏸️  Aucun match dans sa fenêtre de jeu — aucune requête API football.')

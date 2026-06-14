@@ -308,9 +308,12 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
 
   const thirdsQualified = bestThirds(results)
 
-  // Matchs en direct (données live OU créneau horaire, non terminés)
+  // Matchs en direct (données live EN JEU — HT inclus — ou créneau horaire, non terminés).
+  // On exige un statut « in-play » : une ligne live résiduelle (FT/périmée) ne compte plus
+  // comme « en direct », même si elle n'a pas encore été nettoyée côté serveur.
   const isLiveNow = (m: Match) =>
-    m.home.code !== 'un' && !results[m.id] && (!!live[m.id] || isMatchLive(m, now))
+    m.home.code !== 'un' && !results[m.id] &&
+    ((!!live[m.id] && INPLAY.has(live[m.id].status)) || isMatchLive(m, now))
   const liveList = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES].filter(isLiveNow)
 
   return (
