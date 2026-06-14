@@ -129,6 +129,8 @@ const TEAM_LL: Record<string, [number, number]> = {
   'gb-sct': [-4.2, 56.8],   // Écosse
   'gb-wls': [-3.8, 52.3],   // Pays de Galles
   'gb-eng': [-1.3, 52.6],   // Angleterre
+  'cw': [-68.99, 12.17],    // Curaçao (île trop petite pour la géométrie du globe)
+  'cv': [-23.61, 15.12],    // Cap-Vert (idem)
 }
 
 interface MatchFlag {
@@ -665,10 +667,11 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
         const byCountry = new Map<number, Match>()
         todaysMatches().forEach(m => {
           const hId = CODE_TO_ID[m.home.code], aId = CODE_TO_ID[m.away.code]
-          if (hId == null || aId == null) return
-          // Position du drapeau : coordonnée forcée (nations UK) sinon centroïde du pays
-          const hc = TEAM_LL[m.home.code] ?? centroidOf(hId)
-          const ac = TEAM_LL[m.away.code] ?? centroidOf(aId)
+          // Position du drapeau : coordonnée forcée (nations UK, petites îles) sinon centroïde
+          // du pays. Une coordonnée forcée suffit → un pays absent de la géométrie (ex. Curaçao)
+          // s'affiche quand même au lieu de faire disparaître TOUT le match.
+          const hc = TEAM_LL[m.home.code] ?? (hId != null ? centroidOf(hId) : null)
+          const ac = TEAM_LL[m.away.code] ?? (aId != null ? centroidOf(aId) : null)
           if (!hc || !ac) return
           arcs.push({
             match: m,
@@ -677,7 +680,8 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
               { code: m.away.code, color: teamColor(m.away), ll: ac },
             ],
           })
-          byCountry.set(hId, m); byCountry.set(aId, m)
+          if (hId != null) byCountry.set(hId, m)
+          if (aId != null) byCountry.set(aId, m)
         })
         matchArcsRef.current     = arcs
         todayByCountryRef.current = byCountry
