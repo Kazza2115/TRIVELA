@@ -90,6 +90,7 @@ export default function App() {
 
   const [activeNav, setActiveNav] = useState<SectionId>('globe')
   const [viewedPlayer, setViewedPlayer] = useState<{ player: UserProfile; rank: number } | null>(null)
+  const [profileFocus, setProfileFocus] = useState<string | null>(null)   // matchId à mettre en avant dans le profil
   const [chatOpen, setChatOpen] = useState(false)
   const [online, setOnline] = useState<PresenceUser[]>([])
   const [notifications, setNotifications] = useState<AppNotification[]>([])
@@ -180,8 +181,10 @@ export default function App() {
 
   const onSelectNotification = (n: AppNotification) => {
     setInboxOpen(false)
+    // Mention (chat) → ouvre le chat. Commentaire/note sur un prono → ouvre MON profil
+    // directement sur le pronostic concerné (section dépliée + commentaires ouverts).
     if (n.type === 'mention') openChat()
-    else openOwnProfile()
+    else openOwnProfile(n.matchId ?? undefined)
   }
 
   // Notification quand on est mentionné (@pseudo) dans le chat
@@ -222,8 +225,9 @@ export default function App() {
   }
 
   // Mon avatar (en haut) → la MÊME page de profil que les autres joueurs.
-  const openOwnProfile = async () => {
+  const openOwnProfile = async (focusMatchId?: string) => {
     if (!currentUser) return
+    setProfileFocus(focusMatchId ?? null)
     const board = await getLeaderboard()
     const idx = board.findIndex(p => p.id === currentUser.id)
     setViewedPlayer({ player: idx >= 0 ? board[idx] : currentUser, rank: idx >= 0 ? idx + 1 : 0 })
@@ -363,7 +367,7 @@ export default function App() {
 
           {/* User / login — avatar-drapeau compact (le pseudo est sur la page profil) */}
           {currentUser ? (
-            <button onClick={openOwnProfile} title={currentUser.pseudo} style={{
+            <button onClick={() => openOwnProfile()} title={currentUser.pseudo} style={{
               width: 34, height: 34, flexShrink: 0, padding: 0,
               background: 'var(--bg-fill)', border: '1px solid var(--border-ui)',
               borderRadius: 10, cursor: 'pointer', overflow: 'hidden',
@@ -428,11 +432,12 @@ export default function App() {
             {viewedPlayer
               ? <PlayerProfile
                   player={viewedPlayer.player} rank={viewedPlayer.rank}
-                  currentUser={currentUser} onBack={() => setViewedPlayer(null)}
+                  focusMatchId={profileFocus}
+                  currentUser={currentUser} onBack={() => { setViewedPlayer(null); setProfileFocus(null) }}
                   onEditProfile={() => setShowProfile(true)} />
               : <Classement
                   onBack={back} currentUser={currentUser} onOpenAuth={openAuth}
-                  onSelectPlayer={(player, rank) => setViewedPlayer({ player, rank })} />}
+                  onSelectPlayer={(player, rank) => { setProfileFocus(null); setViewedPlayer({ player, rank }) }} />}
           </ErrorBoundary>
         )}
       </div>

@@ -44,9 +44,10 @@ interface PlayerProfileProps {
   currentUser: UserProfile | null
   onBack: () => void
   onEditProfile?: () => void
+  focusMatchId?: string | null   // pronostic à mettre en avant (clic sur notification)
 }
 
-export default function PlayerProfile({ player, rank, currentUser, onBack, onEditProfile }: PlayerProfileProps) {
+export default function PlayerProfile({ player, rank, currentUser, onBack, onEditProfile, focusMatchId }: PlayerProfileProps) {
   const [bets,     setBets]     = useState<PublicBet[]>([])
   const [myBets,   setMyBets]   = useState<PublicBet[]>([])
   const [results,  setResults]  = useState<Map<string, MatchResult>>(new Map())
@@ -158,14 +159,32 @@ export default function PlayerProfile({ player, rank, currentUser, onBack, onEdi
     return arr
   }, [bets])
 
-  // À l'arrivée sur la page, toutes les sections sont repliées (une seule fois).
+  // Section qui contient le pronostic ciblé (clic sur notification), pour la déplier.
+  const focusSectionLabel = useMemo(() => {
+    if (!focusMatchId) return null
+    return sections.find(s => s.bets.some(b => b.matchId === focusMatchId))?.label ?? null
+  }, [sections, focusMatchId])
+
+  // À l'arrivée sur la page, toutes les sections sont repliées (une seule fois) —
+  // sauf celle du pronostic ciblé par une notification, qu'on laisse dépliée.
   const initCollapsed = useRef(false)
   useEffect(() => {
     if (!loading && !initCollapsed.current && sections.length) {
-      setCollapsed(new Set(sections.map(s => s.label)))
+      setCollapsed(new Set(sections.map(s => s.label).filter(l => l !== focusSectionLabel)))
       initCollapsed.current = true
     }
-  }, [loading, sections])
+  }, [loading, sections, focusSectionLabel])
+
+  // Défile jusqu'au pronostic ciblé une fois chargé (clic sur notification).
+  const scrolledTo = useRef<string | null>(null)
+  useEffect(() => {
+    if (loading || !focusMatchId || scrolledTo.current === focusMatchId) return
+    const t = setTimeout(() => {
+      document.getElementById(`bet-${focusMatchId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      scrolledTo.current = focusMatchId
+    }, 250)
+    return () => clearTimeout(t)
+  }, [loading, focusMatchId])
 
   const toggleSection = (label: string) => setCollapsed(prev => {
     const next = new Set(prev)
@@ -317,6 +336,7 @@ export default function PlayerProfile({ player, rank, currentUser, onBack, onEdi
                         isSelf={isSelf}
                         targetUserId={player.id}
                         onChanged={loadSocial}
+                        highlight={bet.matchId === focusMatchId}
                       />
                     ))}
                   </div>
@@ -344,12 +364,13 @@ interface BetSocialCardProps {
   isSelf: boolean
   targetUserId: string
   onChanged: () => void
+  highlight?: boolean
 }
 
 function BetSocialCard({
-  bet, match, result, ratings, comments, reactions, currentUser, isSelf, targetUserId, onChanged,
+  bet, match, result, ratings, comments, reactions, currentUser, isSelf, targetUserId, onChanged, highlight,
 }: BetSocialCardProps) {
-  const [open, setOpen]   = useState(false)
+  const [open, setOpen]   = useState(!!highlight)   // commentaires ouverts d'emblée si ciblé par une notif
   const [draft, setDraft] = useState('')
   const [busy, setBusy]   = useState(false)
   const [err,  setErr]    = useState('')
@@ -389,9 +410,12 @@ function BetSocialCard({
   const remove = async (id: string) => { setBusy(true); await deleteComment(id); await onChanged(); setBusy(false) }
 
   return (
-    <div style={{
-      background: 'var(--bg-card)', border: '1px solid var(--border)',
-      borderRadius: 12, boxShadow: 'var(--shadow-sm)', overflow: 'hidden',
+    <div id={`bet-${bet.matchId}`} style={{
+      background: 'var(--bg-card)',
+      border: highlight ? '1px solid rgba(200,155,60,0.6)' : '1px solid var(--border)',
+      borderRadius: 12,
+      boxShadow: highlight ? '0 0 0 2px rgba(200,155,60,0.25), var(--shadow-sm)' : 'var(--shadow-sm)',
+      overflow: 'hidden', scrollMarginTop: 80,
     }}>
       {/* Row : teams + prediction */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px' }}>
