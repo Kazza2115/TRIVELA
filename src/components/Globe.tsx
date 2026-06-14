@@ -215,7 +215,7 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
   const [matchCard,     setMatchCard]     = useState<Match | null>(null)
   const matchArcsRef    = useRef<MatchArc[]>([])
   const todayByCountryRef = useRef<Map<number, Match>>(new Map())
-  const arcScoreRef     = useRef<Map<string, string>>(new Map())   // matchId → "2-0" (final ou live)
+  const arcScoreRef     = useRef<Map<string, { h: number; a: number }>>(new Map())   // matchId → { home, away } (final ou live)
   const openMatchCardRef  = useRef<(m: Match) => void>(() => {})
   const [popup,              setPopup]              = useState<PopupState | null>(null)
   const [isLoaded,           setIsLoaded]           = useState(false)
@@ -421,8 +421,8 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
         const [liveRows, results] = await Promise.all([getLive(), getResults()])
         if (!on) return
         const next = new Map(arcScoreRef.current)
-        for (const l of liveRows) next.set(l.matchId, `${l.homeScore}-${l.awayScore}`)
-        for (const r of results)  next.set(r.matchId, `${r.homeScore}-${r.awayScore}`)  // final = prioritaire
+        for (const l of liveRows) next.set(l.matchId, { h: l.homeScore, a: l.awayScore })
+        for (const r of results)  next.set(r.matchId, { h: r.homeScore, a: r.awayScore })  // final = prioritaire
         arcScoreRef.current = next
       } catch { /* ignore */ }
     }
@@ -741,8 +741,13 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
             if (tops[0] && tops[1]) {
               const [a, b] = [tops[0], tops[1]]
               link.attr('x1', a[0]).attr('y1', a[1]).attr('x2', b[0]).attr('y2', b[1]).attr('opacity', 0.8)
-              // Affiche le score (final ou live) si connu, sinon "VS".
-              vs.text(arcScoreRef.current.get(arc.match.id) ?? 'VS')
+              // Affiche le score (final ou live) si connu, sinon "VS". a = drapeau DOMICILE
+              // (flags[0]), b = drapeau EXTÉRIEUR (flags[1]). On oriente le score selon la
+              // position ÉCRAN des drapeaux : le nombre de gauche correspond au drapeau de
+              // gauche → plus d'ambiguïté (ex. Australie 2-0 ne se lit plus « 2 pour la Turquie »).
+              const sc = arcScoreRef.current.get(arc.match.id)
+              const label = sc ? (a[0] <= b[0] ? `${sc.h}-${sc.a}` : `${sc.a}-${sc.h}`) : 'VS'
+              vs.text(label)
                 .attr('x', (a[0] + b[0]) / 2).attr('y', (a[1] + b[1]) / 2).attr('opacity', 1)
             } else {
               link.attr('opacity', 0); vs.attr('opacity', 0)
