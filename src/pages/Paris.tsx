@@ -257,6 +257,30 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
     return () => clearTimeout(t)
   }, [focus])
 
+  // À l'ouverture de la page : on se place DIRECTEMENT sur le match le plus proche
+  // (en cours sinon le prochain à venir, sinon le dernier joué) — plus besoin de tout
+  // faire défiler. Une seule fois, et seulement si aucun saut "EN DIRECT" n'est demandé.
+  const didInitialScroll = useRef(false)
+  useEffect(() => {
+    if (didInitialScroll.current || focus || tab !== 'phase') return
+    const nowTs = Date.now()
+    const cand = GROUP_MATCHES
+      .filter(m => m.home.code !== 'un' && m.away.code !== 'un')
+      .map(m => ({ id: m.id, k: KICKOFF_MS.get(m.id) }))
+      .filter((x): x is { id: string; k: number } => x.k != null)
+    if (!cand.length) return
+    const live = cand.find(x => nowTs >= x.k - 5 * 60000 && nowTs < x.k + 135 * 60000)
+    const upcoming = cand.filter(x => x.k >= nowTs).sort((a, b) => a.k - b.k)[0]
+    const lastPast = [...cand].sort((a, b) => b.k - a.k)[0]
+    const targetId = (live ?? upcoming ?? lastPast)?.id
+    if (!targetId) return
+    const t = setTimeout(() => {
+      const el = document.getElementById(`match-${targetId}`)
+      if (el) { el.scrollIntoView({ behavior: 'auto', block: 'center' }); didInitialScroll.current = true }
+    }, 350)
+    return () => clearTimeout(t)
+  }, [tab, focus])
+
   const toggleFavorite = (short: string) => {
     if (!currentUser) { onOpenAuth(); return }
     setFavorites(prev => {
