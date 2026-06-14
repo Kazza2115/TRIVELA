@@ -15,10 +15,11 @@ const FINISHED = new Set(['FT', 'AET', 'PEN'])
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 // Fenêtre de jeu d'un match : on commence à suivre 5 min avant le coup d'envoi,
-// et jusqu'à 150 min après (couvre prolongations + tirs au but + arrêts de jeu).
-// Un match déjà réglé (présent dans match_results) sort de la fenêtre immédiatement.
+// et jusqu'à 3 h 30 après (couvre arrêts de jeu LONGS + prolongations + tirs au but).
+// Un match déjà réglé (présent dans match_results) sort de la fenêtre immédiatement,
+// et tant qu'il est suivi en direct sa fin réelle est captée quoi qu'il arrive.
 const PREROLL_MS = 5 * 60 * 1000
-const MAX_DURATION_MS = 150 * 60 * 1000
+const MAX_DURATION_MS = 210 * 60 * 1000
 
 // Nettoyage du « en direct » — lecture Supabase UNIQUEMENT (zéro appel API football,
 // donc aucun quota consommé). Tourne à CHAQUE minute, même hors fenêtre de match :
