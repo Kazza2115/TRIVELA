@@ -1,0 +1,17 @@
+name: Debug state
+on:
+  push:
+    branches: [claude/resume-codebase-work-i3uAg]
+    paths: ['scripts/debug-state.mjs', '.github/workflows/debug-state.yml']
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/debug-state.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
