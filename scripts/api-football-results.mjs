@@ -43,33 +43,26 @@ async function main() {
   // ── GATE QUOTA + BACKUP AUTOMATIQUE ────────────────────────────────────────
   // On lance une passe API football si l'UNE de ces conditions est vraie :
   //   1) un match est dans sa fenêtre de règlement normale (≤ 4 h après le coup d'envoi) ;
-  //   2) BACKUP : un match dont le coup d'envoi est passé (≤ 24 h) n'est TOUJOURS PAS réglé
-  //      → sa fin a été ratée (creux API pendant sa fenêtre). On le règle automatiquement,
-  //      sans aucune action manuelle. Ce cron tourne toutes les 10 min : un match terminé
-  //      mais manqué est donc rattrapé en ≤ 10 min, tout seul.
-  //   3) FORCE=1 (déclenchement manuel) : rafraîchit tout, hors fenêtre.
-  // Tant qu'il n'y a rien à régler : sortie immédiate après lectures Supabase (ZÉRO quota).
+  //   2) BACKUP règlement : un match dont le coup d'envoi est passé (≤ 24 h) n'est PAS réglé ;
+  //   3) BACKUP buteurs/cartons : un match récent (≤ 48 h) est réglé mais ses BUTEURS sont
+  //      incomplets (moins de buteurs que de buts) OU ses cartons jamais synchronisés
+  //      → un creux API en fin de match. On complète automatiquement, en ≤ 10 min, sans
+  //      aucune action manuelle ;
+  //   4) FORCE=1 (déclenchement manuel) : rafraîchit tout, hors fenêtre.
+  // Tant qu'il n'y a rien à faire : sortie immédiate après lectures Supabase (ZÉRO quota).
   const now = Date.now()
-  const rrep = await sb('match_results?select=match_id')
-  const settledSet = rrep.ok ? new Set((await rrep.json()).map(r => r.match_id)) : new Set()
-  const BACKSTOP_MS = 24 * 60 * 60 * 1000
-  const unsettledPast = schedRows.filter(r => {
-    if (settledSet.has(r.match_id)) return false
-    const k = Date.parse(r.kickoff)
-    return Number.isFinite(k) && now > k && now < k + BACKSTOP_MS
-  })
-  const FORCE = process.env.FORCE === '1'
-  const inWindow = anyMatchInWindow(schedRows, 0, RESULTS_MAX_MS)
-  if (!FORCE && !inWindow && unsettledPast.length === 0) {
-    console.log('⏸️  Aucun match récent ni match passé non réglé — aucune requête API football.')
-    return
-  }
-  if (FORCE) console.log('⚡ FORCE : règlement hors fenêtre (rafraîchissement manuel).')
-  else if (!inWindow && unsettledPast.length)
-    console.log(`🛟 Backup : ${unsettledPast.length} match(s) passé(s) non réglé(s) → ${unsettledPast.map(r => r.match_id).join(', ')}`)
+  const BACKSTOP_MS = 24 * 60 * 60 * 1000   // règlement d'un match manqué
+  const HEAL_MS     = 48 * 60 * 60 * 1000   // complétion buteurs/cartons d'un match récent
 
-  // Nb de buteurs déjà enregistrés + cartons déjà synchronisés (cards non null),
-  // pour ne re-télécharger les événements que si buteurs incomplets OU cartons jamais synchronisés.
+  // Résultats déjà enregistrés (avec le score → nb de buts attendus).
+  const rrep = await sb('match_results?select=match_id,home_score,away_score')
+  const settledSet = new Set()
+  const goalsExpected = new Map()
+  if (rrep.ok) for (const r of await rrep.json()) {
+    settledSet.add(r.match_id); goalsExpected.set(r.match_id, (r.home_score ?? 0) + (r.away_score ?? 0))
+  }
+
+  // Buteurs/cartons déjà stockés (on ne re-télécharge que si incomplet).
   const gExisting = await sb('match_goals?select=match_id,scorers,cards')
   const storedCount = new Map()
   const cardsKnown = new Set()
@@ -82,6 +75,33 @@ async function main() {
       if (Array.isArray(r.scorers) && r.scorers.some(s => s && s.og)) hadOG.add(r.match_id)
     }
   }
+
+  const unsettledPast = schedRows.filter(r => {
+    if (settledSet.has(r.match_id)) return false
+    const k = Date.parse(r.kickoff)
+    return Number.isFinite(k) && now > k && now < k + BACKSTOP_MS
+  })
+  // Matchs récents réglés mais buteurs incomplets ou cartons non synchronisés → à compléter.
+  const incompleteRecent = schedRows.filter(r => {
+    if (!settledSet.has(r.match_id)) return false
+    const k = Date.parse(r.kickoff)
+    if (!Number.isFinite(k) || now > k + HEAL_MS) return false
+    const expected = goalsExpected.get(r.match_id) ?? 0
+    const have = storedCount.get(r.match_id) ?? 0
+    return have < expected || !cardsKnown.has(r.match_id)
+  })
+
+  const FORCE = process.env.FORCE === '1'
+  const inWindow = anyMatchInWindow(schedRows, 0, RESULTS_MAX_MS)
+  if (!FORCE && !inWindow && unsettledPast.length === 0 && incompleteRecent.length === 0) {
+    console.log('⏸️  Rien à régler ni à compléter — aucune requête API football.')
+    return
+  }
+  if (FORCE) console.log('⚡ FORCE : règlement hors fenêtre (rafraîchissement manuel).')
+  else if (!inWindow && unsettledPast.length)
+    console.log(`🛟 Backup règlement : ${unsettledPast.length} match(s) non réglé(s) → ${unsettledPast.map(r => r.match_id).join(', ')}`)
+  else if (!inWindow && incompleteRecent.length)
+    console.log(`🛟 Backup buteurs : ${incompleteRecent.length} match(s) à compléter → ${incompleteRecent.map(r => r.match_id).join(', ')}`)
 
   const data = await api('/fixtures?league=1&season=2026')
   const fixtures = data.response || []
