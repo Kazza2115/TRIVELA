@@ -2,6 +2,11 @@ name: API-Football results
 
 on:
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Forcer le règlement même hors fenêtre (rafraîchit les scores après un creux API)"
+        type: boolean
+        default: false
   schedule:
     - cron: '*/10 * * * *'   # règle les matchs terminés toutes les 10 min
   push:
@@ -21,3 +26,4 @@ jobs:
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          FORCE: ${{ inputs.force && '1' || '' }}

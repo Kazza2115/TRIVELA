@@ -43,10 +43,14 @@ async function main() {
   // ── GATE QUOTA ────────────────────────────────────────────────────────────
   // On ne règle (et ne complète buteurs/cartons) que dans les 4 h suivant un coup
   // d'envoi. Hors de cette fenêtre : sortie immédiate, ZÉRO requête API football.
-  if (!anyMatchInWindow(schedRows, 0, RESULTS_MAX_MS)) {
+  // FORCE=1 (déclenchement manuel) ignore la fenêtre : rafraîchit les scores après
+  // un creux API (ex. un match dont le score n'a pas été correctement renvoyé).
+  const FORCE = process.env.FORCE === '1'
+  if (!FORCE && !anyMatchInWindow(schedRows, 0, RESULTS_MAX_MS)) {
     console.log('⏸️  Aucun match récent à régler — aucune requête API football.')
     return
   }
+  if (FORCE) console.log('⚡ FORCE : règlement hors fenêtre (rafraîchissement manuel).')
 
   // Nb de buteurs déjà enregistrés + cartons déjà synchronisés (cards non null),
   // pour ne re-télécharger les événements que si buteurs incomplets OU cartons jamais synchronisés.
@@ -88,7 +92,9 @@ async function main() {
       // on le ré-écrit depuis l'API pour placer le but du bon côté, automatiquement.
       const finishedAt = Date.parse(f.fixture?.date)
       const recentlyFinished = Number.isFinite(finishedAt) && (Date.now() - finishedAt) < 36 * 3600 * 1000
-      const healOG = hadOG.has(id) && recentlyFinished
+      // healOG : un csc à réorienter ; sous FORCE on ré-écrit aussi buteurs/cartons
+      // de tout match récent pour réparer un creux API (score/buteurs mal renvoyés).
+      const healOG = (hadOG.has(id) || FORCE) && recentlyFinished
       // Récupère les événements si les buteurs sont incomplets, OU si les cartons ne sont
       // pas synchronisés, OU si le résultat vient d'être CORRIGÉ (orientation), OU si un csc
       // doit être réorienté → ré-écrit buteurs/cartons du bon côté automatiquement.
