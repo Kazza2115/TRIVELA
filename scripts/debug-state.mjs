@@ -1,16 +1,19 @@
-// Diagnostic lecture seule : imprime l'état réel des tables clés dans les logs CI.
+// Diagnostic lecture seule + TEST settle_match : imprime l'état et teste la RPC.
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
 if (!SERVICE) { console.error('❌ pas de service key'); process.exit(1) }
-const sb = path => fetch(`${SUPA_URL}/rest/v1/${path}`, {
-  headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}` },
-}).then(r => r.json())
+const sb = (path, init = {}) => fetch(`${SUPA_URL}/rest/v1/${path}`, {
+  ...init, headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json', ...(init.headers || {}) },
+})
 
-const results = await sb('match_results?select=match_id,home_score,away_score,settled_at&order=settled_at.desc&limit=15')
-console.log('── match_results ──\n' + JSON.stringify(results, null, 0))
-const live = await sb('match_live?select=match_id,status,home_score,away_score,updated_at')
-console.log('── match_live ──\n' + JSON.stringify(live, null, 0))
-const goals = await sb('match_goals?match_id=in.(gD-md1-aus-tur,gB-md1-qat-sui,gC-md1-hai-sco,gC-md1-bra-mar)&select=match_id,scorers,cards')
-console.log('── match_goals (hier) ──\n' + JSON.stringify(goals, null, 0))
-const top = await sb('profiles?select=pseudo,score&order=score.desc&limit=8')
-console.log('── top profiles ──\n' + JSON.stringify(top, null, 0))
+// TEST : appel settle_match pour gB-md1-qat-sui (1-1) et on regarde le retour + la persistance.
+const r = await sb('rpc/settle_match', { method: 'POST',
+  body: JSON.stringify({ p_match_id: 'gB-md1-qat-sui', p_home_score: 1, p_away_score: 1 }) })
+console.log(`settle_match status=${r.status} body=${await r.text().catch(() => '?')}`)
+
+const after = await (await sb('match_results?match_id=eq.gB-md1-qat-sui&select=match_id,home_score,away_score,settled_at')).json()
+console.log('── après settle (gB-md1-qat-sui) ──\n' + JSON.stringify(after, null, 0))
+
+// Liste des fonctions settle_match visibles (détecte les surcharges).
+const fns = await (await sb('rpc/settle_match', { method: 'OPTIONS' })).status
+console.log('OPTIONS settle_match status=' + fns)
