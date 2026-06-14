@@ -7,7 +7,7 @@
 // fenêtre de jeu (coup d'envoi → fin). Hors match, le cron sort immédiatement après
 // 2 lectures Supabase (gratuites) → ZÉRO appel à l'API football. Cette fenêtre est
 // déterminée à partir de match_schedule (kickoff) et de match_results (déjà réglé).
-import { buildFixtureMap, orient, settleViaRest, SETTLE_GRACE_MS } from '../scripts/wc-map.mjs'
+import { buildFixtureMap, orient, settleViaRest, reconcileScores, SETTLE_GRACE_MS } from '../scripts/wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const API = 'https://v3.football.api-sports.io'
@@ -198,6 +198,8 @@ async function runLoop(env) {
   if (!(await hasActiveMatch(sb))) return
   const { map: fxMap, all } = await buildContext(api, sb)
   try { await settleAll(api, sb, all, fxMap) } catch (e) { console.log('settle err', String(e)) }
+  // Classement réconcilié après règlement (idempotent, insensible aux courses).
+  try { await reconcileScores(sb) } catch (e) { console.log('reconcile err', String(e)) }
   for (let i = 0; i < 5; i++) {
     try { await poll(api, sb, fxMap) } catch (e) { console.log('poll err', String(e)) }
     if (i < 4) await sleep(12000)

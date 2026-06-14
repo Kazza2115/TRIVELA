@@ -1,7 +1,7 @@
 // Scores en direct : interroge l'API toutes les 30 s pendant ~5 min (le cron
 // relance toutes les 5 min) et écrit l'état des matchs en cours dans match_live.
 // S'arrête tôt s'il n'y a aucun match en direct (économise le quota).
-import { buildFixtureMap, orient, shouldTrack, settleViaRest, LIVE_PREROLL_MS, LIVE_MAX_MS } from './wc-map.mjs'
+import { buildFixtureMap, orient, shouldTrack, settleViaRest, reconcileScores, LIVE_PREROLL_MS, LIVE_MAX_MS } from './wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -230,5 +230,8 @@ async function main() {
     if (i === 0 && n === 0) { console.log('Aucun match en direct — arrêt anticipé.'); break }
     if (i < ITER - 1) await sleep(GAP)
   }
+  // Réconciliation du classement après les règlements (idempotent, insensible aux courses).
+  try { const f = await reconcileScores(sb); if (f) console.log(`⚖️  Classement réconcilié : ${f} joueur(s).`) }
+  catch (e) { console.warn('reconcile erreur:', String(e)) }
 }
 main().catch(e => { console.error(e); process.exit(0) })

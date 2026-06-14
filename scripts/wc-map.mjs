@@ -70,30 +70,46 @@ export async function settleViaRest(sb, matchId, homeScore, awayScore) {
     body: JSON.stringify([{ match_id: matchId, home_score: homeScore, away_score: awayScore, settled_at: new Date().toISOString() }]),
   })
 
-  // 2) Points de chaque pari sur ce match.
+  // 2) Points de chaque pari sur ce match (verrouillés).
   const br = await sb(`bets?match_id=eq.${matchId}&select=id,user_id,home_score,away_score`)
   const bets = br.ok ? await br.json() : []
-  const users = new Set()
   for (const b of bets) {
     const pts = betPoints(b.home_score, b.away_score, homeScore, awayScore)
     await sb(`bets?id=eq.${b.id}`, {
       method: 'PATCH', headers: { Prefer: 'return=minimal' },
       body: JSON.stringify({ points: pts, locked: true }),
     })
-    users.add(b.user_id)
   }
-
-  // 3) Score total de chaque joueur concerné = somme de TOUS ses points (auto-correcteur).
-  for (const uid of users) {
-    const pr = await sb(`bets?user_id=eq.${uid}&select=points`)
-    const rows = pr.ok ? await pr.json() : []
-    const total = rows.reduce((s, r) => s + (r.points || 0), 0)
-    await sb(`profiles?id=eq.${uid}`, {
-      method: 'PATCH', headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ score: total }),
-    })
-  }
+  // 3) Le score des joueurs n'est PAS recalculé ici (sujet aux courses quand plusieurs
+  //    matchs sont réglés en parallèle). C'est reconcileScores() — autoritaire et
+  //    idempotent — qui fixe profiles.score = somme des points, à chaque passage.
   return { changed: true }
+}
+
+/**
+ * Réconcilie le classement : pour CHAQUE joueur, profiles.score = somme de SES points de paris.
+ * Autoritaire et idempotent → insensible aux courses (worker + crons en parallèle). N'utilise
+ * que Supabase (zéro quota API). N'écrit que les profils dont le score a réellement changé.
+ * @returns nombre de profils corrigés
+ */
+export async function reconcileScores(sb) {
+  const pr = await sb('profiles?select=id,score')
+  if (!pr.ok) return 0
+  const profiles = await pr.json()
+  let fixed = 0
+  for (const p of profiles) {
+    const br = await sb(`bets?user_id=eq.${p.id}&select=points`)
+    if (!br.ok) continue
+    const total = (await br.json()).reduce((s, r) => s + (r.points || 0), 0)
+    if (total !== p.score) {
+      await sb(`profiles?id=eq.${p.id}`, {
+        method: 'PATCH', headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ score: total }),
+      })
+      fixed++
+    }
+  }
+  return fixed
 }
 
 export const GROUPS = {

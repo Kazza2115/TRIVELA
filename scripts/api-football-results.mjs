@@ -1,6 +1,6 @@
 // Résultats via API-Football : règle les matchs de groupe TERMINÉS
 // (settle_match → points + classements). Mapping partagé via wc-map.mjs.
-import { buildFixtureMap, orient, anyMatchInWindow, settleViaRest, RESULTS_MAX_MS } from './wc-map.mjs'
+import { buildFixtureMap, orient, anyMatchInWindow, settleViaRest, reconcileScores, RESULTS_MAX_MS } from './wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -39,6 +39,12 @@ async function main() {
   const sched = await sb('match_schedule?select=match_id,kickoff')
   const schedRows = sched.ok ? await sched.json() : []
   const validIds = new Set(schedRows.map(r => r.match_id))
+
+  // Réconciliation du classement à CHAQUE passage (Supabase seul, zéro quota API) :
+  // garantit que profiles.score = somme des points de chaque joueur, en ≤ 10 min,
+  // quoi qu'il arrive (corrige toute incohérence due aux courses de règlement).
+  const reconciled = await reconcileScores(sb)
+  if (reconciled) console.log(`⚖️  Classement réconcilié : ${reconciled} joueur(s) corrigé(s).`)
 
   // ── GATE QUOTA + BACKUP AUTOMATIQUE ────────────────────────────────────────
   // On lance une passe API football si l'UNE de ces conditions est vraie :
