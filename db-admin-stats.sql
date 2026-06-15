@@ -1,15 +1,16 @@
 -- TRIVELA — Statistiques admin (agrégats analytics, réservés aux administrateurs)
 -- À coller dans Supabase → SQL Editor → Run. Idempotent.
 --
--- Expose UNE fonction admin_stats() (security definer) qui agrège analytics_events
--- + profiles + bets et renvoie un seul objet jsonb. L'accès est refusé à tout joueur
--- non-admin (vérif is_admin()). La table analytics_events garde sa RLS « lecture
--- interdite au client » : seules les RPC security definer peuvent l'agréger.
+-- admin_stats(p_days, p_bucket) — security definer, réservé aux admins (is_admin()).
+--   • p_days   : fenêtre d'analyse en jours (7, 30, 90, 365…). Défaut 30.
+--   • p_bucket : 'day' ou 'week' → granularité de la série temporelle. Défaut 'day'.
+-- Renvoie un objet jsonb : KPIs globaux + KPIs sur la fenêtre + série temporelle
+-- (visiteurs & actions par jour/semaine) + top pages + top features + rétention.
 --
--- Pré-requis : db-admin.sql (fonction is_admin) et db-analytics.sql (table). Par
--- sécurité, on (re)crée la table analytics_events ici si elle manque (idempotent).
+-- Pré-requis : db-admin.sql (is_admin). La table analytics_events est (re)créée ici
+-- au besoin (idempotent), comme dans db-analytics.sql.
 
--- ── Filet : garantit l'existence de analytics_events (cf. db-analytics.sql) ──
+-- ── Filet : garantit l'existence de analytics_events ─────────────────────────
 create table if not exists analytics_events (
   id          bigint generated always as identity primary key,
   created_at  timestamptz not null default now(),
@@ -28,8 +29,10 @@ alter table analytics_events enable row level security;
 drop policy if exists analytics_events_insert on analytics_events;
 create policy analytics_events_insert on analytics_events for insert with check (true);
 
--- ── admin_stats() — tout l'overview en un seul appel (réservé aux admins) ─────
-create or replace function public.admin_stats()
+-- On remplace l'ancienne version sans argument par la version paramétrée.
+drop function if exists public.admin_stats();
+
+create or replace function public.admin_stats(p_days int default 30, p_bucket text default 'day')
 returns jsonb
 language plpgsql
 security definer
@@ -37,53 +40,74 @@ set search_path = public
 stable
 as $$
 declare
-  result jsonb;
+  result   jsonb;
+  v_bucket text        := case when lower(coalesce(p_bucket, 'day')) = 'week' then 'week' else 'day' end;
+  v_days   int         := greatest(1, least(coalesce(p_days, 30), 730));
+  v_since  timestamptz := now() - make_interval(days => v_days);
 begin
   if not public.is_admin() then
     raise exception 'Réservé aux administrateurs';
   end if;
 
   select jsonb_build_object(
-    'generated_at',   now(),
+    'generated_at', now(),
+    'days',   v_days,
+    'bucket', v_bucket,
+
+    -- ── KPIs globaux (tout l'historique) ──
     'players',        (select count(*) from profiles),
     'bets',           (select count(*) from bets),
     'events_total',   (select count(*) from analytics_events),
     'visitors_total', (select count(distinct distinct_id) from analytics_events),
-    'visitors_7d',    (select count(distinct distinct_id) from analytics_events where created_at > now() - interval '7 days'),
-    'visitors_30d',   (select count(distinct distinct_id) from analytics_events where created_at > now() - interval '30 days'),
     'active_today',   (select count(distinct distinct_id) from analytics_events where created_at::date = now()::date),
-    'registered_30d', (select count(distinct user_id) from analytics_events where user_id is not null and created_at > now() - interval '30 days'),
 
-    'dau', (
-      select coalesce(jsonb_agg(jsonb_build_object('day', to_char(day, 'YYYY-MM-DD'), 'visitors', visitors) order by day), '[]'::jsonb)
+    -- ── KPIs sur la fenêtre sélectionnée ──
+    'visitors_window',   (select count(distinct distinct_id) from analytics_events where created_at >= v_since),
+    'sessions_window',   (select count(distinct session_id)  from analytics_events where created_at >= v_since and session_id is not null),
+    'events_window',     (select count(*)                    from analytics_events where created_at >= v_since),
+    'registered_window', (select count(distinct user_id)     from analytics_events where user_id is not null and created_at >= v_since),
+    'bets_window',       (select count(*)                    from bets where created_at >= v_since),
+
+    -- ── Série temporelle (visiteurs & actions par jour/semaine) ──
+    'series', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'bucket',   to_char(b, 'YYYY-MM-DD'),
+        'visitors', visitors,
+        'events',   events
+      ) order by b), '[]'::jsonb)
       from (
-        select created_at::date as day, count(distinct distinct_id) as visitors
+        select date_trunc(v_bucket, created_at)::date as b,
+               count(distinct distinct_id)            as visitors,
+               count(*)                               as events
         from analytics_events
-        where created_at > now() - interval '14 days'
+        where created_at >= v_since
         group by 1
-      ) d
+      ) s
     ),
 
+    -- ── Top pages (fenêtre) ──
     'top_pages', (
       select coalesce(jsonb_agg(jsonb_build_object('path', path, 'views', views, 'visitors', visitors) order by views desc), '[]'::jsonb)
       from (
         select coalesce(path, '(inconnu)') as path, count(*) as views, count(distinct distinct_id) as visitors
         from analytics_events
-        where event = '$pageview' and created_at > now() - interval '30 days'
-        group by 1 order by views desc limit 10
+        where event = '$pageview' and created_at >= v_since
+        group by 1 order by views desc limit 12
       ) p
     ),
 
+    -- ── Top features / évènements (fenêtre) ──
     'top_events', (
       select coalesce(jsonb_agg(jsonb_build_object('event', event, 'hits', hits, 'users', users) order by hits desc), '[]'::jsonb)
       from (
         select event, count(*) as hits, count(distinct distinct_id) as users
         from analytics_events
-        where created_at > now() - interval '30 days'
-        group by 1 order by hits desc limit 12
+        where created_at >= v_since
+        group by 1 order by hits desc limit 15
       ) e
     ),
 
+    -- ── Rétention J+1 (global) ──
     'retention_d1', (
       with first_seen as (
         select distinct_id, min(created_at)::date as d0 from analytics_events group by 1
@@ -102,4 +126,4 @@ begin
 end;
 $$;
 
-grant execute on function public.admin_stats() to authenticated;
+grant execute on function public.admin_stats(int, text) to authenticated;

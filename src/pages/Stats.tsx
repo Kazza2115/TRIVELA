@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import PageLayout from './PageLayout'
 import { getAdminStats } from '../services/auth'
-import type { UserProfile, AdminStats } from '../services/auth'
+import type { UserProfile, AdminStats, StatBucket, StatPoint } from '../services/auth'
 
 const GOLD = '#C89B3C'
 
-// Libellés lisibles pour les évènements et les sections.
 const EVENT_LABELS: Record<string, string> = {
   '$pageview': 'Pages vues', nav_click: 'Navigation', chat_open: 'Chat ouvert',
   chat_message: 'Message chat', bet_placed: 'Pari placé', trends_open: 'Tendances',
@@ -19,38 +18,38 @@ const PATH_LABELS: Record<string, string> = {
 const eventLabel = (e: string) => EVENT_LABELS[e] ?? e
 const pathLabel  = (p: string) => PATH_LABELS[p] ?? p
 
-// Construit un axe continu de 14 jours, valeurs DAU remplies à 0 si manquantes.
-function dauSeries(dau: { day: string; visitors: number }[]): { day: string; visitors: number }[] {
-  const byDay = new Map(dau.map(d => [d.day, d.visitors]))
-  const out: { day: string; visitors: number }[] = []
-  const today = new Date()
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date(today)
-    d.setUTCDate(d.getUTCDate() - i)
-    const key = d.toISOString().slice(0, 10)
-    out.push({ day: key, visitors: byDay.get(key) ?? 0 })
-  }
-  return out
+const PERIODS: { days: number; label: string }[] = [
+  { days: 7, label: '7 j' }, { days: 30, label: '30 j' }, { days: 90, label: '90 j' }, { days: 365, label: '1 an' },
+]
+
+// "YYYY-MM-DD" → Date (UTC).
+const parseBucket = (s: string) => new Date(s + 'T00:00:00Z')
+const axisLabel = (s: string) => { const d = parseBucket(s); return `${d.getUTCDate()}/${d.getUTCMonth() + 1}` }
+function fullLabel(s: string, bucket: StatBucket): string {
+  const d = parseBucket(s)
+  if (bucket === 'week') return `Semaine du ${d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' })}`
+  return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC' })
 }
 
 export default function Stats({ onBack, currentUser }: {
   onBack: () => void
   currentUser: UserProfile | null
 }) {
+  const [days, setDays] = useState(30)
+  const [bucket, setBucket] = useState<StatBucket>('day')
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const load = useCallback(() => {
+  const load = useCallback((d: number, b: StatBucket) => {
     setLoading(true); setError(null)
-    getAdminStats()
+    getAdminStats(d, b)
       .then(({ stats, error }) => { if (error) setError(error); else setStats(stats ?? null) })
       .catch(() => setError('Erreur réseau.'))
       .finally(() => setLoading(false))
   }, [])
-  useEffect(() => { if (currentUser?.isAdmin) load(); else setLoading(false) }, [currentUser, load])
+  useEffect(() => { if (currentUser?.isAdmin) load(days, bucket); else setLoading(false) }, [currentUser, days, bucket, load])
 
-  // Garde-fou client (la RPC refuse déjà côté serveur).
   if (!currentUser?.isAdmin) {
     return (
       <PageLayout onBack={onBack} accentColor={GOLD} flag="📈" title="STATISTIQUES" subtitle="Réservé aux administrateurs">
@@ -63,8 +62,19 @@ export default function Stats({ onBack, currentUser }: {
     )
   }
 
+  const periodLabel = PERIODS.find(p => p.days === days)?.label ?? `${days} j`
+
   return (
     <PageLayout onBack={onBack} accentColor={GOLD} flag="📈" title="STATISTIQUES" subtitle="Vue d'ensemble · trivela.ch">
+
+      {/* ── Contrôles : période + granularité ───────────────────── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Segmented options={PERIODS.map(p => ({ key: String(p.days), label: p.label }))}
+          value={String(days)} onChange={k => setDays(Number(k))} />
+        <Segmented options={[{ key: 'day', label: 'Jour' }, { key: 'week', label: 'Semaine' }]}
+          value={bucket} onChange={k => setBucket(k as StatBucket)} />
+      </div>
+
       {loading ? (
         <div style={{ fontSize: 13, color: 'var(--text-3)', padding: '20px 4px' }}>Chargement…</div>
       ) : error ? (
@@ -73,37 +83,45 @@ export default function Stats({ onBack, currentUser }: {
           <div style={{ fontSize: 13, color: '#dc2626', fontWeight: 700 }}>Impossible de charger les statistiques</div>
           <div style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.5 }}>{error}</div>
           <div style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.5 }}>
-            Vérifie que <b>db-admin-stats.sql</b> (et <b>db-analytics.sql</b>) sont bien appliqués dans Supabase.
+            Vérifie que <b>db-admin-stats.sql</b> est bien appliqué dans Supabase.
           </div>
-          <button onClick={load} style={btnStyle}>↻ Réessayer</button>
+          <button onClick={() => load(days, bucket)} style={btnStyle}>↻ Réessayer</button>
         </div>
       ) : stats ? (
         <>
-          {/* ── KPIs ─────────────────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 18 }}>
+          {/* ── KPIs fenêtre ─────────────────────────────────────── */}
+          <SectionTitle>Sur {periodLabel === '1 an' ? '1 an' : `les ${periodLabel}`}</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 16 }}>
+            <Kpi label="Visiteurs uniques" value={stats.visitorsWindow} accent={GOLD} />
+            <Kpi label="Sessions" value={stats.sessionsWindow} />
+            <Kpi label="Actions / évènements" value={stats.eventsWindow} />
+            <Kpi label="Pronostics placés" value={stats.betsWindow} accent="#16a34a" />
+          </div>
+
+          {/* ── Graphe interactif (cliquable) ────────────────────── */}
+          <Card title={`Visiteurs par ${bucket === 'week' ? 'semaine' : 'jour'}`} subtitle="Touchez une barre pour le détail">
+            <InteractiveChart series={stats.series} bucket={bucket} />
+          </Card>
+
+          {/* ── KPIs globaux ─────────────────────────────────────── */}
+          <SectionTitle>Global (depuis le début)</SectionTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginBottom: 16 }}>
             <Kpi label="Visiteurs uniques" value={stats.visitorsTotal} accent={GOLD} />
             <Kpi label="Actifs aujourd'hui" value={stats.activeToday} accent="#16a34a" />
-            <Kpi label="Visiteurs · 7 j" value={stats.visitors7d} />
-            <Kpi label="Visiteurs · 30 j" value={stats.visitors30d} />
-            <Kpi label="Joueurs inscrits" value={stats.players} accent={GOLD} />
-            <Kpi label="Pronostics placés" value={stats.bets} />
-            <Kpi label="Inscrits actifs · 30 j" value={stats.registered30d} />
+            <Kpi label="Joueurs inscrits" value={stats.players} />
+            <Kpi label="Pronostics (total)" value={stats.bets} />
+            <Kpi label="Évènements (total)" value={stats.eventsTotal} />
             <Kpi label="Rétention J+1" value={stats.retentionD1 == null ? '—' : `${stats.retentionD1}%`} accent="#16a34a" />
           </div>
 
-          {/* ── DAU (14 jours) ───────────────────────────────────── */}
-          <Card title="Visiteurs actifs / jour" subtitle="14 derniers jours">
-            <DauChart data={dauSeries(stats.dau)} />
-          </Card>
-
           {/* ── Top pages ────────────────────────────────────────── */}
-          <Card title="Pages les plus vues" subtitle="30 derniers jours">
+          <Card title="Pages les plus vues" subtitle={`Sur ${periodLabel}`}>
             <RankList rows={stats.topPages.map(p => ({ label: pathLabel(p.path), main: p.views, sub: `${p.visitors} visiteurs` }))}
               emptyHint="Aucune page vue sur la période." unit="vues" />
           </Card>
 
           {/* ── Top features ─────────────────────────────────────── */}
-          <Card title="Fonctionnalités les plus utilisées" subtitle="30 derniers jours">
+          <Card title="Fonctionnalités les plus utilisées" subtitle={`Sur ${periodLabel}`}>
             <RankList rows={stats.topEvents.map(e => ({ label: eventLabel(e.event), main: e.hits, sub: `${e.users} utilisateurs` }))}
               emptyHint="Aucune activité sur la période." unit="actions" />
           </Card>
@@ -112,11 +130,11 @@ export default function Stats({ onBack, currentUser }: {
             <span style={{ fontSize: 10, color: 'var(--text-3)' }}>
               Maj : {new Date(stats.generatedAt).toLocaleString('fr-FR', { timeZone: 'Europe/Zurich', dateStyle: 'short', timeStyle: 'short' })}
             </span>
-            <button onClick={load} style={{ ...btnStyle, width: 'auto', padding: '6px 14px' }}>↻ Rafraîchir</button>
+            <button onClick={() => load(days, bucket)} style={{ ...btnStyle, width: 'auto', padding: '6px 14px' }}>↻ Rafraîchir</button>
           </div>
           <div style={{ marginTop: 10, fontSize: 9, color: 'var(--text-3)', lineHeight: 1.5 }}>
-            Données collectées uniquement sur trivela.ch (visiteurs connectés et anonymes). Un « visiteur unique » = un identifiant
-            de navigateur stable.
+            Données collectées uniquement sur trivela.ch (visiteurs connectés et anonymes). « Visiteur unique » = un identifiant de
+            navigateur stable ; « session » = une visite (par onglet).
           </div>
         </>
       ) : null}
@@ -130,16 +148,41 @@ const btnStyle: React.CSSProperties = {
   fontSize: 12, fontWeight: 700,
 }
 
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: 'var(--text-3)', textTransform: 'uppercase', padding: '0 2px 8px' }}>
+      {children}
+    </div>
+  )
+}
+
+function Segmented({ options, value, onChange }: {
+  options: { key: string; label: string }[]; value: string; onChange: (k: string) => void
+}) {
+  return (
+    <div style={{ display: 'inline-flex', background: 'var(--bg-fill)', borderRadius: 10, padding: 3, border: '1px solid var(--border)' }}>
+      {options.map(o => {
+        const on = o.key === value
+        return (
+          <button key={o.key} onClick={() => onChange(o.key)} style={{
+            padding: '6px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+            fontSize: 12, fontWeight: 700, letterSpacing: 0.2,
+            background: on ? 'var(--bg-card)' : 'transparent',
+            color: on ? GOLD : 'var(--text-3)',
+            boxShadow: on ? 'var(--shadow-sm)' : 'none', transition: 'all 0.15s',
+          }}>{o.label}</button>
+        )
+      })}
+    </div>
+  )
+}
+
 function Kpi({ label, value, accent }: { label: string; value: number | string; accent?: string }) {
   return (
-    <div style={{
-      padding: '12px 14px', borderRadius: 14, background: 'var(--bg-card)',
-      border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)',
-    }}>
-      <div style={{
-        fontFamily: "'Bebas Neue', cursive", fontSize: 30, lineHeight: 1,
-        color: accent ?? 'var(--text-1)', fontVariantNumeric: 'tabular-nums',
-      }}>{typeof value === 'number' ? value.toLocaleString('fr-FR') : value}</div>
+    <div style={{ padding: '12px 14px', borderRadius: 14, background: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+      <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 30, lineHeight: 1, color: accent ?? 'var(--text-1)', fontVariantNumeric: 'tabular-nums' }}>
+        {typeof value === 'number' ? value.toLocaleString('fr-FR') : value}
+      </div>
       <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 4, letterSpacing: 0.3 }}>{label}</div>
     </div>
   )
@@ -147,10 +190,7 @@ function Kpi({ label, value, accent }: { label: string; value: number | string; 
 
 function Card({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div style={{
-      marginBottom: 14, padding: '14px 16px', borderRadius: 16,
-      background: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)',
-    }}>
+    <div style={{ marginBottom: 14, padding: '14px 16px', borderRadius: 16, background: 'var(--bg-card)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 18, letterSpacing: 1.2, color: 'var(--text-1)' }}>{title}</div>
         {subtitle && <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 1 }}>{subtitle}</div>}
@@ -160,26 +200,65 @@ function Card({ title, subtitle, children }: { title: string; subtitle?: string;
   )
 }
 
-function DauChart({ data }: { data: { day: string; visitors: number }[] }) {
-  const max = Math.max(1, ...data.map(d => d.visitors))
+function InteractiveChart({ series, bucket }: { series: StatPoint[]; bucket: StatBucket }) {
+  const [sel, setSel] = useState<number>(series.length - 1)
+  // Resélectionne la dernière barre quand les données changent.
+  useEffect(() => { setSel(series.length - 1) }, [series])
+
+  if (series.length === 0) {
+    return <div style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>Aucune donnée sur la période.</div>
+  }
+
+  const max = Math.max(1, ...series.map(p => p.visitors))
+  const labelStep = Math.max(1, Math.ceil(series.length / 8))
+  const selected = series[Math.min(sel, series.length - 1)] ?? series[series.length - 1]
+
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 120 }}>
-      {data.map((d, i) => {
-        const h = Math.round((d.visitors / max) * 100)
-        const dd = d.day.slice(8, 10)
-        const isLast = i === data.length - 1
-        return (
-          <div key={d.day} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, height: '100%' }}>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', width: '100%' }}>
-              <div title={`${d.day} : ${d.visitors}`} style={{
-                width: '100%', height: `${Math.max(h, d.visitors > 0 ? 6 : 2)}%`, borderRadius: '4px 4px 0 0',
-                background: isLast ? GOLD : 'rgba(200,155,60,0.45)', transition: 'height 0.4s ease',
+    <div>
+      {/* Détail de la barre sélectionnée */}
+      <div style={{
+        display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8,
+        padding: '8px 12px', marginBottom: 10, borderRadius: 10,
+        background: 'rgba(200,155,60,0.08)', border: '1px solid rgba(200,155,60,0.25)',
+      }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#A07828', textTransform: 'capitalize' }}>
+          {fullLabel(selected.bucket, bucket)}
+        </span>
+        <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
+          <b style={{ color: 'var(--text-1)' }}>{selected.visitors.toLocaleString('fr-FR')}</b> visiteurs ·
+          {' '}<b style={{ color: 'var(--text-1)' }}>{selected.events.toLocaleString('fr-FR')}</b> actions
+        </span>
+      </div>
+
+      {/* Barres cliquables */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 120 }}>
+        {series.map((p, i) => {
+          const h = Math.round((p.visitors / max) * 100)
+          const on = i === sel
+          return (
+            <button key={p.bucket} onClick={() => setSel(i)} title={`${fullLabel(p.bucket, bucket)} : ${p.visitors} visiteurs`}
+              style={{
+                flex: 1, minWidth: 0, height: '100%', padding: 0, border: 'none', cursor: 'pointer',
+                background: 'transparent', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+              }}>
+              <div style={{
+                width: '100%', height: `${Math.max(h, p.visitors > 0 ? 6 : 2)}%`, borderRadius: '4px 4px 0 0',
+                background: on ? GOLD : 'rgba(200,155,60,0.40)', transition: 'height 0.3s ease, background 0.15s',
               }} />
-            </div>
-            <span style={{ fontSize: 8, color: isLast ? GOLD : 'var(--text-3)', fontWeight: isLast ? 800 : 500 }}>{dd}</span>
+            </button>
+          )
+        })}
+      </div>
+      {/* Axe X (libellés espacés) */}
+      <div style={{ display: 'flex', gap: 3, marginTop: 4 }}>
+        {series.map((p, i) => (
+          <div key={p.bucket} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: 8,
+            color: i === sel ? GOLD : 'var(--text-3)', fontWeight: i === sel ? 800 : 500,
+            overflow: 'hidden', whiteSpace: 'nowrap' }}>
+            {(i % labelStep === 0 || i === series.length - 1) ? axisLabel(p.bucket) : ''}
           </div>
-        )
-      })}
+        ))}
+      </div>
     </div>
   )
 }
