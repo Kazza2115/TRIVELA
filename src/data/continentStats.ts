@@ -154,15 +154,15 @@ export const COMPETITIONS: Record<string, CompetitionData> = {
     editions: 'Depuis 1991',
     tagline: 'Le duel éternel entre le Mexique et les États-Unis.',
     titles: [
-      { code: 'mx', name: 'Mexique',    count: 9 },
+      { code: 'mx', name: 'Mexique',    count: 10 },
       { code: 'us', name: 'États-Unis', count: 7 },
       { code: 'ca', name: 'Canada',     count: 1 },
     ],
     recentFinals: [
+      { year: 2025, winner: 'Mexique',     winnerCode: 'mx', score: '2–1',        runnerUp: 'États-Unis',  runnerUpCode: 'us' },
       { year: 2023, winner: 'Mexique',     winnerCode: 'mx', score: '1–0',        runnerUp: 'Panama',      runnerUpCode: 'pa' },
       { year: 2021, winner: 'États-Unis',  winnerCode: 'us', score: '1–0 (a.p.)', runnerUp: 'Mexique',     runnerUpCode: 'mx' },
       { year: 2019, winner: 'Mexique',     winnerCode: 'mx', score: '1–0',        runnerUp: 'États-Unis',  runnerUpCode: 'us' },
-      { year: 2017, winner: 'États-Unis',  winnerCode: 'us', score: '2–1',        runnerUp: 'Jamaïque',    runnerUpCode: 'jm' },
     ],
     topScorers: [
       { name: 'Landon Donovan', country: 'États-Unis', countryCode: 'us', goals: 18 },
@@ -170,10 +170,11 @@ export const COMPETITIONS: Record<string, CompetitionData> = {
       { name: 'Zague',          country: 'Mexique',    countryCode: 'mx', goals: 12 },
     ],
     records: [
-      { label: 'Plus titrée',     value: 'Mexique — 9 titres' },
+      { label: 'Plus titrée',     value: 'Mexique — 10 titres' },
       { label: 'Meilleur buteur', value: 'Landon Donovan — 18 buts' },
     ],
     facts: [
+      'En 2025, le Mexique bat les États-Unis 2–1 en finale et décroche un 10e titre record.',
       'Le Mexique et les États-Unis se partagent presque tous les titres de l’épreuve.',
       'La Jamaïque a atteint deux finales, performance rare hors du duo de tête.',
       'Landon Donovan reste le meilleur buteur de l’histoire de la compétition.',
