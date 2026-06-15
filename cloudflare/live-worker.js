@@ -1,5 +1,6 @@
 // TRIVELA — Worker Cloudflare : scores en direct API-Football → Supabase (match_live + match_goals)
 // Cron 1 min, avec une boucle interne (~14 s) → mise à jour quasi temps réel.
+// Redéploiement 2026-06-15 : ré-enregistrement du cron + secrets (live tombé en panne).
 // Mapping FIABLE par fixture_id (groupes + élimination directe) via buildFixtureMap.
 // Secrets (wrangler secret put) : API_FOOTBALL_KEY, SUPABASE_SERVICE_ROLE_KEY
 //
