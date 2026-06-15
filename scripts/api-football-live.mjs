@@ -162,14 +162,18 @@ async function main() {
   // ── GATE QUOTA ────────────────────────────────────────────────────────────
   // On n'appelle l'API football QUE si un match est dans sa fenêtre de jeu et pas
   // encore réglé. Sinon : sortie immédiate, ZÉRO requête API. (Lecture Supabase only.)
-  const rr0 = await sb('match_results?select=match_id')
-  const settled0 = rr0.ok ? new Set((await rr0.json()).map(r => r.match_id)) : new Set()
-  const activeRows = schedRows.filter(r => !settled0.has(r.match_id))
-  if (!anyMatchInWindow(activeRows, LIVE_PREROLL_MS, LIVE_MAX_MS)) {
-    console.log('⏸️  Aucun match dans sa fenêtre de jeu — aucune requête API football.')
-    return
+  // SÉCURITÉ LIVE : si le planning est illisible/vide (anomalie), on NE coupe PAS le
+  // live → on interroge quand même pour ne jamais masquer un match en cours.
+  if (schedRows.length > 0) {
+    const rr0 = await sb('match_results?select=match_id')
+    const settled0 = rr0.ok ? new Set((await rr0.json()).map(r => r.match_id)) : new Set()
+    const activeRows = schedRows.filter(r => !settled0.has(r.match_id))
+    if (!anyMatchInWindow(activeRows, LIVE_PREROLL_MS, LIVE_MAX_MS)) {
+      console.log('⏸️  Aucun match dans sa fenêtre de jeu — aucune requête API football.')
+      return
+    }
+    for (const m of settled0) settled.add(m)   // réutilise le set pour le dedup des règlements
   }
-  for (const m of settled0) settled.add(m)   // réutilise le set pour le dedup des règlements
 
   // Mapping fiable de TOUTE la compétition (groupes + élimination directe) par fixture_id.
   let allFixtures = []

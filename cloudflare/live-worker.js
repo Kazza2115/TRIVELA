@@ -22,14 +22,16 @@ const MAX_DURATION_MS = 150 * 60 * 1000
 
 // Y a-t-il au moins un match à suivre MAINTENANT ?
 // N'utilise QUE Supabase (REST) → aucun appel à l'API football, donc aucun quota consommé.
-// Échec de lecture (Supabase indisponible) → on NE lance PAS le suivi : sans accès au
-// planning on ne saurait de toute façon pas où écrire, et on protège le quota.
+// SÉCURITÉ LIVE : si le planning est illisible ou vide (anomalie), on NE coupe PAS le
+// live → on interroge quand même, pour ne jamais masquer un match en cours par erreur.
+// En fonctionnement normal (planning rempli), seul un match dans sa fenêtre déclenche l'appel.
 async function hasActiveMatch(sb) {
   try {
     const now = Date.now()
     const sres = await sb('match_schedule?select=match_id,kickoff')
-    if (!sres.ok) return false
+    if (!sres.ok) return true                       // planning illisible → on ne casse pas le live
     const sched = await sres.json()
+    if (!Array.isArray(sched) || sched.length === 0) return true   // planning vide/anormal → idem
     const rres = await sb('match_results?select=match_id')
     const settled = rres.ok ? new Set((await rres.json()).map(r => r.match_id)) : new Set()
     return sched.some(s => {
@@ -37,7 +39,7 @@ async function hasActiveMatch(sb) {
       const k = Date.parse(s.kickoff)
       return Number.isFinite(k) && now >= k - PREROLL_MS && now <= k + MAX_DURATION_MS
     })
-  } catch { return false }
+  } catch { return true }                            // erreur inattendue → on privilégie le live
 }
 
 function scorersFrom(events, homeId) {
