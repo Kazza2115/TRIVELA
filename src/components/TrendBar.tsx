@@ -20,6 +20,7 @@ export function trendPercents(home: number, draw: number, away: number): Percent
 }
 
 const GREEN = '#16a34a'
+const YELLOW = '#CA8A04'      // « Nul » — même jaune que la colonne N des classements
 const FLAME_THRESHOLD = 80   // 🔥 si l'issue majoritaire dépasse 80 %
 
 function Flag({ code, size = 16 }: { code: string; size?: number }) {
@@ -61,9 +62,14 @@ export default function TrendBar({
     )
   }
 
-  const segColor = (o: Outcome) => (o === p.leader ? GREEN : 'var(--text-3)')
+  // Couleur d'une issue : majoritaire en vert, le « Nul » en jaune (pour bien le
+  // distinguer au centre), le reste neutre.
+  const outColor = (o: Outcome) =>
+    o === p.leader ? GREEN : o === 'draw' ? YELLOW : 'var(--text-2)'
   const segBg = (o: Outcome) =>
-    o === p.leader ? 'rgba(22,163,74,0.85)' : 'rgba(140,140,148,0.30)'
+    o === p.leader ? 'rgba(22,163,74,0.85)'
+      : o === 'draw' ? 'rgba(202,138,4,0.70)'
+        : 'rgba(140,140,148,0.30)'
   const pct = { home: p.home, draw: p.draw, away: p.away }
   const flame = (o: Outcome) => o === p.leader && pct[o] > FLAME_THRESHOLD
 
@@ -75,9 +81,8 @@ export default function TrendBar({
   )
 
   const Label = ({ o }: { o: Outcome }) => {
-    const isLeader = o === p.leader
     const content = o === 'draw'
-      ? <span style={{ fontSize: compact ? 9 : 11, fontWeight: 700, color: segColor(o) }}>Nul</span>
+      ? <span style={{ fontSize: compact ? 9 : 11, fontWeight: 700, color: outColor(o) }}>Nul</span>
       : <Flag code={(o === 'home' ? homeTeam : awayTeam).code} size={compact ? 15 : 18} />
     return (
       <div style={{
@@ -88,7 +93,7 @@ export default function TrendBar({
         <span style={{
           fontSize: compact ? 11 : 14, fontWeight: 800,
           fontVariantNumeric: 'tabular-nums',
-          color: isLeader ? GREEN : 'var(--text-2)',
+          color: outColor(o),
         }}>{pct[o]}%</span>
         {flame(o) && (
           <span style={{
