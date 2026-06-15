@@ -145,16 +145,45 @@ begin
       ) c
     ),
 
-    -- ── Rétention J+1 (global) ──
-    'retention_d1', (
-      with first_seen as (
-        select distinct_id, min(created_at)::date as d0 from analytics_events group by 1
-      ),
-      activity as (
-        select distinct distinct_id, created_at::date as d from analytics_events
+    -- ── Nouveaux visiteurs (toute 1re visite dans la fenêtre) ──
+    'new_visitors_window', (
+      select count(*) from (
+        select distinct_id from analytics_events group by distinct_id having min(created_at) >= v_since
+      ) x
+    ),
+
+    -- ── Activité par heure (heure de Genève, fenêtre) ──
+    'activity_by_hour', (
+      select coalesce(jsonb_agg(jsonb_build_object('hour', hour, 'visitors', visitors) order by hour), '[]'::jsonb)
+      from (
+        select extract(hour from created_at at time zone 'Europe/Zurich')::int as hour,
+               count(distinct distinct_id) as visitors
+        from analytics_events
+        where created_at >= v_since
+        group by 1
+      ) h
+    ),
+
+    -- ── Répartition des joueurs (inscrits) par pays ──
+    'top_countries', (
+      select coalesce(jsonb_agg(jsonb_build_object('code', code, 'name', name, 'players', players) order by players desc), '[]'::jsonb)
+      from (
+        select country_code as code, max(country_name) as name, count(*) as players
+        from profiles
+        where country_code is not null and country_code <> ''
+        group by country_code order by players desc limit 12
+      ) c
+    ),
+
+    -- ── Rétention J+1 / J+7 / J+30 (global ; dénominateur = cohortes assez anciennes) ──
+    'retention', (
+      with first_seen as (select distinct_id, min(created_at)::date as d0 from analytics_events group by 1),
+           activity   as (select distinct distinct_id, created_at::date as d from analytics_events)
+      select jsonb_build_object(
+        'd1',  round(100.0 * count(distinct a.distinct_id) filter (where a.d = f.d0 + 1)  / nullif(count(distinct f.distinct_id) filter (where f.d0 <= current_date - 1), 0), 1),
+        'd7',  round(100.0 * count(distinct a.distinct_id) filter (where a.d = f.d0 + 7)  / nullif(count(distinct f.distinct_id) filter (where f.d0 <= current_date - 7), 0), 1),
+        'd30', round(100.0 * count(distinct a.distinct_id) filter (where a.d = f.d0 + 30) / nullif(count(distinct f.distinct_id) filter (where f.d0 <= current_date - 30), 0), 1)
       )
-      select round(100.0 * count(distinct a.distinct_id) filter (where a.d = f.d0 + 1)
-             / nullif(count(distinct f.distinct_id), 0), 1)
       from first_seen f
       left join activity a on a.distinct_id = f.distinct_id
     )

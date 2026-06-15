@@ -107,6 +107,9 @@ export default function Stats({ onBack, currentUser }: {
             <Kpi label="Actions / évènements" value={stats.eventsWindow} />
             <Kpi label="Pronostics placés" value={stats.betsWindow} accent="#16a34a" />
             <Kpi label="Temps moyen / page" value={stats.avgVisitSeconds ? fmtDuration(stats.avgVisitSeconds) : '—'} accent={GOLD} />
+            <Kpi label="Nouveaux visiteurs" value={stats.newVisitorsWindow} accent="#16a34a" />
+            <Kpi label="Récurrents" value={Math.max(0, stats.visitorsWindow - stats.newVisitorsWindow)} />
+            <Kpi label="Part connectés" value={stats.visitorsWindow ? `${Math.round((stats.registeredWindow / stats.visitorsWindow) * 100)}%` : '—'} />
           </div>
 
           {/* ── Graphe interactif (cliquable) ────────────────────── */}
@@ -121,9 +124,26 @@ export default function Stats({ onBack, currentUser }: {
             <Kpi label="Actifs aujourd'hui" value={stats.activeToday} accent="#16a34a" />
             <Kpi label="Joueurs inscrits" value={stats.players} />
             <Kpi label="Pronostics (total)" value={stats.bets} />
-            <Kpi label="Évènements (total)" value={stats.eventsTotal} />
-            <Kpi label="Rétention J+1" value={stats.retentionD1 == null ? '—' : `${stats.retentionD1}%`} accent="#16a34a" />
           </div>
+
+          {/* ── Rétention ────────────────────────────────────────── */}
+          <Card title="Rétention" subtitle="Part des visiteurs qui reviennent (global)">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+              <Kpi label="J+1" value={stats.retention.d1 == null ? '—' : `${stats.retention.d1}%`} accent="#16a34a" />
+              <Kpi label="J+7" value={stats.retention.d7 == null ? '—' : `${stats.retention.d7}%`} accent={GOLD} />
+              <Kpi label="J+30" value={stats.retention.d30 == null ? '—' : `${stats.retention.d30}%`} />
+            </div>
+          </Card>
+
+          {/* ── Activité par heure ───────────────────────────────── */}
+          <Card title="Activité par heure" subtitle="Heure de Genève · sur la période">
+            <HourChart data={stats.activityByHour} />
+          </Card>
+
+          {/* ── Joueurs par pays ─────────────────────────────────── */}
+          <Card title="Joueurs par pays" subtitle="Inscrits Trivela">
+            <CountryList rows={stats.topCountries} />
+          </Card>
 
           {/* ── Top pages ────────────────────────────────────────── */}
           <Card title="Pages les plus vues" subtitle={`Sur ${periodLabel}`}>
@@ -307,6 +327,55 @@ function BarList({ rows, emptyHint }: {
           <div style={{ height: 6, borderRadius: 999, background: 'var(--bg-fill)', overflow: 'hidden' }}>
             <div style={{ width: `${Math.round((r.value / max) * 100)}%`, height: '100%', background: GOLD, transition: 'width 0.4s ease' }} />
           </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function HourChart({ data }: { data: { hour: number; visitors: number }[] }) {
+  if (data.length === 0) return <div style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>Pas encore de données sur la période.</div>
+  const byHour = new Map(data.map(d => [d.hour, d.visitors]))
+  const bars = Array.from({ length: 24 }, (_, h) => ({ hour: h, visitors: byHour.get(h) ?? 0 }))
+  const max = Math.max(1, ...bars.map(b => b.visitors))
+  const peak = bars.reduce((a, b) => (b.visitors > a.visitors ? b : a), bars[0])
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8 }}>
+        Pic d'activité : <b style={{ color: '#A07828' }}>{peak.hour}h–{(peak.hour + 1) % 24}h</b> ({peak.visitors} visiteurs)
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 90 }}>
+        {bars.map(b => (
+          <div key={b.hour} title={`${b.hour}h : ${b.visitors} visiteurs`} style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'flex-end' }}>
+            <div style={{ width: '100%', height: `${Math.max(Math.round((b.visitors / max) * 100), b.visitors > 0 ? 6 : 2)}%`,
+              borderRadius: '3px 3px 0 0', background: b.hour === peak.hour ? GOLD : 'rgba(200,155,60,0.40)', transition: 'height 0.3s ease' }} />
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
+        {bars.map(b => (
+          <div key={b.hour} style={{ flex: 1, textAlign: 'center', fontSize: 8, color: 'var(--text-3)' }}>
+            {(b.hour % 6 === 0) ? `${b.hour}h` : ''}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function CountryList({ rows }: { rows: { code: string; name: string; players: number }[] }) {
+  if (rows.length === 0) return <div style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>Aucun pays renseigné.</div>
+  const max = Math.max(1, ...rows.map(r => r.players))
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {rows.map(r => (
+        <div key={r.code} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <img src={`https://flagcdn.com/w20/${r.code}.png`} alt="" style={{ width: 20, height: 14, borderRadius: 2, objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0 }} />
+          <span style={{ width: 90, flexShrink: 0, fontSize: 12, fontWeight: 600, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+          <div style={{ flex: 1, height: 6, borderRadius: 999, background: 'var(--bg-fill)', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.round((r.players / max) * 100)}%`, height: '100%', background: GOLD }} />
+          </div>
+          <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 800, color: 'var(--text-1)', fontVariantNumeric: 'tabular-nums', minWidth: 22, textAlign: 'right' }}>{r.players}</span>
         </div>
       ))}
     </div>

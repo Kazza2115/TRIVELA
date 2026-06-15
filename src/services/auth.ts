@@ -594,7 +594,10 @@ export interface AdminStats {
   timeByPage: { section: string; views: number; avgSeconds: number; totalSeconds: number }[]
   avgVisitSeconds: number
   topClicks:  { label: string; clicks: number; users: number }[]
-  retentionD1: number | null
+  newVisitorsWindow: number
+  activityByHour: { hour: number; visitors: number }[]
+  topCountries: { code: string; name: string; players: number }[]
+  retention: { d1: number | null; d7: number | null; d30: number | null }
 }
 
 /** Récupère l'overview de statistiques (réservé aux admins ; refusé sinon).
@@ -630,7 +633,14 @@ export async function getAdminStats(days = 30, bucket: StatBucket = 'day'): Prom
       timeByPage: Array.isArray(d.time_by_page) ? d.time_by_page.map((r: any) => ({ section: r.section as string, views: Number(r.views ?? 0), avgSeconds: Number(r.avg_seconds ?? 0), totalSeconds: Number(r.total_seconds ?? 0) })) : [],
       avgVisitSeconds: Number(d.avg_visit_seconds ?? 0),
       topClicks:  Array.isArray(d.top_clicks) ? d.top_clicks.map((r: any) => ({ label: r.label as string, clicks: Number(r.clicks ?? 0), users: Number(r.users ?? 0) })) : [],
-      retentionD1: d.retention_d1 == null ? null : Number(d.retention_d1),
+      newVisitorsWindow: Number(d.new_visitors_window ?? 0),
+      activityByHour: Array.isArray(d.activity_by_hour) ? d.activity_by_hour.map((r: any) => ({ hour: Number(r.hour ?? 0), visitors: Number(r.visitors ?? 0) })) : [],
+      topCountries: Array.isArray(d.top_countries) ? d.top_countries.map((r: any) => ({ code: r.code as string, name: (r.name as string) ?? r.code, players: Number(r.players ?? 0) })) : [],
+      retention: {
+        d1:  d.retention?.d1  == null ? null : Number(d.retention.d1),
+        d7:  d.retention?.d7  == null ? null : Number(d.retention.d7),
+        d30: d.retention?.d30 == null ? null : Number(d.retention.d30),
+      },
     },
   }
 }
