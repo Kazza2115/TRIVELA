@@ -1,0 +1,29 @@
+name: API-Football odds (tendance mondiale)
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Forcer la récupération des cotes de TOUS les matchs à venir (hors fenêtre)"
+        type: boolean
+        default: false
+  schedule:
+    - cron: '0 */12 * * *'   # cotes bookmakers rafraîchies toutes les 12 h
+  push:
+    branches: [claude/jolly-archimedes-53jcrc]
+    paths: ['scripts/api-football-odds.mjs', '.github/workflows/api-football-odds.yml']
+
+jobs:
+  odds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/api-football-odds.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          FORCE: ${{ inputs.force && '1' || '' }}

@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import PageLayout from './PageLayout'
 import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS, ALL_MATCHES, matchKickoffUTC } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { saveBet, saveFavorites, getBets, subscribeToResults, getResults, getLive, subscribeToLive, getMatchGoals, getMatchCards, subscribeToMatchGoals } from '../services/auth'
-import type { UserProfile, MatchResult, LiveScore, Scorer, RedCard } from '../services/auth'
+import { saveBet, saveFavorites, getBets, subscribeToResults, getResults, getLive, subscribeToLive, getMatchGoals, getMatchCards, subscribeToMatchGoals, getMatchTrends } from '../services/auth'
+import type { UserProfile, MatchResult, LiveScore, Scorer, RedCard, MatchTrend } from '../services/auth'
 import { track } from '../services/analytics'
+import TrendBar from '../components/TrendBar'
 
 const INPLAY = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE', 'INT', 'SUSP'])
 
@@ -138,11 +139,12 @@ function bestThirds(results: Record<string, MatchResult>): Set<string> {
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────
-export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
+export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTrends }: {
   onBack: () => void
   currentUser: UserProfile | null
   onOpenAuth: () => void
   focus?: { id: string; nonce: number } | null
+  onOpenTrends?: (matchId: string) => void
 }) {
   const [tab,         setTab]         = useState<Tab>('phase')
   const [predictions, setPredictions] = useState<Predictions>({})
@@ -181,6 +183,15 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
     // Filet de sécurité si un push Realtime est manqué (websocket tombé, etc.)
     const iv = setInterval(() => { getResults().then(apply) }, 30000)
     return () => { unsub(); clearInterval(iv) }
+  }, [])
+
+  // Tendance TRIVELA (agrégat des pronos par match) — rafraîchie périodiquement.
+  const [trends, setTrends] = useState<Record<string, MatchTrend>>({})
+  useEffect(() => {
+    const load = () => getMatchTrends().then(setTrends).catch(() => {})
+    load()
+    const iv = setInterval(load, 30000)
+    return () => clearInterval(iv)
   }, [])
 
   // Horloge — rafraîchit l'état "en direct / terminé" des matchs
@@ -511,6 +522,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
                           result={results[m.id]} now={now}
                           liveData={live[m.id]} goalSide={goalFlash[m.id]}
                           scorers={goals[m.id]} redCards={cards[m.id]}
+                          trend={trends[m.id]} onOpenTrends={onOpenTrends}
                           delay={i * 30}
                           onIncrement={(s, d) => setPrediction(m.id, s, d)}
                           onConfirm={() => confirm(m.id)}
@@ -531,6 +543,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus }: {
         <KnockoutView
           results={results} live={live} goals={goals} cards={cards} goalFlash={goalFlash}
           predictions={predictions} confirmed={confirmed} lockErrors={lockErrors} now={now}
+          trends={trends} onOpenTrends={onOpenTrends}
           onIncrement={setPrediction} onConfirm={confirm} onEdit={edit}
         />
       )}
@@ -650,13 +663,15 @@ interface MatchCardProps {
   redCards?: RedCard[]
   now?: number
   domId?: string
+  trend?: MatchTrend
+  onOpenTrends?: (matchId: string) => void
   delay: number
   onIncrement: (side: 'home' | 'away', delta: number) => void
   onConfirm: () => void
   onEdit: () => void
 }
 
-function MatchCard({ match, prediction, confirmed, lockError, result, liveData, goalSide, scorers, redCards, now, domId, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
+function MatchCard({ match, prediction, confirmed, lockError, result, liveData, goalSide, scorers, redCards, now, domId, trend, onOpenTrends, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
   const pred   = prediction ?? { home: 0, away: 0 }
   const isTBD  = match.home.code === 'un'
   const locked = isMatchLocked(match)
@@ -854,6 +869,20 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
         </div>
       )}
 
+      {/* Tendance TRIVELA — agrégat des pronos (remplace l'ancien barème +5/+4/+3) */}
+      {!isTBD && !finished && (
+        <div style={{ padding: '2px 16px 10px' }}>
+          <TrendBar compact
+            homeTeam={match.home} awayTeam={match.away}
+            home={trend?.homeWin ?? 0} draw={trend?.draw ?? 0} away={trend?.awayWin ?? 0}
+            total={trend?.total ?? 0}
+            label="Tendance Trivela"
+            emptyHint="Aucun prono — sois le premier !"
+            onClick={onOpenTrends ? () => onOpenTrends(match.id) : undefined}
+          />
+        </div>
+      )}
+
       {/* Footer */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -869,15 +898,7 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
                 {result.homeScore}–{result.awayScore}
               </span>
             </span>
-          ) : (
-            <>
-              <span style={{ color: '#A07828', fontWeight: 700 }}>+5</span> exact
-              &nbsp;·&nbsp;
-              <span style={{ color: 'rgba(160,120,40,0.7)', fontWeight: 600 }}>+4</span> bon nul
-              &nbsp;·&nbsp;
-              <span style={{ color: 'rgba(160,120,40,0.6)', fontWeight: 600 }}>+3</span> bon vainqueur
-            </>
-          )}
+          ) : null}
         </div>
         {result && confirmed && prediction ? (() => {
           const pts = calcPoints(result, prediction)
@@ -1126,6 +1147,8 @@ interface KOData {
   confirmed: Set<string>
   lockErrors: Record<string, string>
   now: number
+  trends: Record<string, MatchTrend>
+  onOpenTrends?: (matchId: string) => void
   onIncrement: (id: string, side: 'home' | 'away', delta: number) => void
   onConfirm: (id: string) => void
   onEdit: (id: string) => void
@@ -1396,6 +1419,7 @@ function DesktopBracket({ data }: { data: KOData }) {
             result={data.results[sel.id]} now={data.now}
             liveData={data.live[sel.id]} goalSide={data.goalFlash[sel.id]}
             scorers={data.goals[sel.id]} redCards={data.cards[sel.id]}
+            trend={data.trends[sel.id]} onOpenTrends={data.onOpenTrends}
             delay={0}
             onIncrement={(s, d) => data.onIncrement(sel.id, s, d)}
             onConfirm={() => data.onConfirm(sel.id)}

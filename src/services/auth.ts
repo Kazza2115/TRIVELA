@@ -132,6 +132,21 @@ async function authFetch(method: string, path: string, body?: object): Promise<R
   })
 }
 
+// Appel RPC authentifié qui RENVOIE des données (pas de Prefer return=minimal,
+// contrairement à authFetch). Passe le JWT du joueur → auth.uid() fonctionne côté SQL.
+async function rpcFetch(fn: string, body?: object): Promise<Response> {
+  await ensureFreshToken()
+  return fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: {
+      'apikey':        SUPA_ANON,
+      'Authorization': `Bearer ${_jwt ?? SUPA_ANON}`,
+      'Content-Type':  'application/json',
+    },
+    body: body ? JSON.stringify(body) : '{}',
+  })
+}
+
 // Fetch a Supabase user's profile row via REST
 async function fetchProfile(userId: string): Promise<UserProfile | null> {
   const res = await authFetch('GET', `profiles?id=eq.${userId}&select=*`)
@@ -449,6 +464,108 @@ export async function getBets(userId: string): Promise<BetRecord[]> {
     const bets = JSON.parse(localStorage.getItem(LS_BETS) ?? '[]') as BetRecord[]
     return bets.filter(b => b.userId === userId).sort((a, b) => b.createdAt - a.createdAt)
   } catch { return [] }
+}
+
+// ─── Tendances : agrégat TRIVELA + cotes bookmakers + détail par joueur ───────
+
+/** Tendance TRIVELA d'un match : nb de pronos par issue (agrégat, jamais nominatif). */
+export interface MatchTrend {
+  matchId:  string
+  homeWin:  number
+  draw:     number
+  awayWin:  number
+  total:    number
+}
+
+/** Agrégat des pronostics par match (sûr avant le coup d'envoi). matchId → tendance. */
+export async function getMatchTrends(): Promise<Record<string, MatchTrend>> {
+  if (supabaseConfigured) {
+    const res = await rpcFetch('match_trends')
+    if (res.ok) {
+      const out: Record<string, MatchTrend> = {}
+      for (const r of (await res.json() as any[])) {
+        out[r.match_id as string] = {
+          matchId: r.match_id as string,
+          homeWin: Number(r.home_win ?? 0),
+          draw:    Number(r.draw ?? 0),
+          awayWin: Number(r.away_win ?? 0),
+          total:   Number(r.total ?? 0),
+        }
+      }
+      return out
+    }
+    return {}
+  }
+  // Repli local (dev) : agrège les paris du localStorage.
+  try {
+    const bets = JSON.parse(localStorage.getItem(LS_BETS) ?? '[]') as BetRecord[]
+    const out: Record<string, MatchTrend> = {}
+    for (const b of bets) {
+      const t = out[b.matchId] ?? { matchId: b.matchId, homeWin: 0, draw: 0, awayWin: 0, total: 0 }
+      if (b.homeScore > b.awayScore) t.homeWin++
+      else if (b.homeScore < b.awayScore) t.awayWin++
+      else t.draw++
+      t.total++
+      out[b.matchId] = t
+    }
+    return out
+  } catch { return {} }
+}
+
+/** Cotes « mondiales » (consensus bookmakers) d'un match, en pourcentages. */
+export interface MatchOdds {
+  matchId:    string
+  homePct:    number
+  drawPct:    number
+  awayPct:    number
+  bookmakers: number
+  updatedAt:  number
+}
+
+/** Probabilités bookmakers par match. matchId → cotes. */
+export async function getMatchOdds(): Promise<Record<string, MatchOdds>> {
+  if (!supabaseConfigured) return {}
+  const res = await authFetch('GET', 'match_odds?select=*')
+  if (!res.ok) return {}
+  const out: Record<string, MatchOdds> = {}
+  for (const r of (await res.json() as any[])) {
+    out[r.match_id as string] = {
+      matchId:    r.match_id as string,
+      homePct:    Number(r.home_pct ?? 0),
+      drawPct:    Number(r.draw_pct ?? 0),
+      awayPct:    Number(r.away_pct ?? 0),
+      bookmakers: Number(r.bookmakers ?? 0),
+      updatedAt:  new Date(r.updated_at as string).getTime(),
+    }
+  }
+  return out
+}
+
+/** Pronostic d'un joueur sur un match. Score = null tant que non révélé (coup d'envoi). */
+export interface PlayerBet {
+  userId:      string
+  pseudo:      string
+  countryCode: string
+  homeScore:   number | null
+  awayScore:   number | null
+  points:      number | null
+  revealed:    boolean
+}
+
+/** Détail des pronos d'un match, joueur par joueur (score masqué avant le coup d'envoi). */
+export async function getMatchPlayerBets(matchId: string): Promise<PlayerBet[]> {
+  if (!supabaseConfigured) return []
+  const res = await rpcFetch('match_player_bets', { p_match_id: matchId })
+  if (!res.ok) return []
+  return (await res.json() as any[]).map(b => ({
+    userId:      b.user_id as string,
+    pseudo:      b.pseudo as string,
+    countryCode: (b.country_code as string) ?? 'un',
+    homeScore:   b.home_score == null ? null : Number(b.home_score),
+    awayScore:   b.away_score == null ? null : Number(b.away_score),
+    points:      b.points == null ? null : Number(b.points),
+    revealed:    !!b.revealed,
+  }))
 }
 
 // ─── Real-time subscriptions ──────────────────────────────────────────────────

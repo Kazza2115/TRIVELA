@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Globe        from './components/Globe'
 import Paris        from './pages/Paris'
+import Tendances    from './pages/Tendances'
 import Classement   from './pages/Classement'
 import PlayerProfile from './pages/PlayerProfile'
 import Actualites   from './pages/Actualites'
@@ -25,7 +26,7 @@ import {
 } from './components/NavIcons'
 import './index.css'
 
-export type SectionId = 'globe' | 'paris' | 'classement' | 'actualites' | 'chat' | 'competition'
+export type SectionId = 'globe' | 'paris' | 'classement' | 'actualites' | 'chat' | 'competition' | 'tendances'
 
 const NAV_ITEMS: {
   id: SectionId; Icon: React.FC<{ size?: number; color?: string }>
@@ -98,6 +99,15 @@ export default function App() {
   const [liveIds, setLiveIds] = useState<string[]>([])
   const [parisFocus, setParisFocus] = useState<{ id: string; nonce: number } | null>(null)
   const [competitionConf, setCompetitionConf] = useState<string | null>(null)
+  const [trendsFocus, setTrendsFocus] = useState<string | null>(null)
+
+  // Depuis la page Paris (clic sur une tendance) ou le menu → page Tendances.
+  const openTrends = (matchId?: string) => {
+    track('trends_open', { matchId: matchId ?? null })
+    setViewedPlayer(null)
+    setTrendsFocus(matchId ?? null)
+    setSection('tendances'); setActiveNav('tendances')
+  }
 
   // Depuis le globe : touche un continent / pays vedette → page stats de la compétition
   const showCompetition = (conf: string) => {
@@ -213,6 +223,7 @@ export default function App() {
   const navigateMenu = (s: SectionId) => {
     track('nav_click', { to: s, from: 'menu' })
     if (s === 'chat') { openChat(); return }   // chat = panneau sur l'accueil, pas une page
+    if (s === 'tendances') { openTrends(); return }   // ouvre sur le match le plus proche
     setViewedPlayer(null); setSection(s); setActiveNav(s)
   }
   const openProfileFromChat = async (userId: string) => {
@@ -426,7 +437,8 @@ export default function App() {
 
         {section === 'actualites' && <ErrorBoundary label="actualites"><Actualites onBack={back} /></ErrorBoundary>}
         {section === 'competition' && competitionConf && <ErrorBoundary label="competition"><Competition conf={competitionConf} onBack={back} /></ErrorBoundary>}
-        {section === 'paris'      && <ErrorBoundary label="paris"><Paris onBack={back} currentUser={currentUser} onOpenAuth={openAuth} focus={parisFocus} /></ErrorBoundary>}
+        {section === 'tendances'  && <ErrorBoundary label="tendances"><Tendances onBack={back} focusMatchId={trendsFocus} currentUser={currentUser} /></ErrorBoundary>}
+        {section === 'paris'      && <ErrorBoundary label="paris"><Paris onBack={back} currentUser={currentUser} onOpenAuth={openAuth} focus={parisFocus} onOpenTrends={openTrends} /></ErrorBoundary>}
         {section === 'classement' && (
           <ErrorBoundary label="classement">
             {viewedPlayer
