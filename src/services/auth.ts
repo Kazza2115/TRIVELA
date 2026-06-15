@@ -645,6 +645,18 @@ export async function getAdminStats(days = 30, bucket: StatBucket = 'day'): Prom
   }
 }
 
+// ─── Live worker : ping à la demande ──────────────────────────────────────────
+// Le cron Cloudflare du worker n'est pas fiable (et les crons GitHub sont throttlés).
+// Quand un match est en direct, l'app pingue le worker → il interroge l'API football
+// et écrit match_live. Fire-and-forget (no-cors : on ne lit pas la réponse, on
+// déclenche juste l'exécution du worker).
+const LIVE_WORKER_URL = 'https://trivela-live.thebigchungus08.workers.dev/?force=1'
+export function pingLiveWorker(): void {
+  try {
+    fetch(LIVE_WORKER_URL, { mode: 'no-cors', cache: 'no-store', keepalive: true }).catch(() => {})
+  } catch { /* ignore */ }
+}
+
 // ─── Admin : édition des pronostics d'un joueur ───────────────────────────────
 
 /** Lit le prono actuel d'un joueur sur un match (admin). null si aucun. */

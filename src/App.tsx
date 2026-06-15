@@ -18,7 +18,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import UpdateBanner from './components/UpdateBanner'
 import NotificationInbox from './components/NotificationInbox'
 import TrivelaLogo  from './components/TrivelaLogo'
-import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages, getLive, subscribeToLive, getResults, subscribeToResults, beginPasswordRecovery, getNotifications, markNotificationsRead, subscribeToNotifications } from './services/auth'
+import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMessages, getLive, subscribeToLive, getResults, subscribeToResults, beginPasswordRecovery, getNotifications, markNotificationsRead, subscribeToNotifications, pingLiveWorker } from './services/auth'
 import type { UserProfile, PresenceUser, AppNotification } from './services/auth'
 import { ALL_MATCHES, matchKickoffUTC } from './data/wc2026Matches'
 import { playMentionSound } from './utils/sound'
@@ -143,6 +143,16 @@ export default function App() {
     const iv = setInterval(compute, 30000)
     return () => { unsubLive(); unsubRes(); clearInterval(iv) }
   }, [])
+
+  // Cron Cloudflare du worker non fiable → quand un match est en direct, l'app
+  // pingue le worker toutes les 20 s pour qu'il rafraîchisse match_live (scores,
+  // buteurs) et règle le match à la fin. Tant qu'un joueur regarde, le live tourne.
+  useEffect(() => {
+    if (liveIds.length === 0) return
+    pingLiveWorker()
+    const iv = setInterval(pingLiveWorker, 20000)
+    return () => clearInterval(iv)
+  }, [liveIds.length])
 
   const goToLive = () => {
     track('live_click', { matchId: liveIds[0] ?? null })
