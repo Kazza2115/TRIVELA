@@ -645,6 +645,36 @@ export async function getAdminStats(days = 30, bucket: StatBucket = 'day'): Prom
   }
 }
 
+// ─── Admin : édition des pronostics d'un joueur ───────────────────────────────
+
+/** Lit le prono actuel d'un joueur sur un match (admin). null si aucun. */
+export async function adminGetBet(userId: string, matchId: string): Promise<{ home: number; away: number } | null> {
+  if (!supabaseConfigured) return null
+  const res = await rpcFetch('admin_get_bet', { p_user_id: userId, p_match_id: matchId })
+  if (!res.ok) return null
+  const rows = await res.json().catch(() => [])
+  const r = Array.isArray(rows) ? rows[0] : null
+  return r ? { home: Number(r.home_score ?? 0), away: Number(r.away_score ?? 0) } : null
+}
+
+/** Crée / corrige le prono d'un joueur (admin ; contourne le verrou de temps). */
+export async function adminSetBet(params: {
+  userId: string; matchId: string; home: string; away: string
+  homeScore: number; awayScore: number; stage: string
+}): Promise<{ error?: string }> {
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+  const res = await rpcFetch('admin_set_bet', {
+    p_user_id: params.userId, p_match_id: params.matchId,
+    p_home: params.home, p_away: params.away,
+    p_home_score: params.homeScore, p_away_score: params.awayScore, p_stage: params.stage,
+  })
+  if (res.ok) return {}
+  const detail = await res.text().catch(() => '')
+  // Message PostgREST → on remonte la cause lisible (ex. « Match déjà réglé »).
+  const m = detail.match(/"message":"([^"]+)"/)
+  return { error: m ? m[1] : `Échec (${res.status}).` }
+}
+
 // ─── Real-time subscriptions ──────────────────────────────────────────────────
 
 export interface MatchResult {

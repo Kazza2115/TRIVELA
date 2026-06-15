@@ -3,6 +3,7 @@ import Globe        from './components/Globe'
 import Paris        from './pages/Paris'
 import Tendances    from './pages/Tendances'
 import Stats        from './pages/Stats'
+import AdminBets    from './pages/AdminBets'
 import Classement   from './pages/Classement'
 import PlayerProfile from './pages/PlayerProfile'
 import Actualites   from './pages/Actualites'
@@ -27,7 +28,7 @@ import {
 } from './components/NavIcons'
 import './index.css'
 
-export type SectionId = 'globe' | 'paris' | 'classement' | 'actualites' | 'chat' | 'competition' | 'tendances' | 'stats'
+export type SectionId = 'globe' | 'paris' | 'classement' | 'actualites' | 'chat' | 'competition' | 'tendances' | 'stats' | 'adminbets'
 
 const NAV_ITEMS: {
   id: SectionId; Icon: React.FC<{ size?: number; color?: string }>
@@ -440,6 +441,7 @@ export default function App() {
         {section === 'competition' && competitionConf && <ErrorBoundary label="competition"><Competition conf={competitionConf} onBack={back} /></ErrorBoundary>}
         {section === 'tendances'  && <ErrorBoundary label="tendances"><Tendances onBack={back} focusMatchId={trendsFocus} currentUser={currentUser} /></ErrorBoundary>}
         {section === 'stats'      && <ErrorBoundary label="stats"><Stats onBack={back} currentUser={currentUser} /></ErrorBoundary>}
+        {section === 'adminbets'  && <ErrorBoundary label="adminbets"><AdminBets onBack={back} currentUser={currentUser} /></ErrorBoundary>}
         {section === 'paris'      && <ErrorBoundary label="paris"><Paris onBack={back} currentUser={currentUser} onOpenAuth={openAuth} focus={parisFocus} onOpenTrends={openTrends} /></ErrorBoundary>}
         {section === 'classement' && (
           <ErrorBoundary label="classement">
