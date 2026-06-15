@@ -22,6 +22,16 @@ const PERIODS: { days: number; label: string }[] = [
   { days: 7, label: '7 j' }, { days: 30, label: '30 j' }, { days: 90, label: '90 j' }, { days: 365, label: '1 an' },
 ]
 
+// Secondes → durée lisible (« 45 s », « 2 min 10 s », « 1 h 5 min »).
+function fmtDuration(s: number): string {
+  if (!s || s < 1) return '0 s'
+  if (s < 60) return `${s} s`
+  const m = Math.floor(s / 60), sec = s % 60
+  if (m < 60) return sec ? `${m} min ${sec} s` : `${m} min`
+  const h = Math.floor(m / 60), mm = m % 60
+  return mm ? `${h} h ${mm} min` : `${h} h`
+}
+
 // "YYYY-MM-DD" → Date (UTC).
 const parseBucket = (s: string) => new Date(s + 'T00:00:00Z')
 const axisLabel = (s: string) => { const d = parseBucket(s); return `${d.getUTCDate()}/${d.getUTCMonth() + 1}` }
@@ -96,6 +106,7 @@ export default function Stats({ onBack, currentUser }: {
             <Kpi label="Sessions" value={stats.sessionsWindow} />
             <Kpi label="Actions / évènements" value={stats.eventsWindow} />
             <Kpi label="Pronostics placés" value={stats.betsWindow} accent="#16a34a" />
+            <Kpi label="Temps moyen / page" value={stats.avgVisitSeconds ? fmtDuration(stats.avgVisitSeconds) : '—'} accent={GOLD} />
           </div>
 
           {/* ── Graphe interactif (cliquable) ────────────────────── */}
@@ -124,6 +135,22 @@ export default function Stats({ onBack, currentUser }: {
           <Card title="Fonctionnalités les plus utilisées" subtitle={`Sur ${periodLabel}`}>
             <RankList rows={stats.topEvents.map(e => ({ label: eventLabel(e.event), main: e.hits, sub: `${e.users} utilisateurs` }))}
               emptyHint="Aucune activité sur la période." unit="actions" />
+          </Card>
+
+          {/* ── Temps passé par page ─────────────────────────────── */}
+          <Card title="Temps passé par page" subtitle={`Sur ${periodLabel} · cumulé et moyen par visite`}>
+            <BarList
+              rows={stats.timeByPage.map(t => ({
+                label: pathLabel(t.section), value: t.totalSeconds,
+                right: `${fmtDuration(t.totalSeconds)} · moy. ${fmtDuration(t.avgSeconds)}`,
+              }))}
+              emptyHint="Pas encore de données de temps (elles se collectent dès maintenant)." />
+          </Card>
+
+          {/* ── Clics les plus fréquents ─────────────────────────── */}
+          <Card title="Clics les plus fréquents" subtitle={`Sur ${periodLabel}`}>
+            <RankList rows={stats.topClicks.map(c => ({ label: c.label, main: c.clicks, sub: `${c.users} utilisateurs` }))}
+              emptyHint="Pas encore de clics enregistrés (ils se collectent dès maintenant)." unit="clics" />
           </Card>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
@@ -259,6 +286,29 @@ function InteractiveChart({ series, bucket }: { series: StatPoint[]; bucket: Sta
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// Liste à barres avec texte de droite libre (ex. durées formatées).
+function BarList({ rows, emptyHint }: {
+  rows: { label: string; value: number; right: string }[]; emptyHint: string
+}) {
+  if (rows.length === 0) return <div style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>{emptyHint}</div>
+  const max = Math.max(1, ...rows.map(r => r.value))
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {rows.map((r, i) => (
+        <div key={i}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</span>
+            <span style={{ flexShrink: 0, fontSize: 11, color: 'var(--text-2)' }}>{r.right}</span>
+          </div>
+          <div style={{ height: 6, borderRadius: 999, background: 'var(--bg-fill)', overflow: 'hidden' }}>
+            <div style={{ width: `${Math.round((r.value / max) * 100)}%`, height: '100%', background: GOLD, transition: 'width 0.4s ease' }} />
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

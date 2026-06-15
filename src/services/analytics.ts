@@ -53,6 +53,7 @@ export function initAnalytics(): void {
   // Hors trivela.ch (dev, prévisualisation, autre domaine) → analytics désactivé.
   if (!isProductionSite()) return
   enabled = true
+  setupAutoTracking()        // clics + temps par page (vers Supabase, prod uniquement)
   if (!POSTHOG_KEY) return
   try {
     posthog.init(POSTHOG_KEY, {
@@ -98,6 +99,53 @@ export function trackPageview(section: string): void {
     path: section,
     $current_url: typeof location !== 'undefined' ? location.href : undefined,
   })
+}
+
+// ─── Temps passé par page (section) ──────────────────────────────────────────
+let _section: string | null = null
+let _sectionStart = 0
+
+/** Vide le chrono de la section courante → envoie un évènement `page_time`. */
+function flushSectionTime(): void {
+  if (!_section || !_sectionStart) return
+  const seconds = Math.round((Date.now() - _sectionStart) / 1000)
+  _sectionStart = 0
+  // On ignore les durées nulles ou aberrantes (onglet laissé ouvert très longtemps).
+  if (seconds >= 1 && seconds <= 2 * 3600) track('page_time', { section: _section, seconds })
+}
+
+/** À appeler à chaque changement de section : enregistre la vue ET chronomètre le
+ *  temps passé sur la section précédente. */
+export function trackSection(section: string): void {
+  flushSectionTime()
+  _section = section
+  _sectionStart = Date.now()
+  trackPageview(section)
+}
+
+// ─── Auto-tracking : clics + reprise/flush du chrono ─────────────────────────
+let autoSetup = false
+function setupAutoTracking(): void {
+  if (autoSetup || typeof document === 'undefined') return
+  autoSetup = true
+
+  // Clics « utiles » : boutons, liens, éléments interactifs — avec leur libellé.
+  document.addEventListener('click', (e) => {
+    const t = e.target as HTMLElement | null
+    const el = t?.closest('button, a, [role="button"], input[type="button"], input[type="submit"]') as HTMLElement | null
+    if (!el) return
+    const raw = (el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || '').replace(/\s+/g, ' ').trim()
+    const label = raw ? raw.slice(0, 60) : '(sans texte)'
+    track('click', { label, section: _section, tag: el.tagName.toLowerCase() })
+  }, { capture: true, passive: true })
+
+  // Onglet masqué → on fige le temps ; visible → on relance le chrono.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) flushSectionTime()
+    else if (_section) _sectionStart = Date.now()
+  })
+  // Fermeture / navigation : dernier flush (best effort).
+  window.addEventListener('pagehide', flushSectionTime)
 }
 
 async function writeToSupabase(event: string, properties: Record<string, unknown>): Promise<void> {

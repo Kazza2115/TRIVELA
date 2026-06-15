@@ -107,6 +107,44 @@ begin
       ) e
     ),
 
+    -- ── Temps passé par page / section (fenêtre) ──
+    'time_by_page', (
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'section', section, 'views', views, 'avg_seconds', avg_seconds, 'total_seconds', total_seconds
+      ) order by total_seconds desc), '[]'::jsonb)
+      from (
+        select coalesce(properties->>'section', '(inconnu)')    as section,
+               count(*)                                          as views,
+               round(avg((properties->>'seconds')::numeric))::int as avg_seconds,
+               sum((properties->>'seconds')::int)                as total_seconds
+        from analytics_events
+        where event = 'page_time' and created_at >= v_since
+          and (properties->>'seconds') ~ '^[0-9]+$'
+        group by 1 order by total_seconds desc limit 12
+      ) t
+    ),
+
+    -- ── Temps moyen par page vue (fenêtre, en secondes) ──
+    'avg_visit_seconds', (
+      select coalesce(round(avg((properties->>'seconds')::numeric))::int, 0)
+      from analytics_events
+      where event = 'page_time' and created_at >= v_since
+        and (properties->>'seconds') ~ '^[0-9]+$'
+    ),
+
+    -- ── Clics les plus fréquents (fenêtre) ──
+    'top_clicks', (
+      select coalesce(jsonb_agg(jsonb_build_object('label', label, 'clicks', clicks, 'users', users) order by clicks desc), '[]'::jsonb)
+      from (
+        select coalesce(properties->>'label', '(sans texte)') as label,
+               count(*)                                        as clicks,
+               count(distinct distinct_id)                     as users
+        from analytics_events
+        where event = 'click' and created_at >= v_since
+        group by 1 order by clicks desc limit 15
+      ) c
+    ),
+
     -- ── Rétention J+1 (global) ──
     'retention_d1', (
       with first_seen as (

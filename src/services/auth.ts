@@ -587,10 +587,13 @@ export interface AdminStats {
   eventsWindow:     number
   registeredWindow: number
   betsWindow:       number
-  // Série temporelle + tops + rétention
+  // Série temporelle + tops + temps + rétention
   series:     StatPoint[]
   topPages:   { path: string; views: number; visitors: number }[]
   topEvents:  { event: string; hits: number; users: number }[]
+  timeByPage: { section: string; views: number; avgSeconds: number; totalSeconds: number }[]
+  avgVisitSeconds: number
+  topClicks:  { label: string; clicks: number; users: number }[]
   retentionD1: number | null
 }
 
@@ -624,6 +627,9 @@ export async function getAdminStats(days = 30, bucket: StatBucket = 'day'): Prom
       series:     Array.isArray(d.series) ? d.series.map((r: any) => ({ bucket: r.bucket as string, visitors: Number(r.visitors ?? 0), events: Number(r.events ?? 0) })) : [],
       topPages:   Array.isArray(d.top_pages) ? d.top_pages.map((r: any) => ({ path: r.path as string, views: Number(r.views ?? 0), visitors: Number(r.visitors ?? 0) })) : [],
       topEvents:  Array.isArray(d.top_events) ? d.top_events.map((r: any) => ({ event: r.event as string, hits: Number(r.hits ?? 0), users: Number(r.users ?? 0) })) : [],
+      timeByPage: Array.isArray(d.time_by_page) ? d.time_by_page.map((r: any) => ({ section: r.section as string, views: Number(r.views ?? 0), avgSeconds: Number(r.avg_seconds ?? 0), totalSeconds: Number(r.total_seconds ?? 0) })) : [],
+      avgVisitSeconds: Number(d.avg_visit_seconds ?? 0),
+      topClicks:  Array.isArray(d.top_clicks) ? d.top_clicks.map((r: any) => ({ label: r.label as string, clicks: Number(r.clicks ?? 0), users: Number(r.users ?? 0) })) : [],
       retentionD1: d.retention_d1 == null ? null : Number(d.retention_d1),
     },
   }

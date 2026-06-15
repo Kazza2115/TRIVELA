@@ -21,7 +21,7 @@ import { subscribeToAuth, getLeaderboard, subscribeToPresence, subscribeToNewMes
 import type { UserProfile, PresenceUser, AppNotification } from './services/auth'
 import { ALL_MATCHES, matchKickoffUTC } from './data/wc2026Matches'
 import { playMentionSound } from './utils/sound'
-import { initAnalytics, identify as analyticsIdentify, track, trackPageview } from './services/analytics'
+import { initAnalytics, identify as analyticsIdentify, track, trackSection } from './services/analytics'
 import {
   IconGlobe, IconTrophy, IconBolt,
 } from './components/NavIcons'
@@ -65,8 +65,8 @@ export default function App() {
       : null)
   }, [currentUser])
 
-  // Page vue à chaque changement de section
-  useEffect(() => { trackPageview(section) }, [section])
+  // Page vue + temps passé par section à chaque changement
+  useEffect(() => { trackSection(section) }, [section])
 
   // Lien de récupération invalide/expiré : prévenir et proposer une nouvelle demande
   useEffect(() => {
