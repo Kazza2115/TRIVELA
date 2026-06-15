@@ -57,11 +57,11 @@ function toGenevaDate(dateStr: string, timeStr: string): string {
   return `${d} ${FR_MONTHS_CAP[m - 1] ?? ''}`.trim()
 }
 
-/** Bet lockout — 1h30 before kickoff (kickoff stored as UTC). */
+/** Bet lockout — 30 min before kickoff (kickoff stored as UTC). */
 function isMatchLocked(match: Match): boolean {
   const utc = parseUTC(match.date, match.time)
   if (utc === null) return false
-  return Date.now() >= utc - 90 * 60 * 1000
+  return Date.now() >= utc - 30 * 60 * 1000
 }
 
 /** Fenêtre « en direct » : du coup d'envoi à +2h15 (tant qu'aucun résultat final). */
