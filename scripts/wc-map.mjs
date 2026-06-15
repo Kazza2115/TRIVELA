@@ -87,12 +87,33 @@ export async function settleViaRest(sb, matchId, homeScore, awayScore) {
 }
 
 /**
- * Réconcilie le classement : pour CHAQUE joueur, profiles.score = somme de SES points de paris.
- * Autoritaire et idempotent → insensible aux courses (worker + crons en parallèle). N'utilise
- * que Supabase (zéro quota API). N'écrit que les profils dont le score a réellement changé.
+ * Réconcilie ENTIÈREMENT le classement (autoritaire, idempotent, Supabase seul) :
+ *   1) pour chaque match réglé, (re)calcule les points de TOUS ses paris d'après le
+ *      résultat officiel — rattrape notamment les paris AJOUTÉS APRÈS le règlement
+ *      (joueurs tardifs) dont les points étaient restés nuls ;
+ *   2) pour chaque joueur, profiles.score = somme de SES points.
+ * Insensible aux courses (worker + crons en parallèle), zéro quota API.
  * @returns nombre de profils corrigés
  */
 export async function reconcileScores(sb) {
+  // 1) Points de chaque pari des matchs réglés (rattrapage des paris tardifs).
+  const rr = await sb('match_results?select=match_id,home_score,away_score')
+  if (rr.ok) {
+    for (const r of await rr.json()) {
+      const br = await sb(`bets?match_id=eq.${r.match_id}&select=id,home_score,away_score,points,locked`)
+      if (!br.ok) continue
+      for (const b of await br.json()) {
+        const pts = betPoints(b.home_score, b.away_score, r.home_score, r.away_score)
+        if (b.points !== pts || !b.locked) {
+          await sb(`bets?id=eq.${b.id}`, {
+            method: 'PATCH', headers: { Prefer: 'return=minimal' },
+            body: JSON.stringify({ points: pts, locked: true }),
+          })
+        }
+      }
+    }
+  }
+  // 2) profiles.score = somme des points de chaque joueur.
   const pr = await sb('profiles?select=id,score')
   if (!pr.ok) return 0
   const profiles = await pr.json()
