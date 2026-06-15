@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import Globe        from './components/Globe'
 import Paris        from './pages/Paris'
 import Tendances    from './pages/Tendances'
+import Stats        from './pages/Stats'
 import Classement   from './pages/Classement'
 import PlayerProfile from './pages/PlayerProfile'
 import Actualites   from './pages/Actualites'
@@ -26,7 +27,7 @@ import {
 } from './components/NavIcons'
 import './index.css'
 
-export type SectionId = 'globe' | 'paris' | 'classement' | 'actualites' | 'chat' | 'competition' | 'tendances'
+export type SectionId = 'globe' | 'paris' | 'classement' | 'actualites' | 'chat' | 'competition' | 'tendances' | 'stats'
 
 const NAV_ITEMS: {
   id: SectionId; Icon: React.FC<{ size?: number; color?: string }>
@@ -438,6 +439,7 @@ export default function App() {
         {section === 'actualites' && <ErrorBoundary label="actualites"><Actualites onBack={back} /></ErrorBoundary>}
         {section === 'competition' && competitionConf && <ErrorBoundary label="competition"><Competition conf={competitionConf} onBack={back} /></ErrorBoundary>}
         {section === 'tendances'  && <ErrorBoundary label="tendances"><Tendances onBack={back} focusMatchId={trendsFocus} currentUser={currentUser} /></ErrorBoundary>}
+        {section === 'stats'      && <ErrorBoundary label="stats"><Stats onBack={back} currentUser={currentUser} /></ErrorBoundary>}
         {section === 'paris'      && <ErrorBoundary label="paris"><Paris onBack={back} currentUser={currentUser} onOpenAuth={openAuth} focus={parisFocus} onOpenTrends={openTrends} /></ErrorBoundary>}
         {section === 'classement' && (
           <ErrorBoundary label="classement">
@@ -510,6 +512,7 @@ export default function App() {
         onNavigate={navigateMenu}
         onSelectCompetition={showCompetition}
         activeSection={section}
+        isAdmin={currentUser?.isAdmin ?? false}
       />
 
       {/* ── Bouton EN DIRECT — uniquement sur le Globe (discret quand inactif, rouge quand un match est en direct) ── */}

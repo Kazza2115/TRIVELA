@@ -568,6 +568,52 @@ export async function getMatchPlayerBets(matchId: string): Promise<PlayerBet[]> 
   }))
 }
 
+// ─── Statistiques admin (agrégats analytics, réservés aux admins) ────────────
+export interface AdminStats {
+  generatedAt:   number
+  players:       number
+  bets:          number
+  eventsTotal:   number
+  visitorsTotal: number
+  visitors7d:    number
+  visitors30d:   number
+  activeToday:   number
+  registered30d: number
+  dau:        { day: string; visitors: number }[]
+  topPages:   { path: string; views: number; visitors: number }[]
+  topEvents:  { event: string; hits: number; users: number }[]
+  retentionD1: number | null
+}
+
+/** Récupère l'overview de statistiques (réservé aux admins ; refusé sinon). */
+export async function getAdminStats(): Promise<{ stats?: AdminStats; error?: string }> {
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+  const res = await rpcFetch('admin_stats')
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    return { error: `Accès refusé (${res.status}). ${detail}`.trim() }
+  }
+  const d = await res.json().catch(() => null)
+  if (!d) return { error: 'Réponse vide.' }
+  return {
+    stats: {
+      generatedAt:   d.generated_at ? new Date(d.generated_at as string).getTime() : Date.now(),
+      players:       Number(d.players ?? 0),
+      bets:          Number(d.bets ?? 0),
+      eventsTotal:   Number(d.events_total ?? 0),
+      visitorsTotal: Number(d.visitors_total ?? 0),
+      visitors7d:    Number(d.visitors_7d ?? 0),
+      visitors30d:   Number(d.visitors_30d ?? 0),
+      activeToday:   Number(d.active_today ?? 0),
+      registered30d: Number(d.registered_30d ?? 0),
+      dau:        Array.isArray(d.dau) ? d.dau.map((r: any) => ({ day: r.day as string, visitors: Number(r.visitors ?? 0) })) : [],
+      topPages:   Array.isArray(d.top_pages) ? d.top_pages.map((r: any) => ({ path: r.path as string, views: Number(r.views ?? 0), visitors: Number(r.visitors ?? 0) })) : [],
+      topEvents:  Array.isArray(d.top_events) ? d.top_events.map((r: any) => ({ event: r.event as string, hits: Number(r.hits ?? 0), users: Number(r.users ?? 0) })) : [],
+      retentionD1: d.retention_d1 == null ? null : Number(d.retention_d1),
+    },
+  }
+}
+
 // ─── Real-time subscriptions ──────────────────────────────────────────────────
 
 export interface MatchResult {
