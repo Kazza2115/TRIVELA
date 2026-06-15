@@ -1,0 +1,24 @@
+name: Verify trends (ponctuel)
+on:
+  push:
+    branches: [claude/jolly-archimedes-53jcrc]
+    paths: ['scripts/verify-trends.mjs', '.github/workflows/verify-trends.yml']
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # 1) Remplit la tendance mondiale (cotes bookmakers) maintenant.
+      - run: node scripts/api-football-odds.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          FORCE: '1'
+      # 2) Vérifie que les 3 objets SQL répondent + montre un échantillon.
+      - run: node scripts/verify-trends.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
