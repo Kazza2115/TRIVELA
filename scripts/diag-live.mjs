@@ -11,9 +11,14 @@ const api = p => fetch(`${API}${p}`, { headers: { 'x-apisports-key': KEY } }).th
 const MID = 'gG-md1-bel-egy'
 const j = async (p) => { const r = await sb(p); return r.ok ? r.json() : `err${r.status}` }
 
-console.log('NOW (UTC):', new Date().toISOString())
-console.log('schedule:', JSON.stringify(await j(`match_schedule?select=match_id,kickoff&match_id=eq.${MID}`)))
-console.log('match_live (BEL-EGY):', JSON.stringify(await j(`match_live?select=*&match_id=eq.${MID}`)))
+const NOW = Date.now()
+console.log('NOW (UTC):', new Date(NOW).toISOString())
+const liveRow = await j(`match_live?select=*&match_id=eq.${MID}`)
+console.log('match_live (BEL-EGY):', JSON.stringify(liveRow))
+if (Array.isArray(liveRow) && liveRow[0]?.updated_at) {
+  const age = Math.round((NOW - Date.parse(liveRow[0].updated_at)) / 1000)
+  console.log(`   → écrit il y a ${age}s (si < 70s et SANS passage manuel → le worker tourne ✅)`)
+}
 console.log('match_results (BEL-EGY):', JSON.stringify(await j(`match_results?select=*&match_id=eq.${MID}`)))
 const allLive = await j('match_live?select=match_id,status,home_score,away_score,updated_at&order=updated_at.desc')
 console.log('TOUTES les lignes match_live:', JSON.stringify(allLive))
