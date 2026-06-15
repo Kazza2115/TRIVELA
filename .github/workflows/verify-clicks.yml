@@ -1,0 +1,17 @@
+name: Verify clicks (ponctuel)
+on:
+  push:
+    branches: [claude/jolly-archimedes-53jcrc]
+    paths: ['scripts/verify-clicks.mjs', '.github/workflows/verify-clicks.yml']
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/verify-clicks.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
