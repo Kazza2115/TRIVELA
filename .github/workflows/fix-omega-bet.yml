@@ -1,0 +1,17 @@
+name: Fix Omega bet (ponctuel)
+on:
+  push:
+    branches: [claude/jolly-archimedes-53jcrc]
+    paths: ['scripts/fix-omega-bet.mjs', '.github/workflows/fix-omega-bet.yml']
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/fix-omega-bet.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
