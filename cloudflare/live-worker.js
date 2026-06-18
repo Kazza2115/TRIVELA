@@ -8,7 +8,7 @@
 // fenêtre de jeu (coup d'envoi → fin). Hors match, le cron sort immédiatement après
 // 2 lectures Supabase (gratuites) → ZÉRO appel à l'API football. Cette fenêtre est
 // déterminée à partir de match_schedule (kickoff) et de match_results (déjà réglé).
-import { buildFixtureMap, orient, settleViaRest, reconcileScores, SETTLE_GRACE_MS } from '../scripts/wc-map.mjs'
+import { buildFixtureMap, orient, settleViaRest, reconcileScores, betPoints, SETTLE_GRACE_MS } from '../scripts/wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const API = 'https://v3.football.api-sports.io'
@@ -207,14 +207,75 @@ async function runLoop(env) {
   }
 }
 
+// ─── API admin : édition des pronostics (réservé aux admins, via service role) ──
+// Permet à l'app de corriger/ajouter le prono d'un joueur SANS dépendre de fonctions
+// SQL : le worker valide le token de l'admin (GoTrue) puis écrit en base avec la clé
+// service role. Si le match est déjà réglé : calcule les points + réconcilie le classement.
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'content-type, authorization',
+}
+function jsonRes(obj, status = 200) {
+  return new Response(JSON.stringify(obj), { status, headers: { 'Content-Type': 'application/json', ...CORS } })
+}
+async function handleAdminBet(path, req, env) {
+  const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY
+  if (!SERVICE) return jsonRes({ error: 'secrets manquants' }, 500)
+  const sb = (p, i = {}) => fetch(`${SUPA_URL}/rest/v1/${p}`, {
+    ...i, headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json', ...(i.headers || {}) },
+  })
+  let body
+  try { body = await req.json() } catch { return jsonRes({ error: 'JSON invalide.' }, 400) }
+  if (!body.token) return jsonRes({ error: 'Non authentifié.' }, 401)
+  // Valide le token + récupère l'uid via GoTrue.
+  const ures = await fetch(`${SUPA_URL}/auth/v1/user`, { headers: { apikey: SERVICE, Authorization: `Bearer ${body.token}` } })
+  if (!ures.ok) return jsonRes({ error: 'Session invalide ou expirée.' }, 401)
+  const uid = (await ures.json())?.id
+  if (!uid) return jsonRes({ error: 'Session invalide.' }, 401)
+  // Vérifie le statut admin.
+  const pr = await sb(`profiles?id=eq.${uid}&select=is_admin`)
+  const isAdmin = pr.ok && (await pr.json())[0]?.is_admin === true
+  if (!isAdmin) return jsonRes({ error: 'Réservé aux administrateurs.' }, 403)
+
+  if (path === '/admin/get-bet') {
+    const r = await sb(`bets?user_id=eq.${body.userId}&match_id=eq.${body.matchId}&select=home_score,away_score`)
+    const row = r.ok ? (await r.json())[0] : null
+    return jsonRes({ bet: row ? { home: row.home_score, away: row.away_score } : null })
+  }
+
+  // /admin/set-bet
+  const { userId, matchId, home, away, homeScore, awayScore, stage } = body
+  if (!userId || !matchId || homeScore == null || awayScore == null || homeScore < 0 || awayScore < 0) {
+    return jsonRes({ error: 'Données invalides.' }, 400)
+  }
+  const rr = await sb(`match_results?match_id=eq.${matchId}&select=home_score,away_score`)
+  const res = rr.ok ? (await rr.json())[0] : null
+  const settled = !!res
+  const row = { user_id: userId, match_id: matchId, home, away, home_score: homeScore, away_score: awayScore, stage, locked: settled }
+  if (settled) row.points = betPoints(homeScore, awayScore, res.home_score, res.away_score)
+  const up = await sb('bets?on_conflict=user_id,match_id', {
+    method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify([row]),
+  })
+  if (!up.ok) return jsonRes({ error: `Échec écriture (${up.status}).` }, 500)
+  if (settled) { try { await reconcileScores(sb) } catch { /* ignore */ } }
+  return jsonRes({ ok: true, settled, points: settled ? row.points : null })
+}
+
 export default {
   async scheduled(_event, env, ctx) { ctx.waitUntil(runLoop(env)) },
   async fetch(req, env) {
+    const url = new URL(req.url)
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
+    // API admin (édition des pronos) — indépendante du suivi live.
+    if (url.pathname === '/admin/get-bet' || url.pathname === '/admin/set-bet') {
+      return handleAdminBet(url.pathname, req, env)
+    }
     const { api, sb, ok } = clients(env)
     if (!ok) return new Response('secrets manquants', { status: 500 })
     // Par défaut on respecte la fenêtre de jeu (zéro appel API hors match).
     // ?force=1 force un passage pour un test manuel.
-    const force = new URL(req.url).searchParams.get('force') === '1'
+    const force = url.searchParams.get('force') === '1'
     if (!force && !(await hasActiveMatch(sb))) {
       return new Response('aucun match en cours — appel API ignoré (ajoute ?force=1 pour forcer)')
     }
