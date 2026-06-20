@@ -1,0 +1,20 @@
+name: Results now (ponctuel)
+on:
+  push:
+    branches: [claude/jolly-archimedes-53jcrc]
+    paths: ['.github/workflows/results-now.yml']
+  workflow_dispatch:
+jobs:
+  results:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/api-football-results.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          FORCE: '1'
