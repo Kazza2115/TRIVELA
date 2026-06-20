@@ -131,6 +131,7 @@ async function settleAll(api, sb, all, fxMap) {
   const eg = await sb('match_goals?select=match_id')
   const haveGoals = eg.ok ? new Set((await eg.json()).map(r => r.match_id)) : new Set()
   const jobs = []
+  let newlySettled = 0
   for (const f of all) {
     const id = fxMap.get(f.fixture?.id)
     const st = f.fixture?.status?.short
@@ -139,10 +140,11 @@ async function settleAll(api, sb, all, fxMap) {
     const inGrace = sa != null && Number.isFinite(sa) && (now - sa) < SETTLE_GRACE_MS
     // Jamais réglé → règlement normal. Réglé il y a < 15 min → re-vérification (on force
     // la ré-écriture des buteurs en passant un set vide).
-    if (!settledAt.has(id)) jobs.push(settleOne(api, sb, id, f, haveGoals))
+    if (!settledAt.has(id)) { jobs.push(settleOne(api, sb, id, f, haveGoals)); newlySettled++ }
     else if (inGrace)       jobs.push(settleOne(api, sb, id, f, new Set()))
   }
   if (jobs.length) await Promise.all(jobs)
+  return newlySettled
 }
 
 async function poll(api, sb, fxMap) {
@@ -280,8 +282,11 @@ export default {
       return new Response('aucun match en cours — appel API ignoré (ajoute ?force=1 pour forcer)')
     }
     const { map: fxMap, all } = await buildContext(api, sb)
-    await settleAll(api, sb, all, fxMap)
+    const settled = await settleAll(api, sb, all, fxMap)
     const n = await poll(api, sb, fxMap)
-    return new Response(`live: ${n} (map: ${fxMap.size})`)
+    // Un match vient d'être réglé via ce ping → on réconcilie le classement
+    // (settleViaRest verrouille les points mais ne recalcule pas profiles.score).
+    if (settled > 0) { try { await reconcileScores(sb) } catch { /* ignore */ } }
+    return new Response(`live: ${n} (map: ${fxMap.size}, settled: ${settled})`)
   },
 }
