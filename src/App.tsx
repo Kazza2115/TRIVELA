@@ -154,6 +154,12 @@ export default function App() {
     return () => clearInterval(iv)
   }, [liveIds.length])
 
+  // Ouvrir le Classement ou Paris réveille aussi le worker (règlement + réconciliation
+  // du classement), même hors fenêtre live → en consultant le classement, on le met à jour.
+  useEffect(() => {
+    if (section === 'classement' || section === 'paris') pingLiveWorker()
+  }, [section])
+
   const goToLive = () => {
     track('live_click', { matchId: liveIds[0] ?? null })
     setViewedPlayer(null)

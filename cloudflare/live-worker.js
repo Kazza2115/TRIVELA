@@ -284,9 +284,11 @@ export default {
     const { map: fxMap, all } = await buildContext(api, sb)
     const settled = await settleAll(api, sb, all, fxMap)
     const n = await poll(api, sb, fxMap)
-    // Un match vient d'être réglé via ce ping → on réconcilie le classement
-    // (settleViaRest verrouille les points mais ne recalcule pas profiles.score).
-    if (settled > 0) { try { await reconcileScores(sb) } catch { /* ignore */ } }
-    return new Response(`live: ${n} (map: ${fxMap.size}, settled: ${settled})`)
+    // Réconciliation du classement à CHAQUE ping (recalcul désormais léger) :
+    // settleViaRest verrouille les points mais ne touche pas profiles.score, donc
+    // c'est ici (ou le cron) qui remet score = somme des points, sans dépendre du cron.
+    let reconciled = 0
+    try { reconciled = await reconcileScores(sb) } catch { /* ignore */ }
+    return new Response(`live: ${n} (map: ${fxMap.size}, settled: ${settled}, reconciled: ${reconciled})`)
   },
 }

@@ -96,32 +96,46 @@ export async function settleViaRest(sb, matchId, homeScore, awayScore) {
  * @returns nombre de profils corrigés
  */
 export async function reconcileScores(sb) {
-  // 1) Points de chaque pari des matchs réglés (rattrapage des paris tardifs).
-  const rr = await sb('match_results?select=match_id,home_score,away_score')
-  if (rr.ok) {
-    for (const r of await rr.json()) {
-      const br = await sb(`bets?match_id=eq.${r.match_id}&select=id,home_score,away_score,points,locked`)
-      if (!br.ok) continue
-      for (const b of await br.json()) {
-        const pts = betPoints(b.home_score, b.away_score, r.home_score, r.away_score)
-        if (b.points !== pts || !b.locked) {
-          await sb(`bets?id=eq.${b.id}`, {
-            method: 'PATCH', headers: { Prefer: 'return=minimal' },
-            body: JSON.stringify({ points: pts, locked: true }),
-          })
-        }
+  // Lectures GROUPÉES (≈ 4 requêtes au lieu de ~65) → tient dans les limites du
+  // worker Cloudflare (sous-requêtes), donc le recalcul aboutit toujours.
+  const rrRes = await sb('match_results?select=match_id,home_score,away_score')
+  const results = {}
+  if (rrRes.ok) for (const r of await rrRes.json()) results[r.match_id] = r
+
+  // Tous les paris en une fois (paginé : PostgREST plafonne à 1000 lignes).
+  const bets = []
+  for (let off = 0; ; off += 1000) {
+    const br = await sb(`bets?select=id,user_id,match_id,home_score,away_score,points,locked&order=id.asc&limit=1000&offset=${off}`)
+    if (!br.ok) break
+    const rows = await br.json()
+    bets.push(...rows)
+    if (rows.length < 1000) break
+  }
+
+  // 1) (Re)pointe les paris des matchs réglés (rattrape les paris tardifs) + somme par joueur.
+  const sums = {}
+  for (const b of bets) {
+    const r = results[b.match_id]
+    let pts = b.points
+    if (r) {
+      const exp = betPoints(b.home_score, b.away_score, r.home_score, r.away_score)
+      if (b.points !== exp || !b.locked) {
+        await sb(`bets?id=eq.${b.id}`, {
+          method: 'PATCH', headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({ points: exp, locked: true }),
+        })
+        pts = exp
       }
     }
+    sums[b.user_id] = (sums[b.user_id] || 0) + (pts || 0)
   }
-  // 2) profiles.score = somme des points de chaque joueur.
+
+  // 2) profiles.score = somme des points (écrit uniquement les profils qui changent).
   const pr = await sb('profiles?select=id,score')
   if (!pr.ok) return 0
-  const profiles = await pr.json()
   let fixed = 0
-  for (const p of profiles) {
-    const br = await sb(`bets?user_id=eq.${p.id}&select=points`)
-    if (!br.ok) continue
-    const total = (await br.json()).reduce((s, r) => s + (r.points || 0), 0)
+  for (const p of await pr.json()) {
+    const total = sums[p.id] || 0
     if (total !== p.score) {
       await sb(`profiles?id=eq.${p.id}`, {
         method: 'PATCH', headers: { Prefer: 'return=minimal' },
