@@ -50,3 +50,5 @@ console.log(`→ Profils dont score ≠ somme des points : ${drift}`)
 // ── 4) Classement actuel ──
 console.log('\n🏆 Classement (top 15) :')
 profiles.sort((a, b) => b.score - a.score).slice(0, 15).forEach((p, i) => console.log(`  ${String(i + 1).padStart(2)}. ${p.pseudo} — ${p.score} (somme réelle ${sums[p.id] || 0})`))
+
+// re-run post-fix
