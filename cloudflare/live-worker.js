@@ -8,7 +8,7 @@
 // fenêtre de jeu (coup d'envoi → fin). Hors match, le cron sort immédiatement après
 // 2 lectures Supabase (gratuites) → ZÉRO appel à l'API football. Cette fenêtre est
 // déterminée à partir de match_schedule (kickoff) et de match_results (déjà réglé).
-import { buildFixtureMap, orient, settleViaRest, reconcileScores, betPoints, SETTLE_GRACE_MS } from '../scripts/wc-map.mjs'
+import { buildFixtureMap, orient, settleViaRest, reconcileScores, betPoints, shortOf, SETTLE_GRACE_MS } from '../scripts/wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const API = 'https://v3.football.api-sports.io'
@@ -102,6 +102,42 @@ async function buildContext(api, sb) {
     const all = (await api('/fixtures?league=1&season=2026')).response || []
     return { map: buildFixtureMap(all, validIds).map, all }
   } catch { return { map: new Map(), all: [] } }
+}
+
+// Auto-remplissage du bracket (phases éliminatoires) depuis l'API. Pour chaque affiche
+// éliminatoire dont les DEUX équipes sont déjà connues (et mappée à un de nos match_id),
+// on écrit knockout_teams (source 'api'). Réutilise les fixtures DÉJÀ chargées (`all`)
+// → ZÉRO appel API supplémentaire. Ne touche jamais une affectation manuelle (source 'admin').
+async function syncKnockoutTeams(sb, all, fxMap) {
+  try {
+    const want = []
+    for (const f of (all || [])) {
+      const id = fxMap.get(f.fixture?.id)
+      if (!id || !/^(r32|r16|qf|sf|3rd|final)/.test(id)) continue
+      const hs = shortOf(f.teams?.home?.name)
+      const as = shortOf(f.teams?.away?.name)
+      if (!hs || !as) continue   // équipes pas encore déterminées → on ne touche pas
+      want.push({ id, hs, as })
+    }
+    if (!want.length) return 0
+    const er = await sb('knockout_teams?select=match_id,source,home_short,away_short')
+    if (!er.ok) return 0   // table absente (SQL pas encore appliqué) → on ignore en silence
+    const existing = new Map()
+    for (const r of await er.json()) existing.set(r.match_id, r)
+    const rows = []
+    for (const w of want) {
+      const ex = existing.get(w.id)
+      if (ex && ex.source === 'admin') continue                              // override manuel prioritaire
+      if (ex && ex.home_short === w.hs && ex.away_short === w.as) continue    // déjà à jour
+      rows.push({ match_id: w.id, home_short: w.hs, away_short: w.as, source: 'api', updated_at: new Date().toISOString() })
+    }
+    if (!rows.length) return 0
+    await sb('knockout_teams?on_conflict=match_id', {
+      method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(rows),
+    })
+    return rows.length
+  } catch { return 0 }
 }
 
 async function settleOne(api, sb, id, f, haveGoals) {
@@ -200,6 +236,8 @@ async function runLoop(env) {
   // Aucun match dans sa fenêtre de jeu → on s'arrête AVANT tout appel à l'API football.
   if (!(await hasActiveMatch(sb))) return
   const { map: fxMap, all } = await buildContext(api, sb)
+  // Bracket : remplit les affiches éliminatoires connues (réutilise `all`, zéro appel API).
+  try { await syncKnockoutTeams(sb, all, fxMap) } catch (e) { console.log('ko-sync err', String(e)) }
   try { await settleAll(api, sb, all, fxMap) } catch (e) { console.log('settle err', String(e)) }
   // Classement réconcilié après règlement (idempotent, insensible aux courses).
   try { await reconcileScores(sb) } catch (e) { console.log('reconcile err', String(e)) }
@@ -246,6 +284,27 @@ async function handleAdminBet(path, req, env) {
     return jsonRes({ bet: row ? { home: row.home_score, away: row.away_score } : null })
   }
 
+  // /admin/set-knockout : affecte (ou efface) les équipes d'une affiche éliminatoire.
+  // Marquée source 'admin' → prioritaire, jamais écrasée par l'auto-sync API.
+  if (path === '/admin/set-knockout') {
+    const matchId = body.matchId
+    if (!matchId) return jsonRes({ error: 'matchId manquant.' }, 400)
+    const hs = body.homeShort ? String(body.homeShort).toUpperCase() : null
+    const as = body.awayShort ? String(body.awayShort).toUpperCase() : null
+    if (!hs && !as) {
+      // Effacement → on supprime la ligne (retour à TBD, l'API pourra re-remplir).
+      const del = await sb(`knockout_teams?match_id=eq.${matchId}`, { method: 'DELETE', headers: { Prefer: 'return=minimal' } })
+      if (!del.ok) return jsonRes({ error: `Échec (${del.status}).` }, 500)
+      return jsonRes({ ok: true, cleared: true })
+    }
+    const up = await sb('knockout_teams?on_conflict=match_id', {
+      method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify([{ match_id: matchId, home_short: hs, away_short: as, source: 'admin', updated_at: new Date().toISOString() }]),
+    })
+    if (!up.ok) return jsonRes({ error: `Échec écriture (${up.status}). Table knockout_teams créée ?` }, 500)
+    return jsonRes({ ok: true })
+  }
+
   // /admin/set-bet
   const { userId, matchId, home, away, homeScore, awayScore, stage } = body
   if (!userId || !matchId || homeScore == null || awayScore == null || homeScore < 0 || awayScore < 0) {
@@ -270,7 +329,7 @@ export default {
     const url = new URL(req.url)
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS })
     // API admin (édition des pronos) — indépendante du suivi live.
-    if (url.pathname === '/admin/get-bet' || url.pathname === '/admin/set-bet') {
+    if (url.pathname === '/admin/get-bet' || url.pathname === '/admin/set-bet' || url.pathname === '/admin/set-knockout') {
       return handleAdminBet(url.pathname, req, env)
     }
     const { api, sb, ok } = clients(env)
@@ -282,6 +341,8 @@ export default {
       return new Response('aucun match en cours — appel API ignoré (ajoute ?force=1 pour forcer)')
     }
     const { map: fxMap, all } = await buildContext(api, sb)
+    let ko = 0
+    try { ko = await syncKnockoutTeams(sb, all, fxMap) } catch { /* ignore */ }
     const settled = await settleAll(api, sb, all, fxMap)
     const n = await poll(api, sb, fxMap)
     // Réconciliation du classement à CHAQUE ping (recalcul désormais léger) :
@@ -289,6 +350,6 @@ export default {
     // c'est ici (ou le cron) qui remet score = somme des points, sans dépendre du cron.
     let reconciled = 0
     try { reconciled = await reconcileScores(sb) } catch { /* ignore */ }
-    return new Response(`live: ${n} (map: ${fxMap.size}, settled: ${settled}, reconciled: ${reconciled})`)
+    return new Response(`live: ${n} (map: ${fxMap.size}, settled: ${settled}, reconciled: ${reconciled}, ko: ${ko})`)
   },
 }

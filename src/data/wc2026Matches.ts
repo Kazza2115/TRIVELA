@@ -331,6 +331,35 @@ export const KNOCKOUT_MATCHES: Match[] = [
 
 export const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
 
+// ─── Équipes : helpers pour l'éditeur de bracket admin + fusion des qualifiés ──
+export const TBD_TEAM = TBD
+// Toutes les sélections (hors TBD), triées par nom français pour les listes déroulantes.
+export const ALL_TEAMS: Team[] = Object.values(T).sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }))
+const TEAM_BY_SHORT: Record<string, Team> = {}
+for (const t of Object.values(T)) TEAM_BY_SHORT[t.short] = t
+/** Équipe à partir de son code court (ex. 'BRA'), ou null. */
+export function teamByShort(short?: string | null): Team | null {
+  if (!short) return null
+  return TEAM_BY_SHORT[short.toUpperCase()] ?? null
+}
+
+export type KnockoutAssign = Record<string, { home_short?: string | null; away_short?: string | null }>
+/**
+ * Applique des affectations { match_id → {home_short, away_short} } aux matchs à
+ * élimination directe : remplace les équipes TBD par les vraies quand elles sont connues.
+ * Pur (ne mute pas KNOCKOUT_MATCHES) — renvoie une nouvelle liste.
+ */
+export function knockoutWithTeams(assign: KnockoutAssign): Match[] {
+  return KNOCKOUT_MATCHES.map(m => {
+    const a = assign[m.id]
+    if (!a) return m
+    const home = teamByShort(a.home_short) ?? m.home
+    const away = teamByShort(a.away_short) ?? m.away
+    if (home === m.home && away === m.away) return m
+    return { ...m, home, away }
+  })
+}
+
 // ─── Helpers temps ──────────────────────────────────────────────────────────
 const FR_MONTHS_MAP: Record<string, number> = {
   Jan: 0, Fév: 1, Mar: 2, Avr: 3, Mai: 4, Juin: 5,

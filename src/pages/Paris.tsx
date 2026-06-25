@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import PageLayout from './PageLayout'
-import { GROUP_MATCHES, KNOCKOUT_MATCHES, GROUPS, ALL_MATCHES, matchKickoffUTC } from '../data/wc2026Matches'
+import { GROUP_MATCHES, GROUPS, ALL_MATCHES, matchKickoffUTC, knockoutWithTeams } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { saveBet, saveFavorites, getBets, subscribeToResults, getResults, getLive, subscribeToLive, getMatchGoals, getMatchCards, subscribeToMatchGoals, getMatchTrends } from '../services/auth'
+import { saveBet, saveFavorites, getBets, subscribeToResults, getResults, getLive, subscribeToLive, getMatchGoals, getMatchCards, subscribeToMatchGoals, getMatchTrends, getKnockoutTeams } from '../services/auth'
+import type { KnockoutTeamRow } from '../services/auth'
 import type { UserProfile, MatchResult, LiveScore, Scorer, RedCard, MatchTrend } from '../services/auth'
 import { track } from '../services/analytics'
 import TrendBar from '../components/TrendBar'
@@ -258,6 +259,20 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
     return () => { unsub(); clearInterval(iv) }
   }, [loadGoals])
 
+  // Affectations d'équipes des phases éliminatoires (bracket rempli au fil des qualifs).
+  const [koTeams, setKoTeams] = useState<Record<string, KnockoutTeamRow>>({})
+  useEffect(() => {
+    let alive = true
+    const load = () => getKnockoutTeams().then(t => { if (alive) setKoTeams(t) })
+    load()
+    const iv = setInterval(load, 60000)
+    return () => { alive = false; clearInterval(iv) }
+  }, [])
+  // Matchs éliminatoires avec les vraies équipes injectées (TBD sinon).
+  const koMatches = useMemo(() => knockoutWithTeams(
+    Object.fromEntries(Object.entries(koTeams).map(([id, r]) => [id, { home_short: r.home_short, away_short: r.away_short }]))
+  ), [koTeams])
+
   // Saut vers un match (bouton "EN DIRECT")
   useEffect(() => {
     if (!focus) return
@@ -318,7 +333,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
 
   const confirm = async (id: string) => {
     if (!currentUser) { onOpenAuth(); return }
-    const match = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES].find(m => m.id === id)
+    const match = [...GROUP_MATCHES, ...koMatches].find(m => m.id === id)
     if (!match) return
     const pred = predictions[id] ?? { home: 0, away: 0 }
     const { error } = await saveBet({
@@ -349,7 +364,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
   const isLiveNow = (m: Match) =>
     m.home.code !== 'un' && !results[m.id] &&
     ((!!live[m.id] && INPLAY.has(live[m.id].status)) || isMatchLive(m, now))
-  const liveList = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES].filter(isLiveNow)
+  const liveList = [...GROUP_MATCHES, ...koMatches].filter(isLiveNow)
 
   return (
     <PageLayout onBack={onBack} accentColor="#C89B3C" flag="🎯" title="PARIS"
@@ -541,6 +556,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
       {/* ══ KNOCKOUT — tableau de tournoi responsive + paris inline ═══ */}
       {tab === 'eliminatoires' && (
         <KnockoutView
+          koMatches={koMatches}
           results={results} live={live} goals={goals} cards={cards} goalFlash={goalFlash}
           predictions={predictions} confirmed={confirmed} lockErrors={lockErrors} now={now}
           trends={trends} onOpenTrends={onOpenTrends}
@@ -1138,6 +1154,7 @@ function MiniTeam({ team, score, win, dim, fire }: {
 
 // Données + handlers partagés par la vue éliminatoires (desktop & mobile).
 interface KOData {
+  koMatches: Match[]
   results: Record<string, MatchResult>
   live: Record<string, LiveScore>
   goals: Record<string, Scorer[]>
@@ -1333,7 +1350,7 @@ function RoundColumn({ label, ids, width, data, selected, onSelect }: {
       }}>{label}</div>
       <div style={{ flex: 1, display: 'grid', gridTemplateRows: `repeat(${ids.length}, 1fr)` }}>
         {ids.map(id => {
-          const m = KNOCKOUT_MATCHES.find(x => x.id === id)
+          const m = data.koMatches.find(x => x.id === id)
           if (!m) return null
           return (
             <div key={id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 2px' }}>
@@ -1353,9 +1370,9 @@ function DesktopBracket({ data }: { data: KOData }) {
   const W = 118   // largeur d'une colonne de matchs
   const CW = 22   // largeur d'une colonne de connecteurs
   const BR_H = 588
-  const finalMatch = KNOCKOUT_MATCHES.find(m => m.id === 'final')!
-  const thirdMatch = KNOCKOUT_MATCHES.find(m => m.id === '3rd')!
-  const sel = KNOCKOUT_MATCHES.find(m => m.id === selected)
+  const finalMatch = data.koMatches.find(m => m.id === 'final')!
+  const thirdMatch = data.koMatches.find(m => m.id === '3rd')!
+  const sel = data.koMatches.find(m => m.id === selected)
   const colP = { data, selected, onSelect }
   const minW = 8 * W + 8 * CW + W + 16
   return (
@@ -1464,7 +1481,7 @@ function MobileRounds({ data }: { data: KOData }) {
       </div>
       <div style={grid}>
         {tab.ids.map(id => {
-          const m = KNOCKOUT_MATCHES.find(x => x.id === id)
+          const m = data.koMatches.find(x => x.id === id)
           if (!m) return null
           return (
             <BracketCell key={id} match={m} data={data}

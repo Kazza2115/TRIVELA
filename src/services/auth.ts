@@ -700,6 +700,40 @@ export async function adminSetBet(params: {
   } catch { return { error: 'Erreur réseau.' } }
 }
 
+// ─── Bracket éliminatoire : affectations d'équipes (lecture publique) ──────────
+export type KnockoutTeamRow = { home_short: string | null; away_short: string | null; source?: string }
+
+/** Affectations d'équipes des phases éliminatoires : { match_id → {home_short, away_short} }. */
+export async function getKnockoutTeams(): Promise<Record<string, KnockoutTeamRow>> {
+  if (!supabaseConfigured) return {}
+  try {
+    const res = await fetch(`${SUPA_URL}/rest/v1/knockout_teams?select=match_id,home_short,away_short,source`, {
+      headers: { apikey: SUPA_ANON, Authorization: `Bearer ${SUPA_ANON}` },
+    })
+    if (!res.ok) return {}
+    const out: Record<string, KnockoutTeamRow> = {}
+    for (const r of await res.json()) out[r.match_id] = { home_short: r.home_short, away_short: r.away_short, source: r.source }
+    return out
+  } catch { return {} }
+}
+
+/** Admin : fixe (ou efface, si shorts nuls) les équipes d'une affiche éliminatoire. */
+export async function adminSetKnockout(params: {
+  matchId: string; homeShort: string | null; awayShort: string | null
+}): Promise<{ error?: string }> {
+  if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
+  await ensureFreshToken()
+  try {
+    const res = await fetch(`${ADMIN_WORKER}/admin/set-knockout`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: _jwt, matchId: params.matchId, homeShort: params.homeShort, awayShort: params.awayShort }),
+    })
+    const d = await res.json().catch(() => ({}))
+    if (res.ok && d.ok) return {}
+    return { error: d.error || `Échec (${res.status}).` }
+  } catch { return { error: 'Erreur réseau.' } }
+}
+
 // ─── Real-time subscriptions ──────────────────────────────────────────────────
 
 export interface MatchResult {
