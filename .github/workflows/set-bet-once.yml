@@ -20,6 +20,6 @@ jobs:
           BET_MATCH_ID: 'gD-md3-par-aus'
           BET_HOME_NAME: 'Paraguay'
           BET_AWAY_NAME: 'Australie'
-          BET_HOME: '0'
-          BET_AWAY: '0'
+          BET_HOME: '1'
+          BET_AWAY: '1'
           BET_STAGE: 'Groupe D · J3'
