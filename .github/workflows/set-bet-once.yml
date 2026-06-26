@@ -1,0 +1,25 @@
+name: Set bet once (ponctuel)
+on:
+  push:
+    branches: [claude/jolly-archimedes-53jcrc]
+    paths: ['scripts/set-bet-once.mjs', '.github/workflows/set-bet-once.yml']
+  workflow_dispatch:
+jobs:
+  setbet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/set-bet-once.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BET_PSEUDO: 'KAZA'
+          BET_MATCH_ID: 'gD-md3-par-aus'
+          BET_HOME_NAME: 'Paraguay'
+          BET_AWAY_NAME: 'Australie'
+          BET_HOME: '0'
+          BET_AWAY: '0'
+          BET_STAGE: 'Groupe D · J3'
