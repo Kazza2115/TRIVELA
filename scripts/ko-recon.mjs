@@ -3,6 +3,7 @@
 //   • classements de groupe (qui est 1er/2e, qualifié ?)
 //   • fixtures à élimination directe : équipes réelles (ou placeholder) + mapping match_id
 import { buildFixtureMap, shortOf, shortToGroup } from './wc-map.mjs'
+// Relance 2026-06-27 : état du bracket après (presque) toute la phase de groupes.
 
 const KEY = process.env.API_FOOTBALL_KEY
 if (!KEY) { console.error('❌ API_FOOTBALL_KEY absent'); process.exit(1) }
