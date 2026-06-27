@@ -1,4 +1,5 @@
 // Recalcule profiles.score = somme des points (réconciliation). Bouton manuel + appel.
+// Relance manuelle 2026-06-27.
 import { reconcileScores } from './wc-map.mjs'
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY
