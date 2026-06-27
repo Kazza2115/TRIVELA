@@ -13,13 +13,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # KAZA · Belgique-Nouvelle-Zélande (J3) : Belgique 3-1 → orientation match NZL 1 - BEL 3
       - run: node scripts/set-bet-once.mjs
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BET_PSEUDO: 'KAZA'
-          BET_MATCH_ID: 'gD-md3-par-aus'
-          BET_HOME_NAME: 'Paraguay'
-          BET_AWAY_NAME: 'Australie'
+          BET_MATCH_ID: 'gG-md3-nzl-bel'
+          BET_HOME_NAME: 'Nouvelle-Zélande'
+          BET_AWAY_NAME: 'Belgique'
           BET_HOME: '1'
+          BET_AWAY: '3'
+          BET_STAGE: 'Groupe G · J3'
+      # KAZA · Égypte-Iran (J3) : Égypte 2-1
+      - run: node scripts/set-bet-once.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BET_PSEUDO: 'KAZA'
+          BET_MATCH_ID: 'gG-md3-egy-irn'
+          BET_HOME_NAME: 'Égypte'
+          BET_AWAY_NAME: 'Iran'
+          BET_HOME: '2'
           BET_AWAY: '1'
-          BET_STAGE: 'Groupe D · J3'
+          BET_STAGE: 'Groupe G · J3'
