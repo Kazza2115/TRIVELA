@@ -153,6 +153,20 @@ html, body {
 }
 .globe-flag-out { animation: globeExtinguish 1.3s ease-out forwards; }
 
+/* Pays dont l'INTÉRIEUR s'embrase pendant son match (sur le remplissage feu). */
+@keyframes globeCountryFire {
+  0%, 100% { filter: brightness(1)    drop-shadow(0 0 4px rgba(255,120,20,.85)); }
+  50%      { filter: brightness(1.38) drop-shadow(0 0 10px rgba(255,175,45,1));  }
+}
+.globe-country-fire { animation: globeCountryFire 0.46s ease-in-out infinite; }
+
+/* Pays ÉLIMINÉ / perdant : éteint (gris sombre). Filtre seul → ne touche pas le remplissage. */
+@keyframes globeCountryOut {
+  0%   { filter: grayscale(0) brightness(1);    }
+  100% { filter: grayscale(1) brightness(0.34); }
+}
+.globe-country-out { animation: globeCountryOut 1.4s ease-out forwards; }
+
 /* Le prono confirmé glisse vers le bas en rétrécissant pour laisser place au vrai score */
 @keyframes predShrinkDown {
   0%   { transform: translateY(-24px) scale(1.8); opacity: 0; }

@@ -3,9 +3,9 @@ import * as d3 from 'd3'
 import { feature } from 'topojson-client'
 import type { Topology } from 'topojson-specification'
 import CountryPopup from './CountryPopup'
-import { todaysMatches, matchKickoffUTC, teamColor } from '../data/wc2026Matches'
+import { todaysMatches, matchKickoffUTC, teamColor, teamByShort } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { getBets, getLive, getResults, subscribeToLive } from '../services/auth'
+import { getBets, getLive, getResults, subscribeToLive, getKnockoutTeams } from '../services/auth'
 import type { UserProfile } from '../services/auth'
 import { COMPETITIONS } from '../data/continentStats'
 
@@ -227,6 +227,8 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
   const arcScoreRef     = useRef<Map<string, { h: number; a: number }>>(new Map())   // matchId → { home, away } (final ou live)
   const matchFinalRef   = useRef<Map<string, { h: number; a: number }>>(new Map())   // résultats FINAUX seuls (→ gagnant/perdant)
   const matchLiveStatusRef = useRef<Map<string, string>>(new Map())                  // matchId → statut live (en jeu ?)
+  const koTeamsRef      = useRef<Record<string, { home_short: string | null; away_short: string | null }>>({})  // bracket
+  const countryFxRef    = useRef<Map<number, 'fire' | 'out' | 'normal'>>(new Map())  // dernier état peint par pays
   const openMatchCardRef  = useRef<(m: Match) => void>(() => {})
   const [popup,              setPopup]              = useState<PopupState | null>(null)
   const [isLoaded,           setIsLoaded]           = useState(false)
@@ -450,6 +452,15 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
     return () => { on = false; unsub(); clearInterval(iv) }
   }, [])
 
+  // Bracket (affectations d'équipes des phases éliminatoires) → savoir qui est encore en lice.
+  useEffect(() => {
+    let on = true
+    const load = () => getKnockoutTeams().then(rows => { if (on) koTeamsRef.current = rows }).catch(() => {})
+    load()
+    const iv = setInterval(load, 60000)
+    return () => { on = false; clearInterval(iv) }
+  }, [])
+
   // Wait for the container to have real pixel dimensions before initialising D3.
   // Root cause of the "tiny globe" bug: on iOS Safari (and occasionally Chrome)
   // the flex layout hasn't resolved yet when the first useEffect fires.
@@ -513,6 +524,14 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
 
     // ── Defs ──────────────────────────────────────────────────────────
     const defs = svg.append('defs')
+
+    // Remplissage « feu » d'un pays en match (chaud en bas, braises en haut).
+    const fireGrad = defs.append('radialGradient').attr('id', 'fire-grad')
+      .attr('cx', '0.5').attr('cy', '0.92').attr('r', '0.95')
+    fireGrad.append('stop').attr('offset', '0%').attr('stop-color', '#FFF1A8')
+    fireGrad.append('stop').attr('offset', '32%').attr('stop-color', '#FF9A1F')
+    fireGrad.append('stop').attr('offset', '68%').attr('stop-color', '#E8431E')
+    fireGrad.append('stop').attr('offset', '100%').attr('stop-color', '#7A1003')
 
     // Faisceau d'hologramme (gagnant projeté) — dégradé vertical cyan qui s'estompe vers le haut.
     const beamGrad = defs.append('linearGradient').attr('id', 'holo-beam-grad')
@@ -709,7 +728,7 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
         todayByCountryRef.current = byCountry
 
         const FLAG_W = 18, FLAG_H = 12, POLE_H = 15
-        const HOLO_LIFT = POLE_H + FLAG_H + 18
+        const HOLO_LIFT = POLE_H + FLAG_H + 40   // gagnant projeté HAUT (grand hologramme)
         arcs.forEach((arc, i) => {
           arc.flags.forEach((fl, s) => {
             // ── Pays EN FEU (match en cours) — flammes aux couleurs du pays, derrière le drapeau ──
@@ -739,10 +758,10 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
             holo.append('ellipse').attr('cx', 0).attr('cy', 0).attr('rx', 7).attr('ry', 2.4)
               .attr('fill', '#7FE9FF').attr('opacity', 0.25)
             holo.append('path').attr('d',
-              `M-2,0 L${(-FLAG_W * 0.75).toFixed(1)},${-HOLO_LIFT} L${(FLAG_W * 0.75).toFixed(1)},${-HOLO_LIFT} L2,0 Z`)
+              `M-2.5,0 L${(-FLAG_W * 1.15).toFixed(1)},${-HOLO_LIFT} L${(FLAG_W * 1.15).toFixed(1)},${-HOLO_LIFT} L2.5,0 Z`)
               .attr('fill', 'url(#holo-beam-grad)')
             const holoAnim = holo.append('g').attr('class', 'globe-holo-anim')
-            const HW = FLAG_W * 1.25, HH = FLAG_H * 1.25
+            const HW = FLAG_W * 2.1, HH = FLAG_H * 2.1   // grand drapeau projeté
             holoAnim.append('image').attr('class', 'globe-holo-flicker')
               .attr('href', `https://flagcdn.com/w160/${fl.code}.png`).attr('preserveAspectRatio', 'none')
               .attr('x', -HW / 2).attr('y', -HOLO_LIFT - HH).attr('width', HW).attr('height', HH)
@@ -831,6 +850,64 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
           })
         }
 
+        // ── Mise en scène des pays : feu (match en cours), éteint (éliminé/perdant) ──
+        // L'intérieur du pays s'embrase pendant son match ; les éliminés (poules ou KO) et
+        // les perdants restent éteints. Diff d'état → on ne repeint qu'au changement (n'écrase
+        // pas les surbrillances au survol). Le scintillement/extinction est géré en CSS.
+        const idOfShort = (s?: string | null): number | undefined => {
+          if (!s) return undefined
+          const t = teamByShort(s)
+          return t ? CODE_TO_ID[t.code] : undefined
+        }
+        const paintCountries = () => {
+          const ko = koTeamsRef.current
+          const koIds = Object.keys(ko)
+          if (!koIds.length) return   // bracket pas encore chargé → on ne touche à rien
+          const nowMs = Date.now()
+          const reached = new Set<number>()   // pays ayant atteint les éliminatoires
+          const losers  = new Set<number>()   // perdants d'une affiche KO déjà jouée
+          for (const mid of koIds) {
+            if (!/^(r32|r16|qf|sf|final|3rd)/.test(mid)) continue
+            const row = ko[mid]
+            const hid = idOfShort(row.home_short), aid = idOfShort(row.away_short)
+            if (hid != null) reached.add(hid)
+            if (aid != null) reached.add(aid)
+            const fin = matchFinalRef.current.get(mid)
+            if (fin) {
+              if (fin.h > fin.a && aid != null) losers.add(aid)
+              else if (fin.a > fin.h && hid != null) losers.add(hid)
+            }
+          }
+          const burning = new Set<number>()   // pays dont l'affiche du jour est EN DIRECT
+          for (const arc of matchArcsRef.current) {
+            if (matchFinalRef.current.get(arc.match.id)) continue
+            const k = matchKickoffUTC(arc.match)
+            const lst = matchLiveStatusRef.current.get(arc.match.id)
+            const inWin = k != null && nowMs >= k && nowMs < k + 135 * 60 * 1000
+            if ((lst != null && INPLAY_STATUS.includes(lst)) || inWin) {
+              const hid = CODE_TO_ID[arc.match.home.code], aid = CODE_TO_ID[arc.match.away.code]
+              if (hid != null) burning.add(hid)
+              if (aid != null) burning.add(aid)
+            }
+          }
+          qualifiedIds.forEach(id => {
+            const alive = reached.has(id) && !losers.has(id)
+            const desired: 'fire' | 'out' | 'normal' = burning.has(id) ? 'fire' : (alive ? 'normal' : 'out')
+            if (countryFxRef.current.get(id) === desired) return
+            countryFxRef.current.set(id, desired)
+            const sel = svg.selectAll(`.country-${id}`)
+            if (sel.empty()) return
+            if (desired === 'fire') {
+              sel.attr('fill', 'url(#fire-grad)').classed('globe-country-out', false).classed('globe-country-fire', true)
+            } else if (desired === 'out') {
+              sel.attr('fill', landColor(id)).classed('globe-country-fire', false).classed('globe-country-out', true)
+            } else {
+              sel.attr('fill', landColor(id)).classed('globe-country-fire', false).classed('globe-country-out', false)
+            }
+          })
+        }
+        paintCountries()
+
 setIsLoaded(true)
 
         if (pendingCenterRef.current !== undefined) {
@@ -840,6 +917,7 @@ setIsLoaded(true)
 
         // ── Animation loop ──────────────────────────────────────────
         let prevT = 0
+        let paintTick = 0
         let prevR0 = NaN, prevR1 = NaN, prevProjScale = NaN
         const animate = (t: number) => {
           // Dive animation: D3 projection zoom triggered by clicking Explorer in the popup.
@@ -1033,6 +1111,7 @@ setIsLoaded(true)
           }
 
           updateArcs(t)
+          if (++paintTick % 40 === 0) paintCountries()   // états feu/éteint (~0.7 s) — CSS gère l'anim
           rafRef.current = requestAnimationFrame(animate)
         }
         rafRef.current = requestAnimationFrame(animate)
