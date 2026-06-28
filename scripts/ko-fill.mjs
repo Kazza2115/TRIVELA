@@ -63,7 +63,8 @@ for (const f of ko) {
   const hn = f.teams?.home?.name, an = f.teams?.away?.name
   const hs = shortOf(hn), as = shortOf(an)
   const d = (f.fixture?.date || '').slice(0, 16)
-  console.log(`  [${(id || '—').padEnd(7)}] ${d}  ${(hn || 'TBD')} (${hs || '??'}) vs ${(an || 'TBD')} (${as || '??'})  | round="${f.league?.round}"`)
+  const vn = f.fixture?.venue?.name || '?', vc = f.fixture?.venue?.city || '?'
+  console.log(`  [${(id || '—').padEnd(7)}] ${d}  ${(hn || 'TBD')} (${hs || '??'}) vs ${(an || 'TBD')} (${as || '??'})  @ ${vn} — ${vc}  | round="${f.league?.round}"`)
   if (id && /^(r32|r16|qf|sf|3rd|final)/.test(id) && hs && as) want.push({ id, hs, as })
 }
 console.log(`\n→ ${want.length} affiche(s) avec les DEUX équipes connues (candidates à l'écriture).`)
