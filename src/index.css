@@ -152,13 +152,13 @@ html, body {
 }
 .globe-flag-out { animation: globeExtinguish 1.3s ease-out forwards; }
 
-/* Pays en match : on garde sa couleur normale + un halo chaud discret (pas de
-   remplissage feu brut) — ce sont les flammes autour du drapeau qui font le feu. */
+/* Pays EN FEU : sa surface (braises) palpite + halo chaud ; les flammes sont dessinées
+   par-dessus, réparties sur tout le pays. */
 @keyframes globeCountryFire {
-  0%, 100% { filter: brightness(1.03) drop-shadow(0 0 5px rgba(255,120,20,.5));  }
-  50%      { filter: brightness(1.13) drop-shadow(0 0 11px rgba(255,160,40,.8)); }
+  0%, 100% { filter: brightness(1)    drop-shadow(0 0 6px rgba(255,110,20,.7));  }
+  50%      { filter: brightness(1.22) drop-shadow(0 0 15px rgba(255,160,40,.95)); }
 }
-.globe-country-fire { animation: globeCountryFire 0.95s ease-in-out infinite; }
+.globe-country-fire { animation: globeCountryFire 0.9s ease-in-out infinite; }
 
 /* Pays ÉLIMINÉ / perdant : éteint (gris sombre). Filtre seul → ne touche pas le remplissage. */
 @keyframes globeCountryOut {

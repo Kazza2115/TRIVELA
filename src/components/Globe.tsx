@@ -533,6 +533,13 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
     flameGrad.append('stop').attr('offset', '76%').attr('stop-color', '#FFB52E')
     flameGrad.append('stop').attr('offset', '100%').attr('stop-color', '#FFF3B0')
 
+    // Remplissage « braises » d'un pays en feu (surface chaude sous les flammes).
+    const emberGrad = defs.append('radialGradient').attr('id', 'ember-grad')
+      .attr('cx', '0.5').attr('cy', '0.78').attr('r', '0.85')
+    emberGrad.append('stop').attr('offset', '0%').attr('stop-color', '#FF7A1E')
+    emberGrad.append('stop').attr('offset', '45%').attr('stop-color', '#D8351A')
+    emberGrad.append('stop').attr('offset', '100%').attr('stop-color', '#6E1206')
+
     // Faisceau d'hologramme (gagnant projeté) — dégradé vertical cyan qui s'estompe vers le haut.
     const beamGrad = defs.append('linearGradient').attr('id', 'holo-beam-grad')
       .attr('x1', '0').attr('y1', '1').attr('x2', '0').attr('y2', '0')   // bas → haut
@@ -832,8 +839,25 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
               pole.attr('x1', x).attr('y1', y).attr('x2', x).attr('y2', y - POLE_H).attr('opacity', 1)
               img.attr('x', fx).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 1)
               edge.attr('x', fx).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 0.9)
-              // Feu pendant le match : cluster centré sur le DRAPEAU (pas sur le pied du mât).
-              flame.attr('transform', `translate(${x},${y - POLE_H - FLAG_H / 2})`).attr('opacity', isLive ? 1 : 0)
+              // Feu sur la SURFACE DU PAYS (sa forme sur le globe) : on étale le cluster de
+              // flammes sur toute la largeur du pays, base vers le bas de son tracé.
+              let burning = false
+              if (isLive) {
+                const cid = CODE_TO_ID[fl.code]
+                const cn = cid != null ? (svg.select(`.country-${cid}`).node() as SVGGraphicsElement | null) : null
+                if (cn) {
+                  try {
+                    const bb = cn.getBBox()
+                    if (bb.width > 0.5 && bb.height > 0.5) {
+                      const fs = Math.max(0.9, Math.min(3.2, bb.width / 18))
+                      flame.attr('transform', `translate(${bb.x + bb.width / 2},${bb.y + bb.height * 0.86}) scale(${fs})`)
+                        .attr('opacity', 1)
+                      burning = true
+                    }
+                  } catch { /* tracé vide (pays au dos du globe) */ }
+                }
+              }
+              if (!burning) flame.attr('opacity', 0)
               // Perdant qui s'éteint (vire au gris/sombre) ; gagnant projeté en hologramme.
               const isLoser = finished && winnerSide >= 0 && s !== winnerSide
               img.classed('globe-flag-out', isLoser)
@@ -908,8 +932,8 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
             const sel = svg.selectAll(`.country-${id}`)
             if (sel.empty()) return
             if (desired === 'fire') {
-              // Couleur normale + halo chaud discret (le feu vient des flammes autour du drapeau).
-              sel.attr('fill', landColor(id)).classed('globe-country-out', false).classed('globe-country-fire', true)
+              // La SURFACE du pays s'embrase : remplissage braises + halo chaud (flammes par-dessus).
+              sel.attr('fill', 'url(#ember-grad)').classed('globe-country-out', false).classed('globe-country-fire', true)
             } else if (desired === 'out') {
               sel.attr('fill', landColor(id)).classed('globe-country-fire', false).classed('globe-country-out', true)
             } else {
