@@ -222,7 +222,9 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
   const matchFinalRef   = useRef<Map<string, { h: number; a: number }>>(new Map())   // résultats FINAUX seuls (→ gagnant/perdant)
   const matchLiveStatusRef = useRef<Map<string, string>>(new Map())                  // matchId → statut live (en jeu ?)
   const koTeamsRef      = useRef<Record<string, { home_short: string | null; away_short: string | null }>>({})  // bracket
-  const countryFxRef    = useRef<Map<number, 'fire' | 'out' | 'normal'>>(new Map())  // dernier état peint par pays
+  const koSigRef        = useRef<string>('')                         // signature du bracket (rebuild si change)
+  const renderMarkersRef = useRef<() => void>(() => {})              // (re)dessine les affiches du globe
+  const countryFxRef    = useRef<Map<number, 'out' | 'normal'>>(new Map())  // dernier état peint par pays
   const openMatchCardRef  = useRef<(m: Match) => void>(() => {})
   const [popup,              setPopup]              = useState<PopupState | null>(null)
   const [isLoaded,           setIsLoaded]           = useState(false)
@@ -449,7 +451,14 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
   // Bracket (affectations d'équipes des phases éliminatoires) → savoir qui est encore en lice.
   useEffect(() => {
     let on = true
-    const load = () => getKnockoutTeams().then(rows => { if (on) koTeamsRef.current = rows }).catch(() => {})
+    const load = () => getKnockoutTeams().then(rows => {
+      if (!on) return
+      const sig = JSON.stringify(rows)
+      if (sig === koSigRef.current) return       // inchangé → on ne reconstruit pas
+      koSigRef.current = sig
+      koTeamsRef.current = rows
+      renderMarkersRef.current()                  // re-dessine les affiches avec les vraies équipes
+    }).catch(() => {})
     load()
     const iv = setInterval(load, 60000)
     return () => { on = false; clearInterval(iv) }
@@ -690,70 +699,86 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
           const c = d3.geoCentroid(getLargestPolygon(f) as any)
           return (isFinite(c[0]) && isFinite(c[1])) ? [c[0], c[1]] : null
         }
-        const arcs: MatchArc[] = []
-        const byCountry = new Map<number, Match>()
-        todaysMatches().forEach(m => {
-          const hId = CODE_TO_ID[m.home.code], aId = CODE_TO_ID[m.away.code]
-          // Position du drapeau : coordonnée forcée (nations UK, petites îles) sinon centroïde
-          // du pays. Une coordonnée forcée suffit → un pays absent de la géométrie (ex. Curaçao)
-          // s'affiche quand même au lieu de faire disparaître TOUT le match.
-          const hc = TEAM_LL[m.home.code] ?? (hId != null ? centroidOf(hId) : null)
-          const ac = TEAM_LL[m.away.code] ?? (aId != null ? centroidOf(aId) : null)
-          if (!hc || !ac) return
-          arcs.push({
-            match: m,
-            flags: [
-              { code: m.home.code, color: teamColor(m.home), ll: hc },
-              { code: m.away.code, color: teamColor(m.away), ll: ac },
-            ],
-          })
-          if (hId != null) byCountry.set(hId, m)
-          if (aId != null) byCountry.set(aId, m)
-        })
-        matchArcsRef.current     = arcs
-        todayByCountryRef.current = byCountry
-
         const FLAG_W = 18, FLAG_H = 12, POLE_H = 15
         const HOLO_LIFT = POLE_H + FLAG_H + 40   // gagnant projeté HAUT (grand hologramme)
-        arcs.forEach((arc, i) => {
-          arc.flags.forEach((fl, s) => {
-            gArcs.append('ellipse').attr('class', `mflag-shadow m-${i}-${s}`)
-              .attr('fill', 'rgba(0,0,0,0.4)')
-            gArcs.append('line').attr('class', `mflag-pole m-${i}-${s}`)
-              .attr('stroke', '#000000').attr('stroke-width', 1.6).attr('stroke-linecap', 'round')
-              .style('filter', 'drop-shadow(0 0 1.2px rgba(255,255,255,0.6))')
-            gArcs.append('image').attr('class', `mflag-img m-${i}-${s}`)
-              .attr('href', `https://flagcdn.com/w160/${fl.code}.png`)
-              .attr('preserveAspectRatio', 'none')
-              .style('filter', 'drop-shadow(0 2px 3px rgba(0,0,0,0.5))')
-            gArcs.append('rect').attr('class', `mflag-edge m-${i}-${s}`)
-              .attr('fill', 'none').attr('stroke', fl.color).attr('stroke-width', 1.2).attr('rx', 1)
 
-            // ── Gagnant PROJETÉ (hologramme) — faisceau + drapeau flottant, au-dessus de tout ──
-            const holo = gArcs.append('g').attr('class', `mholo m-${i}-${s}`)
-              .attr('opacity', 0).style('pointer-events', 'none')
-            holo.append('ellipse').attr('cx', 0).attr('cy', 0).attr('rx', 7).attr('ry', 2.4)
-              .attr('fill', '#7FE9FF').attr('opacity', 0.25)
-            holo.append('path').attr('d',
-              `M-2.5,0 L${(-FLAG_W * 1.15).toFixed(1)},${-HOLO_LIFT} L${(FLAG_W * 1.15).toFixed(1)},${-HOLO_LIFT} L2.5,0 Z`)
-              .attr('fill', 'url(#holo-beam-grad)')
-            const holoAnim = holo.append('g').attr('class', 'globe-holo-anim')
-            const HW = FLAG_W * 2.1, HH = FLAG_H * 2.1   // grand drapeau projeté
-            holoAnim.append('image').attr('class', 'globe-holo-flicker')
-              .attr('href', `https://flagcdn.com/w160/${fl.code}.png`).attr('preserveAspectRatio', 'none')
-              .attr('x', -HW / 2).attr('y', -HOLO_LIFT - HH).attr('width', HW).attr('height', HH)
-              .style('filter', 'drop-shadow(0 0 5px #7FE9FF) drop-shadow(0 0 10px rgba(127,233,255,0.6))')
-              .attr('opacity', 0.9)
+        // Affiches montrées sur le globe : UNIQUEMENT les matchs éliminatoires du jour, avec
+        // les vraies équipes injectées depuis le bracket (knockout_teams). Les matchs de poules
+        // ne sont plus affichés.
+        const resolveKoMatches = (): Match[] => {
+          const ko = koTeamsRef.current
+          return todaysMatches()
+            .filter(m => m.round !== 'group')
+            .map(m => {
+              const a = ko[m.id]
+              return a ? { ...m, home: teamByShort(a.home_short) ?? m.home, away: teamByShort(a.away_short) ?? m.away } : m
+            })
+            .filter(m => m.home.code !== 'un' && m.away.code !== 'un')   // équipes connues
+        }
+
+        // (Re)construit drapeaux + arcs. Rappelé quand le bracket se charge (équipes connues).
+        const renderMatchMarkers = () => {
+          gArcs.selectAll('*').remove()
+          const arcs: MatchArc[] = []
+          const byCountry = new Map<number, Match>()
+          resolveKoMatches().forEach(m => {
+            const hId = CODE_TO_ID[m.home.code], aId = CODE_TO_ID[m.away.code]
+            // Coordonnée forcée (nations UK, petites îles) sinon centroïde du pays.
+            const hc = TEAM_LL[m.home.code] ?? (hId != null ? centroidOf(hId) : null)
+            const ac = TEAM_LL[m.away.code] ?? (aId != null ? centroidOf(aId) : null)
+            if (!hc || !ac) return
+            arcs.push({ match: m, flags: [
+              { code: m.home.code, color: teamColor(m.home), ll: hc },
+              { code: m.away.code, color: teamColor(m.away), ll: ac },
+            ] })
+            if (hId != null) byCountry.set(hId, m)
+            if (aId != null) byCountry.set(aId, m)
           })
-          // Lien de match entre les deux pays + petit "VS"
-          gArcs.append('line').attr('class', `mflag-link arc-${i}`)
-            .attr('stroke', '#C89B3C').attr('stroke-width', 1.5).attr('stroke-dasharray', '3 3').attr('stroke-linecap', 'round')
-          gArcs.append('text').attr('class', `mflag-vs arc-${i}`)
-            .attr('text-anchor', 'middle').attr('dominant-baseline', 'central')
-            .attr('font-size', 9).attr('font-weight', 800).attr('letter-spacing', 0.5)
-            .attr('fill', '#FFE9B0').attr('stroke', 'rgba(0,0,0,0.85)').attr('stroke-width', 2.4)
-            .style('paint-order', 'stroke').text('VS')
-        })
+          matchArcsRef.current     = arcs
+          todayByCountryRef.current = byCountry
+
+          arcs.forEach((arc, i) => {
+            arc.flags.forEach((fl, s) => {
+              gArcs.append('ellipse').attr('class', `mflag-shadow m-${i}-${s}`)
+                .attr('fill', 'rgba(0,0,0,0.4)')
+              gArcs.append('line').attr('class', `mflag-pole m-${i}-${s}`)
+                .attr('stroke', '#000000').attr('stroke-width', 1.6).attr('stroke-linecap', 'round')
+                .style('filter', 'drop-shadow(0 0 1.2px rgba(255,255,255,0.6))')
+              gArcs.append('image').attr('class', `mflag-img m-${i}-${s}`)
+                .attr('href', `https://flagcdn.com/w160/${fl.code}.png`)
+                .attr('preserveAspectRatio', 'none')
+                .style('filter', 'drop-shadow(0 2px 3px rgba(0,0,0,0.5))')
+              gArcs.append('rect').attr('class', `mflag-edge m-${i}-${s}`)
+                .attr('fill', 'none').attr('stroke', fl.color).attr('stroke-width', 1.2).attr('rx', 1)
+
+              // ── Gagnant PROJETÉ (hologramme) — faisceau + drapeau flottant, au-dessus de tout ──
+              const holo = gArcs.append('g').attr('class', `mholo m-${i}-${s}`)
+                .attr('opacity', 0).style('pointer-events', 'none')
+              holo.append('ellipse').attr('cx', 0).attr('cy', 0).attr('rx', 7).attr('ry', 2.4)
+                .attr('fill', '#7FE9FF').attr('opacity', 0.25)
+              holo.append('path').attr('d',
+                `M-2.5,0 L${(-FLAG_W * 1.15).toFixed(1)},${-HOLO_LIFT} L${(FLAG_W * 1.15).toFixed(1)},${-HOLO_LIFT} L2.5,0 Z`)
+                .attr('fill', 'url(#holo-beam-grad)')
+              const holoAnim = holo.append('g').attr('class', 'globe-holo-anim')
+              const HW = FLAG_W * 2.1, HH = FLAG_H * 2.1   // grand drapeau projeté
+              holoAnim.append('image').attr('class', 'globe-holo-flicker')
+                .attr('href', `https://flagcdn.com/w160/${fl.code}.png`).attr('preserveAspectRatio', 'none')
+                .attr('x', -HW / 2).attr('y', -HOLO_LIFT - HH).attr('width', HW).attr('height', HH)
+                .style('filter', 'drop-shadow(0 0 5px #7FE9FF) drop-shadow(0 0 10px rgba(127,233,255,0.6))')
+                .attr('opacity', 0.9)
+            })
+            // Lien de match entre les deux pays + petit "VS"
+            gArcs.append('line').attr('class', `mflag-link arc-${i}`)
+              .attr('stroke', '#C89B3C').attr('stroke-width', 1.5).attr('stroke-dasharray', '3 3').attr('stroke-linecap', 'round')
+            gArcs.append('text').attr('class', `mflag-vs arc-${i}`)
+              .attr('text-anchor', 'middle').attr('dominant-baseline', 'central')
+              .attr('font-size', 9).attr('font-weight', 800).attr('letter-spacing', 0.5)
+              .attr('fill', '#FFE9B0').attr('stroke', 'rgba(0,0,0,0.85)').attr('stroke-width', 2.4)
+              .style('paint-order', 'stroke').text('VS')
+          })
+        }
+        renderMatchMarkers()
+        renderMarkersRef.current = renderMatchMarkers
 
         const updateArcs = (_t: number) => {
           const list = matchArcsRef.current
