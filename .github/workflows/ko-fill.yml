@@ -1,0 +1,25 @@
+name: KO fill (ponctuel)
+on:
+  push:
+    branches: [claude/world-cup-qualifiers-update-z9ehtl]
+    paths: ['scripts/ko-fill.mjs', '.github/workflows/ko-fill.yml']
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Écrire dans knockout_teams (sinon rapport seul)"
+        type: boolean
+        default: false
+jobs:
+  fill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/ko-fill.mjs
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          APPLY: ${{ (github.event_name == 'workflow_dispatch' && inputs.apply) && '1' || '' }}
