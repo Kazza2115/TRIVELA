@@ -176,6 +176,9 @@ function landColor(numericId: number): string {
 }
 
 /** Slightly brighten a hex color for the selected state. Skips url() fills. */
+// Couleur d'un pays « éteint » (éliminé) sur le globe.
+const OUT_FILL = '#222B38'
+
 function brighten(hex: string, amount = 0.13): string {
   if (hex.startsWith('url(')) return hex
   const c = d3.hsl(hex)
@@ -225,6 +228,8 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
   const koSigRef        = useRef<string>('')                         // signature du bracket (rebuild si change)
   const renderMarkersRef = useRef<() => void>(() => {})              // (re)dessine les affiches du globe
   const countryFxRef    = useRef<Map<number, 'out' | 'normal'>>(new Map())  // dernier état peint par pays
+  const eliminatedRef   = useRef<Set<number>>(new Set())                     // pays éliminés (éteints)
+  const outAnimUntilRef = useRef<Map<number, number>>(new Map())             // fin d'anim d'extinction par pays
   const openMatchCardRef  = useRef<(m: Match) => void>(() => {})
   const [popup,              setPopup]              = useState<PopupState | null>(null)
   const [isLoaded,           setIsLoaded]           = useState(false)
@@ -275,11 +280,13 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
       svg.select('.g-flags').selectAll('*').remove()
       if (prev !== null) {
         svg.select(`defs #clip-flag-${prev}`).remove()
-        // Restore featured country to its normal confederation fill
+        // Restore featured country to its normal fill — sauf s'il est éliminé (reste éteint).
         if (FEATURED[prev]) {
+          const elim = eliminatedRef.current.has(prev)
           svg.select(`.ft-country.country-${prev}`)
             .classed('selected', false)
-            .attr('fill', landColor(prev))
+            .attr('fill', elim ? OUT_FILL : landColor(prev))
+            .attr('opacity', elim ? 0.55 : 1)
             .attr('stroke', C.bgStroke)
             .attr('stroke-width', '0.5')
         }
@@ -400,7 +407,7 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
     if (svgRef.current && pathRef.current && featuresRef.current.length && ids.length) {
       const svg = d3.select(svgRef.current)
       applyContinent(ids, featuresRef.current, pathRef.current,
-        svg.select('.g-flags') as any, svg.select('defs') as any)
+        svg.select('.g-flags') as any, svg.select('defs') as any, eliminatedRef.current)
       continentCountriesRef.current = ids
       isRotRef.current = false
       velRef.current   = { x: 0, y: 0 }
@@ -881,20 +888,33 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
               else if (fin.a > fin.h && hid != null) losers.add(hid)
             }
           }
-          // Pays éliminés (sortis en poules ou perdants KO) → ÉTEINTS : on remplace directement
-          // leur couleur par un gris sombre (le filtre CSS sur un <path> SVG n'est pas fiable selon
-          // les navigateurs). Ré-appliqué à chaque passage pour résister à toute autre écriture ;
-          // les pays encore en lice ne sont touchés QUE s'ils repassent de « éteint » à « vivant ».
+          // Pays éliminés (sortis en poules ou perdants KO) → ÉTEINTS en gris sombre. À la première
+          // extinction : transition animée (cascade). Ensuite : maintien direct (robuste) une fois
+          // l'anim finie. Couleur directe (pas de filtre CSS, peu fiable sur un <path> SVG).
+          const nowMs = Date.now()
+          let outI = 0
           qualifiedIds.forEach(id => {
             const out = !(reached.has(id) && !losers.has(id))
             const sel = svg.selectAll(`.country-${id}`)
             if (sel.empty()) return
+            const prev = countryFxRef.current.get(id)
             if (out) {
-              sel.attr('fill', '#222B38').attr('opacity', 0.55)
-              countryFxRef.current.set(id, 'out')
-            } else if (countryFxRef.current.get(id) === 'out') {
-              sel.attr('fill', landColor(id)).attr('opacity', 1)
-              countryFxRef.current.set(id, 'normal')
+              eliminatedRef.current.add(id)
+              if (prev !== 'out') {
+                countryFxRef.current.set(id, 'out')
+                const delay = (outI++ % 16) * 45                       // cascade d'extinction
+                outAnimUntilRef.current.set(id, nowMs + delay + 850)
+                sel.interrupt().transition().delay(delay).duration(800).ease(d3.easeCubicInOut)
+                  .attr('fill', OUT_FILL).attr('opacity', 0.55)
+              } else if ((outAnimUntilRef.current.get(id) ?? 0) < nowMs) {
+                sel.attr('fill', OUT_FILL).attr('opacity', 0.55)       // maintien (anim terminée)
+              }
+            } else {
+              eliminatedRef.current.delete(id)
+              if (prev === 'out') {
+                countryFxRef.current.set(id, 'normal')
+                sel.interrupt().attr('fill', landColor(id)).attr('opacity', 1)
+              }
             }
           })
         }
@@ -1007,7 +1027,7 @@ setIsLoaded(true)
                 // UEFA: also inject Italy so the RAF loop tracks its ghost flag position
                 if (conf === 'UEFA') ids.push(ITALY_ID)
                 continentCountriesRef.current = ids
-                applyContinent(ids, featuresRef.current, geoPath, gFlags, defs)
+                applyContinent(ids, featuresRef.current, geoPath, gFlags, defs, eliminatedRef.current)
                 setContinentPopup({ conf })
                 // Only auto-navigate when triggered from a nav bar click
                 if (fromNav) onContinentShownRef.current?.()
@@ -1530,6 +1550,7 @@ function applyContinent(
   geoPath: d3.GeoPath,
   gFlags: d3.Selection<SVGGElement, unknown, null, undefined>,
   defs:   d3.Selection<SVGDefsElement, unknown, null, undefined>,
+  dimIds?: Set<number>,   // pays éliminés → drapeau qui reste sombre (ne s'allume pas)
 ) {
   gFlags.selectAll('*').remove()
   countryIds.forEach(id => defs.select(`#clip-flag-${id}`).remove())
@@ -1570,9 +1591,11 @@ function applyContinent(
         .transition().duration(520).ease(d3.easeCubicIn)
         .attr('opacity', 0.00)                                   // éteint
     } else {
+      // Pays éliminé → drapeau qui reste très sombre (il ne « s'allume » pas) ; sinon plein éclat.
+      const targetOp = dimIds && dimIds.has(id) ? 0.16 : 0.92
       img
         .transition().delay(i * 50).duration(500).ease(d3.easeCubicOut)
-        .attr('opacity', 0.92)
+        .attr('opacity', targetOp)
     }
   })
 }
