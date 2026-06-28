@@ -9,9 +9,34 @@ const sb = (p, i = {}) => fetch(`${SUPA_URL}/rest/v1/${p}`, {
 })
 const KO_RE = /^(r32|r16|qf|sf|3rd|final)/
 
+// Table nom FR → code court (équipes susceptibles d'apparaître en phase finale).
+const FR2SHORT = {
+  'Brésil': 'BRA', 'Argentine': 'ARG', 'Colombie': 'COL', 'Uruguay': 'URU', 'Équateur': 'ECU',
+  'Paraguay': 'PAR', 'France': 'FRA', 'Allemagne': 'GER', 'Espagne': 'ESP', 'Angleterre': 'ENG',
+  'Portugal': 'POR', 'Pays-Bas': 'NED', 'Belgique': 'BEL', 'Suisse': 'SUI', 'Croatie': 'CRO',
+  'Autriche': 'AUT', 'Norvège': 'NOR', 'Suède': 'SWE', 'Écosse': 'SCO', 'Tchéquie': 'CZE',
+  'Irlande du Nord': 'NIR', 'États-Unis': 'USA', 'Mexique': 'MEX', 'Canada': 'CAN', 'Panama': 'PAN',
+  'Haïti': 'HAI', 'Curaçao': 'CUR', 'Japon': 'JPN', 'Corée du Sud': 'KOR', 'Iran': 'IRN',
+  'Australie': 'AUS', 'Arabie Saoudite': 'SAU', 'Irak': 'IRQ', 'Jordanie': 'JOR', 'Ouzbékistan': 'UZB',
+  'Qatar': 'QAT', 'Turquie': 'TUR', 'Maroc': 'MAR', 'Sénégal': 'SEN', 'Égypte': 'EGY',
+  'Afrique du Sud': 'ZAF', 'Algérie': 'DZA', 'RD Congo': 'COD', 'Ghana': 'GHA', 'Tunisie': 'TUN',
+  'Nouvelle-Zélande': 'NZL', 'Cap-Vert': 'CPV', 'Bosnie-Herzégovine': 'BIH', 'Côte d\'Ivoire': 'CIV',
+}
+const toShort = n => FR2SHORT[(n || '').trim()] || (n || '').trim().toUpperCase()
+
 // 1) Bracket (slot → équipes).
 const ko = {}
 for (const r of await (await sb('knockout_teams?select=match_id,home_short,away_short,source')).json()) ko[r.match_id] = r
+// Index inverse : paire d'équipes {A,B} (triée) → slot du bracket.
+const pairToSlot = {}
+for (const [id, t] of Object.entries(ko)) {
+  if (t.home_short && t.away_short) pairToSlot[[t.home_short, t.away_short].sort().join('|')] = id
+}
+
+// 0) Profils (pseudo) pour rendre le rapport lisible.
+const pseudo = {}
+try { for (const p of await (await sb('profiles?select=id,pseudo')).json()) pseudo[p.id] = p.pseudo } catch {}
+const who = uid => pseudo[uid] || uid.slice(0, 8)
 
 // 2) Calendrier (slot → coup d'envoi).
 const sched = {}
@@ -49,9 +74,37 @@ for (const id of slots) {
   }
 }
 
+// === Paris mal rattachés (placés avant le réordonnancement du bracket) ===
+// Pour chaque pari KO, on déduit le slot VISÉ depuis la paire d'équipes stockée,
+// puis on le compare au slot réellement enregistré.
+console.log('\n=== PARIS MAL RATTACHÉS (slot enregistré ≠ affiche pariée) ===')
+const misslots = []
+for (const b of koBets) {
+  const hs = toShort(b.home), as = toShort(b.away)
+  const target = pairToSlot[[hs, as].sort().join('|')]
+  if (target && target !== b.match_id) misslots.push({ b, hs, as, target })
+}
+if (!misslots.length) {
+  console.log('  ✅ Aucun — tous les paris KO sont rattachés au bon slot.')
+} else {
+  // Un pari sur le slot cible existe-t-il déjà pour ce joueur ? (risque de collision si on déplace)
+  const occupied = new Set(koBets.map(b => `${b.user_id}|${b.match_id}`))
+  for (const m of misslots.sort((a, b) => a.target.localeCompare(b.target, undefined, { numeric: true }))) {
+    const coll = occupied.has(`${m.b.user_id}|${m.target}`)
+    const sc = `${m.b.home_score}-${m.b.away_score}`
+    console.log(`  ${who(m.b.user_id).padEnd(16)} ${m.hs}-${m.as} (${sc})  : ${m.b.match_id} → devrait être ${m.target}${coll ? '  ⚠️ COLLISION (pari déjà présent sur la cible)' : ''}`)
+  }
+  console.log(`\n  → ${misslots.length} pari(s) à redéplacer, ${misslots.filter(m => occupied.has(`${m.b.user_id}|${m.target}`)).length} collision(s).`)
+}
+
 console.log('\n=== SYNTHÈSE ===')
 console.log('Slots KO avec au moins 1 pari :', slots.filter(id => (byMatch[id] || []).length).length)
 console.log('Total paris KO               :', koBets.length)
 console.log('Joueurs distincts (KO)       :', new Set(koBets.map(b => b.user_id)).size)
 console.log('Joueurs distincts (tous paris):', new Set(bets.map(b => b.user_id)).size)
+// Qui n'a pas (encore) parié sur les éliminatoires ?
+const koPlayers = new Set(koBets.map(b => b.user_id))
+const allPlayers = new Set(bets.map(b => b.user_id))
+const missing = [...allPlayers].filter(u => !koPlayers.has(u))
+if (missing.length) console.log('Joueurs SANS aucun pari KO    :', missing.map(who).join(', '))
 console.log('\n✅ Terminé.')
