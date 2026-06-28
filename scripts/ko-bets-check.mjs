@@ -8,6 +8,7 @@ const sb = (p, i = {}) => fetch(`${SUPA_URL}/rest/v1/${p}`, {
   ...i, headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', ...(i.headers || {}) },
 })
 const KO_RE = /^(r32|r16|qf|sf|3rd|final)/
+// Relance 2026-06-28 : contrôle post-correction des paris mal rattachés.
 
 // Table nom FR → code court (équipes susceptibles d'apparaître en phase finale).
 const FR2SHORT = {
