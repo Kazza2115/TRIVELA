@@ -183,6 +183,13 @@ function brighten(hex: string, amount = 0.13): string {
   return c.formatHex()
 }
 
+// Statuts API « en jeu » (un match déjà réglé n'est plus en direct).
+const INPLAY_STATUS = ['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE']
+// Flammes (coordonnées locales : base à l'origine, pointe vers le haut −y).
+const FLAME_OUTER = 'M0,0 C-6,-3 -7,-13 -3,-19 C-1.5,-22 1.5,-22 3,-19 C7,-13 6,-3 0,0 Z'
+const FLAME_INNER = 'M0,-2 C-4,-4 -4.5,-11 -1.8,-15 C-0.8,-17 0.8,-17 1.8,-15 C4.5,-11 4,-4 0,-2 Z'
+const FLAME_CORE  = 'M0,-3 C-2.4,-5 -2.6,-9 -1,-12.5 C-0.3,-14 0.3,-14 1,-12.5 C2.6,-9 2.4,-5 0,-3 Z'
+
 // ─── Globe palette ─────────────────────────────────────────────────────────
 const C = {
   border:   'rgba(45, 62, 82, 0.48)',   // softer navy — visible but not harsh
@@ -218,6 +225,8 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
   const matchArcsRef    = useRef<MatchArc[]>([])
   const todayByCountryRef = useRef<Map<number, Match>>(new Map())
   const arcScoreRef     = useRef<Map<string, { h: number; a: number }>>(new Map())   // matchId → { home, away } (final ou live)
+  const matchFinalRef   = useRef<Map<string, { h: number; a: number }>>(new Map())   // résultats FINAUX seuls (→ gagnant/perdant)
+  const matchLiveStatusRef = useRef<Map<string, string>>(new Map())                  // matchId → statut live (en jeu ?)
   const openMatchCardRef  = useRef<(m: Match) => void>(() => {})
   const [popup,              setPopup]              = useState<PopupState | null>(null)
   const [isLoaded,           setIsLoaded]           = useState(false)
@@ -426,6 +435,13 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
         for (const l of liveRows) next.set(l.matchId, { h: l.homeScore, a: l.awayScore })
         for (const r of results)  next.set(r.matchId, { h: r.homeScore, a: r.awayScore })  // final = prioritaire
         arcScoreRef.current = next
+        // Pour la mise en scène (feu / hologramme / extinction) : résultats FINAUX et statut live.
+        const finals = new Map<string, { h: number; a: number }>()
+        for (const r of results) finals.set(r.matchId, { h: r.homeScore, a: r.awayScore })
+        matchFinalRef.current = finals
+        const liveStatus = new Map<string, string>()
+        for (const l of liveRows) liveStatus.set(l.matchId, l.status)
+        matchLiveStatusRef.current = liveStatus
       } catch { /* ignore */ }
     }
     load()
@@ -497,6 +513,12 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
 
     // ── Defs ──────────────────────────────────────────────────────────
     const defs = svg.append('defs')
+
+    // Faisceau d'hologramme (gagnant projeté) — dégradé vertical cyan qui s'estompe vers le haut.
+    const beamGrad = defs.append('linearGradient').attr('id', 'holo-beam-grad')
+      .attr('x1', '0').attr('y1', '1').attr('x2', '0').attr('y2', '0')   // bas → haut
+    beamGrad.append('stop').attr('offset', '0%').attr('stop-color', '#7FE9FF').attr('stop-opacity', 0.55)
+    beamGrad.append('stop').attr('offset', '100%').attr('stop-color', '#7FE9FF').attr('stop-opacity', 0)
 
     // Ocean — deep dark gradient
     const sphereGrad = defs.append('radialGradient').attr('id', 'sphere-grad')
@@ -687,8 +709,18 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
         todayByCountryRef.current = byCountry
 
         const FLAG_W = 18, FLAG_H = 12, POLE_H = 15
+        const HOLO_LIFT = POLE_H + FLAG_H + 18
         arcs.forEach((arc, i) => {
           arc.flags.forEach((fl, s) => {
+            // ── Pays EN FEU (match en cours) — flammes aux couleurs du pays, derrière le drapeau ──
+            const flame = gArcs.append('g').attr('class', `mflame m-${i}-${s}`)
+              .attr('opacity', 0).style('pointer-events', 'none')
+            const flameAnim = flame.append('g').attr('class', `globe-flame-anim${s ? ' s1' : ''}`)
+            flameAnim.append('path').attr('d', FLAME_OUTER).attr('fill', fl.color)
+              .attr('opacity', 0.9).style('filter', `drop-shadow(0 0 3px ${fl.color})`)
+            flameAnim.append('path').attr('d', FLAME_INNER).attr('fill', brighten(fl.color, 0.30))
+            flameAnim.append('path').attr('d', FLAME_CORE).attr('fill', '#FFF6E0').attr('opacity', 0.92)
+
             gArcs.append('ellipse').attr('class', `mflag-shadow m-${i}-${s}`)
               .attr('fill', 'rgba(0,0,0,0.4)')
             gArcs.append('line').attr('class', `mflag-pole m-${i}-${s}`)
@@ -700,6 +732,22 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
               .style('filter', 'drop-shadow(0 2px 3px rgba(0,0,0,0.5))')
             gArcs.append('rect').attr('class', `mflag-edge m-${i}-${s}`)
               .attr('fill', 'none').attr('stroke', fl.color).attr('stroke-width', 1.2).attr('rx', 1)
+
+            // ── Gagnant PROJETÉ (hologramme) — faisceau + drapeau flottant, au-dessus de tout ──
+            const holo = gArcs.append('g').attr('class', `mholo m-${i}-${s}`)
+              .attr('opacity', 0).style('pointer-events', 'none')
+            holo.append('ellipse').attr('cx', 0).attr('cy', 0).attr('rx', 7).attr('ry', 2.4)
+              .attr('fill', '#7FE9FF').attr('opacity', 0.25)
+            holo.append('path').attr('d',
+              `M-2,0 L${(-FLAG_W * 0.75).toFixed(1)},${-HOLO_LIFT} L${(FLAG_W * 0.75).toFixed(1)},${-HOLO_LIFT} L2,0 Z`)
+              .attr('fill', 'url(#holo-beam-grad)')
+            const holoAnim = holo.append('g').attr('class', 'globe-holo-anim')
+            const HW = FLAG_W * 1.25, HH = FLAG_H * 1.25
+            holoAnim.append('image').attr('class', 'globe-holo-flicker')
+              .attr('href', `https://flagcdn.com/w160/${fl.code}.png`).attr('preserveAspectRatio', 'none')
+              .attr('x', -HW / 2).attr('y', -HOLO_LIFT - HH).attr('width', HW).attr('height', HH)
+              .style('filter', 'drop-shadow(0 0 5px #7FE9FF) drop-shadow(0 0 10px rgba(127,233,255,0.6))')
+              .attr('opacity', 0.9)
           })
           // Lien de match entre les deux pays + petit "VS"
           gArcs.append('line').attr('class', `mflag-link arc-${i}`)
@@ -716,7 +764,22 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
           if (!list.length) return
           const rot = rotRef.current
           const center: [number, number] = [-rot[0], -rot[1]]
+          const nowMs = Date.now()
+          const allKos = list.map(a => matchKickoffUTC(a.match) ?? Infinity)
           list.forEach((arc, i) => {
+            // État du match → mise en scène (feu / hologramme / extinction).
+            const ko = matchKickoffUTC(arc.match)
+            const final = matchFinalRef.current.get(arc.match.id)
+            const finished = !!final
+            const lstatus = matchLiveStatusRef.current.get(arc.match.id)
+            const inWindow = ko != null && nowMs >= ko && nowMs < ko + 135 * 60 * 1000
+            const isLive = !finished && ((lstatus != null && INPLAY_STATUS.includes(lstatus)) || inWindow)
+            // Gagnant : 0 = domicile (flags[0]), 1 = extérieur (flags[1]), -1 = nul / indéterminé.
+            const winnerSide = !final ? -1 : (final.h > final.a ? 0 : final.a > final.h ? 1 : -1)
+            // Hologramme du gagnant « jusqu'au prochain match du jour » : tant qu'aucun match
+            // dont le coup d'envoi est postérieur n'a encore démarré.
+            const nextKo = Math.min(Infinity, ...allKos.filter(k => ko != null && k > ko))
+            const holoActive = finished && winnerSide >= 0 && nowMs < nextKo
             // Position écran (et visibilité) de chaque drapeau
             const tops: ([number, number] | null)[] = []
             arc.flags.forEach((fl, s) => {
@@ -724,10 +787,13 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
               const pole = gArcs.select(`.mflag-pole.m-${i}-${s}`)
               const img  = gArcs.select(`.mflag-img.m-${i}-${s}`)
               const edge = gArcs.select(`.mflag-edge.m-${i}-${s}`)
+              const flame = gArcs.select(`.mflame.m-${i}-${s}`)
+              const holo  = gArcs.select(`.mholo.m-${i}-${s}`)
               const p = proj(fl.ll)
               const visible = !!p && d3.geoDistance(center, fl.ll) < Math.PI / 2 - 0.02
               if (!visible || !p) {
                 sh.attr('opacity', 0); pole.attr('opacity', 0); img.attr('opacity', 0); edge.attr('opacity', 0)
+                flame.attr('opacity', 0); holo.attr('opacity', 0)
                 tops.push(null); return
               }
               const [x, y] = p
@@ -737,6 +803,12 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
               pole.attr('x1', x).attr('y1', y).attr('x2', x).attr('y2', y - POLE_H).attr('opacity', 1)
               img.attr('x', fx).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 1)
               edge.attr('x', fx).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 0.9)
+              // Feu pendant le match (les deux pays).
+              flame.attr('transform', `translate(${x},${y})`).attr('opacity', isLive ? 1 : 0)
+              // Perdant qui s'éteint (vire au gris/sombre) ; gagnant projeté en hologramme.
+              const isLoser = finished && winnerSide >= 0 && s !== winnerSide
+              img.classed('globe-flag-out', isLoser)
+              holo.attr('transform', `translate(${x},${y})`).attr('opacity', holoActive && s === winnerSide ? 1 : 0)
               tops.push([x, y - POLE_H - FLAG_H / 2])   // centre du drapeau
             })
             // Lien + "VS" si les deux drapeaux sont visibles
