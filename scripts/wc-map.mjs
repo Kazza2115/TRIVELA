@@ -87,15 +87,27 @@ export function koPredictedQualifier(matchId, predH, predA, qualifierShort, ko) 
   return qualifierShort ? _up(qualifierShort) : null
 }
 
-/** Points totaux d'un pari = barème + bonus qualifié (sur les matchs KO uniquement). */
+/**
+ * Points totaux d'un pari.
+ *  • Hors KO ou match KO décisif → barème normal (betPoints), sans bonus.
+ *  • Match KO NUL (réglé aux tirs au but), Q = équipe qui se qualifie :
+ *      - prono NUL  + bon qualifié choisi (= Q) → barème du nul (+5/+4) + KO_QUALIFIER_BONUS (+2) ;
+ *      - prono VAINQUEUR dont l'équipe = Q       → +3 « bon vainqueur » (l'équipe qui passe = le vainqueur) ;
+ *      - sinon → 0.
+ */
 export function scoreBet(matchId, predH, predA, qualifierShort, realH, realA, ko) {
-  let pts = betPoints(predH, predA, realH, realA)
-  if (isKnockout(matchId)) {
-    const actual = koActualQualifier(matchId, realH, realA, ko)
-    const pred = koPredictedQualifier(matchId, predH, predA, qualifierShort, ko)
-    if (actual && pred && actual === pred) pts += KO_QUALIFIER_BONUS
+  const base = betPoints(predH, predA, realH, realA)
+  if (!isKnockout(matchId) || realH !== realA) return base   // hors KO ou match décisif
+  const Q = koActualQualifier(matchId, realH, realA, ko)      // équipe qui se qualifie (T.A.B.)
+  if (!Q) return base
+  const me = (ko || {})[matchId] || {}
+  if (predH === predA) {                                       // prono nul → +2 si bon qualifié choisi
+    const pick = qualifierShort ? _up(qualifierShort) : null
+    return base + (pick && pick === Q ? KO_QUALIFIER_BONUS : 0)
   }
-  return pts
+  // prono vainqueur sur un match nul → +3 « bon vainqueur » si le vainqueur pronostiqué passe aux T.A.B.
+  const predWinner = predH > predA ? _up(me.home_short) : _up(me.away_short)
+  return base + (predWinner && predWinner === Q ? 3 : 0)
 }
 
 /**

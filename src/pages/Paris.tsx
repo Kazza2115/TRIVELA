@@ -708,28 +708,26 @@ function koActualQual(id: string, rH: number, rA: number, ko: KoAssign): string 
   for (const t of [nx.home_short, nx.away_short]) if (t && mine.has(upShort(t))) return upShort(t)
   return null
 }
-function koPredQual(id: string, pH: number, pA: number, qualifier: string | null | undefined, ko: KoAssign): string | null {
-  const me = ko[id]; if (!me) return null
-  if (pH > pA) return upShort(me.home_short) || null
-  if (pA > pH) return upShort(me.away_short) || null
-  return qualifier ? upShort(qualifier) : null
-}
-
 function calcPoints(result: MatchResult, pred: { home: number; away: number },
   match?: Match, qualifier?: string | null, ko?: KoAssign): number {
   const { homeScore: rH, awayScore: rA } = result
   const { home: pH, away: pA } = pred
-  let pts =
+  const base =
     rH === pH && rA === pA ? 5 :
     rH > rA && pH > pA ? 3 :
     rH < rA && pH < pA ? 3 :
     rH === rA && pH === pA ? 4 : 0   // nul correctement pronostiqué (score inexact)
-  if (match && ko && isKoMatch(match.id)) {
-    const a = koActualQual(match.id, rH, rA, ko)
-    const p = koPredQual(match.id, pH, pA, qualifier, ko)
-    if (a && p && a === p) pts += KO_QUALIFIER_BONUS
+  // KO décisif ou hors KO → barème seul. KO nul (T.A.B.) → règles spéciales ci-dessous.
+  if (!match || !ko || !isKoMatch(match.id) || rH !== rA) return base
+  const Q = koActualQual(match.id, rH, rA, ko)   // équipe qui se qualifie
+  if (!Q) return base
+  if (pH === pA) {                                // prono nul → +2 si bon qualifié choisi
+    const pick = qualifier ? upShort(qualifier) : null
+    return base + (pick && pick === Q ? KO_QUALIFIER_BONUS : 0)
   }
-  return pts
+  // prono vainqueur sur un match nul → +3 « bon vainqueur » si l'équipe choisie passe aux T.A.B.
+  const predWinner = pH > pA ? upShort(match.home.short) : upShort(match.away.short)
+  return base + (predWinner && predWinner === Q ? 3 : 0)
 }
 
 interface MatchCardProps {
