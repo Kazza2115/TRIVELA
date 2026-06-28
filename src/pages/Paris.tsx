@@ -1448,47 +1448,103 @@ function DesktopBracket({ data }: { data: KOData }) {
   )
 }
 
-// ─── Vue mobile : sélecteur de tour + cartes verticales bettables ──────────
-const KO_TABS = [
-  { key: 'r32', label: '32es', ids: ['r32-1', 'r32-2', 'r32-3', 'r32-4', 'r32-5', 'r32-6', 'r32-7', 'r32-8', 'r32-9', 'r32-10', 'r32-11', 'r32-12', 'r32-13', 'r32-14', 'r32-15', 'r32-16'] },
-  { key: 'r16', label: '8es',    ids: ['r16-1', 'r16-2', 'r16-3', 'r16-4', 'r16-5', 'r16-6', 'r16-7', 'r16-8'] },
-  { key: 'qf',  label: 'Quarts', ids: ['qf-1', 'qf-2', 'qf-3', 'qf-4'] },
-  { key: 'sf',  label: 'Demies', ids: ['sf-1', 'sf-2'] },
-  { key: 'final', label: 'Finale', ids: ['final', '3rd'] },
-] as const
+// ─── Vue « Liste » : exactement comme la phase de groupes (cartes par date) ──
+const KO_ROUND_ORDER = ['r32', 'r16', 'qf', 'sf', '3rd', 'final'] as const
 
-function MobileRounds({ data }: { data: KOData }) {
-  const [round, setRound] = useState<string>('r32')
-  const grid: React.CSSProperties = {
-    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 10,
+function KnockoutList({ data }: { data: KOData }) {
+  // On n'affiche que les affiches dont les équipes sont connues (les autres restent
+  // « À venir » dans le tableau). Présentation identique à la phase de groupes :
+  // en-tête de tour → séparateur de date → cartes empilées, dans l'ordre des dates.
+  const known = data.koMatches.filter(m => m.home.code !== 'un' && m.away.code !== 'un')
+  if (known.length === 0) {
+    return (
+      <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 13, color: 'var(--text-3)' }}>
+        Les affiches s'afficheront ici dès que les équipes seront connues.
+      </div>
+    )
   }
-  const tab = KO_TABS.find(t => t.key === round) ?? KO_TABS[0]
   return (
     <>
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 14, scrollbarWidth: 'none' }}>
-        {KO_TABS.map(t => {
-          const on = round === t.key
-          return (
-            <button key={t.key} onClick={() => setRound(t.key)} style={{
-              flexShrink: 0, padding: '7px 15px', borderRadius: 20,
-              border: `1px solid ${on ? '#C89B3C' : 'var(--border)'}`,
-              background: on ? 'rgba(200,155,60,0.12)' : 'var(--bg-card)',
-              color: on ? '#A07828' : 'var(--text-2)',
-              fontSize: 12, fontWeight: 700, letterSpacing: 0.3, cursor: 'pointer', whiteSpace: 'nowrap',
-            }}>{t.label}</button>
-          )
-        })}
-      </div>
-      <div style={grid}>
-        {tab.ids.map(id => {
-          const m = data.koMatches.find(x => x.id === id)
-          if (!m) return null
-          return (
-            <BracketCell key={id} match={m} data={data}
-              expanded={false} alwaysBet onSelect={() => {}} />
-          )
-        })}
-      </div>
+      {KO_ROUND_ORDER.map(round => {
+        const roundMatches = known
+          .filter(m => m.round === round)
+          .sort((a, b) => (parseUTC(a.date, a.time) ?? 0) - (parseUTC(b.date, b.time) ?? 0))
+        if (!roundMatches.length) return null
+        const gd = (m: Match) => toGenevaDate(m.date, m.time)
+        const dates = [...new Set(roundMatches.map(gd))]
+        const dateRange = dates.length > 1 ? `${dates[0]} – ${dates[dates.length - 1]}` : dates[0] ?? ''
+        // Regroupe par date locale (ordre chronologique conservé)
+        const byDate: { date: string; matches: Match[] }[] = []
+        roundMatches.forEach(m => {
+          const d = gd(m)
+          const last = byDate[byDate.length - 1]
+          if (last && last.date === d) last.matches.push(m)
+          else byDate.push({ date: d, matches: [m] })
+        })
+        return (
+          <div key={round} style={{ marginBottom: 26 }}>
+            {/* En-tête du tour (équivalent de « Journée X ») */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12,
+              padding: '9px 14px',
+              background: 'linear-gradient(90deg, rgba(200,155,60,0.10) 0%, rgba(200,155,60,0.03) 100%)',
+              borderLeft: '3px solid #C89B3C', borderRadius: '0 10px 10px 0',
+            }}>
+              <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 16, letterSpacing: 2, color: '#A07828' }}>
+                {KO_LABELS[round]}
+              </span>
+              <div style={{ flex: 1, height: 1, background: 'rgba(200,155,60,0.25)' }} />
+              {dateRange && (
+                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-2)', letterSpacing: 0.4, whiteSpace: 'nowrap' }}>
+                  {dateRange}
+                </span>
+              )}
+            </div>
+
+            {byDate.map(({ date, matches }, di) => (
+              <div key={date} style={{ marginBottom: 16 }}>
+                {/* Séparateur de date */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  margin: di === 0 ? '2px 0 12px' : '20px 0 12px',
+                  padding: '9px 14px', borderRadius: 12,
+                  background: 'var(--bg-fill)', border: '1px solid var(--border)',
+                  borderLeft: '4px solid #5B8DEF',
+                }}>
+                  <span style={{ fontSize: 16, lineHeight: 1 }}>📅</span>
+                  <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-1)', letterSpacing: 0.4 }}>
+                    {date}
+                  </span>
+                  <div style={{ flex: 1 }} />
+                  <span style={{
+                    fontSize: 10, fontWeight: 700, color: 'var(--text-2)',
+                    background: 'var(--bg-card)', border: '1px solid var(--border)',
+                    borderRadius: 999, padding: '3px 9px',
+                  }}>
+                    {matches.length} match{matches.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {matches.map((m, i) => (
+                    <MatchCard key={m.id} match={m} domId={`match-${m.id}`}
+                      prediction={data.predictions[m.id]} confirmed={data.confirmed.has(m.id)}
+                      lockError={data.lockErrors[m.id]}
+                      result={data.results[m.id]} now={data.now}
+                      liveData={data.live[m.id]} goalSide={data.goalFlash[m.id]}
+                      scorers={data.goals[m.id]} redCards={data.cards[m.id]}
+                      trend={data.trends[m.id]} onOpenTrends={data.onOpenTrends}
+                      delay={i * 30}
+                      onIncrement={(s, d) => data.onIncrement(m.id, s, d)}
+                      onConfirm={() => data.onConfirm(m.id)}
+                      onEdit={() => data.onEdit(m.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      })}
     </>
   )
 }
@@ -1505,7 +1561,7 @@ function KnockoutView(data: KOData) {
       }}>
         {view === 'bracket'
           ? 'Touchez un match du tableau (faites défiler ◀ ▶) pour pronostiquer juste en dessous.'
-          : 'Choisissez un tour, puis pariez sur chaque match.'}{' '}
+          : 'Tous les matchs à élimination directe, les uns après les autres, dans l’ordre des dates.'}{' '}
         Les drapeaux des qualifiés apparaissent après la phase de groupes.
       </div>
 
@@ -1525,7 +1581,7 @@ function KnockoutView(data: KOData) {
         })}
       </div>
 
-      {view === 'bracket' ? <DesktopBracket data={data} /> : <MobileRounds data={data} />}
+      {view === 'bracket' ? <DesktopBracket data={data} /> : <KnockoutList data={data} />}
     </>
   )
 }
