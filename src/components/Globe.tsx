@@ -183,12 +183,6 @@ function brighten(hex: string, amount = 0.13): string {
   return c.formatHex()
 }
 
-// Statuts API « en jeu » (un match déjà réglé n'est plus en direct).
-const INPLAY_STATUS = ['1H', 'HT', '2H', 'ET', 'BT', 'P', 'LIVE']
-// Flammes (coordonnées locales : base à l'origine, pointe vers le haut −y).
-const FLAME_OUTER = 'M0,0 C-6,-3 -7,-13 -3,-19 C-1.5,-22 1.5,-22 3,-19 C7,-13 6,-3 0,0 Z'
-const FLAME_INNER = 'M0,-2 C-4,-4 -4.5,-11 -1.8,-15 C-0.8,-17 0.8,-17 1.8,-15 C4.5,-11 4,-4 0,-2 Z'
-const FLAME_CORE  = 'M0,-3 C-2.4,-5 -2.6,-9 -1,-12.5 C-0.3,-14 0.3,-14 1,-12.5 C2.6,-9 2.4,-5 0,-3 Z'
 
 // ─── Globe palette ─────────────────────────────────────────────────────────
 const C = {
@@ -525,21 +519,6 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
     // ── Defs ──────────────────────────────────────────────────────────
     const defs = svg.append('defs')
 
-    // Dégradé d'une langue de feu (base rouge profond → orange → pointe jaune clair).
-    const flameGrad = defs.append('linearGradient').attr('id', 'flame-grad')
-      .attr('x1', '0').attr('y1', '1').attr('x2', '0').attr('y2', '0')   // bas → haut
-    flameGrad.append('stop').attr('offset', '0%').attr('stop-color', '#B81E0A')
-    flameGrad.append('stop').attr('offset', '42%').attr('stop-color', '#FF6A1F')
-    flameGrad.append('stop').attr('offset', '76%').attr('stop-color', '#FFB52E')
-    flameGrad.append('stop').attr('offset', '100%').attr('stop-color', '#FFF3B0')
-
-    // Remplissage « braises » d'un pays en feu (surface chaude sous les flammes).
-    const emberGrad = defs.append('radialGradient').attr('id', 'ember-grad')
-      .attr('cx', '0.5').attr('cy', '0.78').attr('r', '0.85')
-    emberGrad.append('stop').attr('offset', '0%').attr('stop-color', '#FF7A1E')
-    emberGrad.append('stop').attr('offset', '45%').attr('stop-color', '#D8351A')
-    emberGrad.append('stop').attr('offset', '100%').attr('stop-color', '#6E1206')
-
     // Faisceau d'hologramme (gagnant projeté) — dégradé vertical cyan qui s'estompe vers le haut.
     const beamGrad = defs.append('linearGradient').attr('id', 'holo-beam-grad')
       .attr('x1', '0').attr('y1', '1').attr('x2', '0').attr('y2', '0')   // bas → haut
@@ -738,25 +717,6 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
         const HOLO_LIFT = POLE_H + FLAG_H + 40   // gagnant projeté HAUT (grand hologramme)
         arcs.forEach((arc, i) => {
           arc.flags.forEach((fl, s) => {
-            // ── Match en cours : le DRAPEAU brûle — cluster de langues de feu tout autour ──
-            // (derrière le drapeau, qui reste lisible au-dessus). Plusieurs langues décalées
-            // en phase/échelle → feu organique plutôt qu'une flamme unique « brute ».
-            const flame = gArcs.append('g').attr('class', `mflame m-${i}-${s}`)
-              .attr('opacity', 0).style('pointer-events', 'none')
-            const TONGUES = [
-              { x: -9, sc: 0.78, d: -0.05 }, { x: -4.5, sc: 1.06, d: -0.34 },
-              { x: 0,  sc: 1.38, d: 0.0   }, { x: 4.5,  sc: 1.10, d: -0.52 },
-              { x: 9,  sc: 0.82, d: -0.20 },
-            ]
-            for (const tg of TONGUES) {
-              const pos  = flame.append('g').attr('transform', `translate(${tg.x},6) scale(${tg.sc})`)
-              const anim = pos.append('g').attr('class', 'globe-flame-anim').style('animation-delay', `${tg.d}s`)
-              anim.append('path').attr('d', FLAME_OUTER).attr('fill', 'url(#flame-grad)')
-                .style('filter', 'drop-shadow(0 0 3px rgba(255,140,30,.9))')
-              anim.append('path').attr('d', FLAME_INNER).attr('fill', '#FF8A1E').attr('opacity', 0.85)
-              anim.append('path').attr('d', FLAME_CORE).attr('fill', '#FFF3B0').attr('opacity', 0.9)
-            }
-
             gArcs.append('ellipse').attr('class', `mflag-shadow m-${i}-${s}`)
               .attr('fill', 'rgba(0,0,0,0.4)')
             gArcs.append('line').attr('class', `mflag-pole m-${i}-${s}`)
@@ -803,13 +763,10 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
           const nowMs = Date.now()
           const allKos = list.map(a => matchKickoffUTC(a.match) ?? Infinity)
           list.forEach((arc, i) => {
-            // État du match → mise en scène (feu / hologramme / extinction).
+            // État du match → hologramme du vainqueur (le feu autour des pays a été retiré).
             const ko = matchKickoffUTC(arc.match)
             const final = matchFinalRef.current.get(arc.match.id)
             const finished = !!final
-            const lstatus = matchLiveStatusRef.current.get(arc.match.id)
-            const inWindow = ko != null && nowMs >= ko && nowMs < ko + 135 * 60 * 1000
-            const isLive = !finished && ((lstatus != null && INPLAY_STATUS.includes(lstatus)) || inWindow)
             // Gagnant : 0 = domicile (flags[0]), 1 = extérieur (flags[1]), -1 = nul / indéterminé.
             const winnerSide = !final ? -1 : (final.h > final.a ? 0 : final.a > final.h ? 1 : -1)
             // Hologramme du gagnant « jusqu'au prochain match du jour » : tant qu'aucun match
@@ -823,13 +780,12 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
               const pole = gArcs.select(`.mflag-pole.m-${i}-${s}`)
               const img  = gArcs.select(`.mflag-img.m-${i}-${s}`)
               const edge = gArcs.select(`.mflag-edge.m-${i}-${s}`)
-              const flame = gArcs.select(`.mflame.m-${i}-${s}`)
               const holo  = gArcs.select(`.mholo.m-${i}-${s}`)
               const p = proj(fl.ll)
               const visible = !!p && d3.geoDistance(center, fl.ll) < Math.PI / 2 - 0.02
               if (!visible || !p) {
                 sh.attr('opacity', 0); pole.attr('opacity', 0); img.attr('opacity', 0); edge.attr('opacity', 0)
-                flame.attr('opacity', 0); holo.attr('opacity', 0)
+                holo.attr('opacity', 0)
                 tops.push(null); return
               }
               const [x, y] = p
@@ -839,28 +795,7 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
               pole.attr('x1', x).attr('y1', y).attr('x2', x).attr('y2', y - POLE_H).attr('opacity', 1)
               img.attr('x', fx).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 1)
               edge.attr('x', fx).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 0.9)
-              // Feu sur la SURFACE DU PAYS (sa forme sur le globe) : on étale le cluster de
-              // flammes sur toute la largeur du pays, base vers le bas de son tracé.
-              let burning = false
-              if (isLive) {
-                const cid = CODE_TO_ID[fl.code]
-                const cn = cid != null ? (svg.select(`.country-${cid}`).node() as SVGGraphicsElement | null) : null
-                if (cn) {
-                  try {
-                    const bb = cn.getBBox()
-                    if (bb.width > 0.5 && bb.height > 0.5) {
-                      const fs = Math.max(0.9, Math.min(3.2, bb.width / 18))
-                      flame.attr('transform', `translate(${bb.x + bb.width / 2},${bb.y + bb.height * 0.86}) scale(${fs})`)
-                        .attr('opacity', 1)
-                      burning = true
-                    }
-                  } catch { /* tracé vide (pays au dos du globe) */ }
-                }
-              }
-              if (!burning) flame.attr('opacity', 0)
-              // Perdant qui s'éteint (vire au gris/sombre) ; gagnant projeté en hologramme.
-              const isLoser = finished && winnerSide >= 0 && s !== winnerSide
-              img.classed('globe-flag-out', isLoser)
+              // Gagnant projeté en hologramme (jusqu'au prochain match du jour).
               holo.attr('transform', `translate(${x},${y})`).attr('opacity', holoActive && s === winnerSide ? 1 : 0)
               tops.push([x, y - POLE_H - FLAG_H / 2])   // centre du drapeau
             })
@@ -897,7 +832,6 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
           const ko = koTeamsRef.current
           const koIds = Object.keys(ko)
           if (!koIds.length) return   // bracket pas encore chargé → on ne touche à rien
-          const nowMs = Date.now()
           const reached = new Set<number>()   // pays ayant atteint les éliminatoires
           const losers  = new Set<number>()   // perdants d'une affiche KO déjà jouée
           for (const mid of koIds) {
@@ -912,33 +846,14 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
               else if (fin.a > fin.h && hid != null) losers.add(hid)
             }
           }
-          const burning = new Set<number>()   // pays dont l'affiche du jour est EN DIRECT
-          for (const arc of matchArcsRef.current) {
-            if (matchFinalRef.current.get(arc.match.id)) continue
-            const k = matchKickoffUTC(arc.match)
-            const lst = matchLiveStatusRef.current.get(arc.match.id)
-            const inWin = k != null && nowMs >= k && nowMs < k + 135 * 60 * 1000
-            if ((lst != null && INPLAY_STATUS.includes(lst)) || inWin) {
-              const hid = CODE_TO_ID[arc.match.home.code], aid = CODE_TO_ID[arc.match.away.code]
-              if (hid != null) burning.add(hid)
-              if (aid != null) burning.add(aid)
-            }
-          }
+          // Pays éliminés (sortis en poules ou perdants d'un match KO) → éteints (gris sombre).
           qualifiedIds.forEach(id => {
-            const alive = reached.has(id) && !losers.has(id)
-            const desired: 'fire' | 'out' | 'normal' = burning.has(id) ? 'fire' : (alive ? 'normal' : 'out')
+            const desired: 'out' | 'normal' = (reached.has(id) && !losers.has(id)) ? 'normal' : 'out'
             if (countryFxRef.current.get(id) === desired) return
             countryFxRef.current.set(id, desired)
             const sel = svg.selectAll(`.country-${id}`)
             if (sel.empty()) return
-            if (desired === 'fire') {
-              // La SURFACE du pays s'embrase : remplissage braises + halo chaud (flammes par-dessus).
-              sel.attr('fill', 'url(#ember-grad)').classed('globe-country-out', false).classed('globe-country-fire', true)
-            } else if (desired === 'out') {
-              sel.attr('fill', landColor(id)).classed('globe-country-fire', false).classed('globe-country-out', true)
-            } else {
-              sel.attr('fill', landColor(id)).classed('globe-country-fire', false).classed('globe-country-out', false)
-            }
+            sel.classed('globe-country-out', desired === 'out')
           })
         }
         paintCountries()

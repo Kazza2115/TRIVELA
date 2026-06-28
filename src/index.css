@@ -123,17 +123,6 @@ html, body {
   50%      { transform: scale(1.4) rotate(7deg) translateY(-2px); opacity: 1; }
 }
 /* ─── Globe : mise en scène des matchs éliminatoires ─────────────────────── */
-/* Langues de feu autour du drapeau — ondulation organique (sway + étirement doux). */
-@keyframes globeFlame {
-  0%   { transform: scaleY(1)    scaleX(1)    skewX(0deg);  opacity: 0.88; }
-  30%  { transform: scaleY(1.12) scaleX(0.95) skewX(3.5deg);opacity: 1;    }
-  55%  { transform: scaleY(0.95) scaleX(1.05) skewX(-2deg); opacity: 0.82; }
-  80%  { transform: scaleY(1.09) scaleX(0.97) skewX(2.5deg);opacity: 1;    }
-  100% { transform: scaleY(1)    scaleX(1)    skewX(0deg);  opacity: 0.88; }
-}
-.globe-flame-anim { animation: globeFlame 0.85s ease-in-out infinite;
-  transform-origin: 50% 100%; transform-box: fill-box; will-change: transform; }
-
 /* Gagnant PROJETÉ EN L'AIR (hologramme) : flotte + scintille jusqu'au prochain match. */
 @keyframes globeHoloBob {
   0%, 100% { transform: translateY(0);      }
@@ -151,14 +140,6 @@ html, body {
   100% { filter: grayscale(1) brightness(0.30); }
 }
 .globe-flag-out { animation: globeExtinguish 1.3s ease-out forwards; }
-
-/* Pays EN FEU : sa surface (braises) palpite + halo chaud ; les flammes sont dessinées
-   par-dessus, réparties sur tout le pays. */
-@keyframes globeCountryFire {
-  0%, 100% { filter: brightness(1)    drop-shadow(0 0 6px rgba(255,110,20,.7));  }
-  50%      { filter: brightness(1.22) drop-shadow(0 0 15px rgba(255,160,40,.95)); }
-}
-.globe-country-fire { animation: globeCountryFire 0.9s ease-in-out infinite; }
 
 /* Pays ÉLIMINÉ / perdant : éteint (gris sombre). Filtre seul → ne touche pas le remplissage. */
 @keyframes globeCountryOut {
