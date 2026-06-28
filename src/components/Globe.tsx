@@ -524,6 +524,9 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
 
     const svg = d3.select(svgRef.current).attr('width', W).attr('height', H)
     svg.selectAll('*').remove()
+    // Le SVG est reconstruit à neuf (pays sans la classe « éteint ») → on vide le cache des
+    // états peints, sinon paintCountries croit que rien n'a changé et ne ré-applique pas le gris.
+    countryFxRef.current.clear()
 
     // ── Defs ──────────────────────────────────────────────────────────
     const defs = svg.append('defs')
