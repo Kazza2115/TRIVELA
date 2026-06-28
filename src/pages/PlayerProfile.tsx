@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import PageLayout from './PageLayout'
-import { ALL_MATCHES } from '../data/wc2026Matches'
-import type { Match } from '../data/wc2026Matches'
+import { ALL_MATCHES, knockoutWithTeams } from '../data/wc2026Matches'
+import type { Match, KnockoutAssign } from '../data/wc2026Matches'
 import {
   getPublicBets, getResults, getRatings, getComments, getCommentReactions,
+  getKnockoutTeams,
   rateBet, addComment, deleteComment, reactToComment, unreactToComment,
   subscribeToPlayerSocial, setUserAdmin, deleteUserProfile,
 } from '../services/auth'
@@ -54,6 +55,7 @@ export default function PlayerProfile({ player, rank, currentUser, onBack, onEdi
   const [ratings,  setRatings]  = useState<BetRating[]>([])
   const [comments, setComments] = useState<BetComment[]>([])
   const [reactions, setReactions] = useState<CommentReaction[]>([])
+  const [koTeams,  setKoTeams]  = useState<KnockoutAssign>({})
   const [loading,  setLoading]  = useState(true)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [targetAdmin, setTargetAdmin] = useState(player.isAdmin)
@@ -93,10 +95,11 @@ export default function PlayerProfile({ player, rank, currentUser, onBack, onEdi
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const [b, res] = await Promise.all([getPublicBets(player.id), getResults()])
+      const [b, res, ko] = await Promise.all([getPublicBets(player.id), getResults(), getKnockoutTeams()])
       if (!alive) return
       setBets(b)
       setResults(new Map(res.map(r => [r.matchId, r])))
+      setKoTeams(ko)
       if (currentUser && currentUser.id !== player.id) setMyBets(await getPublicBets(currentUser.id))
       await loadSocial()
       if (alive) setLoading(false)
@@ -104,6 +107,14 @@ export default function PlayerProfile({ player, rank, currentUser, onBack, onEdi
     const unsub = subscribeToPlayerSocial(player.id, loadSocial)
     return () => { alive = false; unsub() }
   }, [player.id, currentUser, loadSocial])
+
+  // Carte des matchs résolue : injecte les équipes du bracket éliminatoire
+  // (knockout_teams) à la place des TBD dès qu'elles sont connues.
+  const matchById = useMemo(() => {
+    const m = new Map(MATCH_BY_ID)
+    for (const ko of knockoutWithTeams(koTeams)) m.set(ko.id, ko)
+    return m
+  }, [koTeams])
 
   // ── Stats (sur paris réglés) ──────────────────────────────────────────────
   const stats = useMemo(() => {
@@ -145,7 +156,7 @@ export default function PlayerProfile({ player, rank, currentUser, onBack, onEdi
 
     const map = new Map<string, { label: string; order: number; bets: PublicBet[]; pts: number }>()
     for (const bet of bets) {
-      const m = MATCH_BY_ID.get(bet.matchId)
+      const m = matchById.get(bet.matchId)
       const { label, order } = m ? sectionOf(m) : { label: bet.stage || 'Autres', order: 900 }
       let sec = map.get(label)
       if (!sec) { sec = { label, order, bets: [], pts: 0 }; map.set(label, sec) }
@@ -153,11 +164,11 @@ export default function PlayerProfile({ player, rank, currentUser, onBack, onEdi
       sec.pts += bet.points ?? 0
     }
     const arr = [...map.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label))
-    const kt = (id: string) => { const m = MATCH_BY_ID.get(id); return parseUTC(m?.date, m?.time) ?? 0 }
-    const md = (id: string) => MATCH_BY_ID.get(id)?.matchday ?? 0
+    const kt = (id: string) => { const m = matchById.get(id); return parseUTC(m?.date, m?.time) ?? 0 }
+    const md = (id: string) => matchById.get(id)?.matchday ?? 0
     for (const sec of arr) sec.bets.sort((x, y) => md(x.matchId) - md(y.matchId) || kt(x.matchId) - kt(y.matchId))
     return arr
-  }, [bets])
+  }, [bets, matchById])
 
   // Section qui contient le pronostic ciblé (clic sur notification), pour la déplier.
   const focusSectionLabel = useMemo(() => {
@@ -327,7 +338,7 @@ export default function PlayerProfile({ player, rank, currentUser, onBack, onEdi
                       <BetSocialCard
                         key={bet.id}
                         bet={bet}
-                        match={MATCH_BY_ID.get(bet.matchId)}
+                        match={matchById.get(bet.matchId)}
                         result={results.get(bet.matchId)}
                         ratings={ratings.filter(r => r.matchId === bet.matchId)}
                         comments={comments.filter(c => c.matchId === bet.matchId)}
