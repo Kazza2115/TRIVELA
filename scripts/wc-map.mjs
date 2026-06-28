@@ -48,6 +48,56 @@ export function betPoints(predH, predA, realH, realA) {
   return 0
 }
 
+// ── Bonus « qualifié » des matchs à élimination directe ─────────────────────
+// +2 si le joueur a trouvé l'équipe qui se qualifie (tirs au but inclus).
+export const KO_QUALIFIER_BONUS = 2
+const KO_ID_RE = /^(r32|r16|qf|sf|3rd|final)/
+// Affiche → affiche du tour suivant (le vainqueur y est reporté). Sert à déduire le
+// qualifié d'un match nul (réglé aux T.A.B.) directement depuis le bracket.
+const KO_NEXT = {
+  'r32-1': 'r16-1', 'r32-2': 'r16-1', 'r32-3': 'r16-2', 'r32-4': 'r16-2',
+  'r32-5': 'r16-3', 'r32-6': 'r16-3', 'r32-7': 'r16-4', 'r32-8': 'r16-4',
+  'r32-9': 'r16-5', 'r32-10': 'r16-5', 'r32-11': 'r16-6', 'r32-12': 'r16-6',
+  'r32-13': 'r16-7', 'r32-14': 'r16-7', 'r32-15': 'r16-8', 'r32-16': 'r16-8',
+  'r16-1': 'qf-1', 'r16-2': 'qf-1', 'r16-3': 'qf-2', 'r16-4': 'qf-2',
+  'r16-5': 'qf-3', 'r16-6': 'qf-3', 'r16-7': 'qf-4', 'r16-8': 'qf-4',
+  'qf-1': 'sf-1', 'qf-2': 'sf-1', 'qf-3': 'sf-2', 'qf-4': 'sf-2',
+  'sf-1': 'final', 'sf-2': 'final',
+}
+const _up = s => (s || '').toUpperCase()
+export const isKnockout = id => KO_ID_RE.test(id || '')
+
+/** Vrai qualifié d'une affiche KO : vainqueur au score, sinon (nul → T.A.B.) l'équipe de
+ *  cette affiche qui figure au tour suivant. Déduit du bracket (knockout_teams). null si indéterminé. */
+export function koActualQualifier(matchId, realH, realA, ko) {
+  const me = (ko || {})[matchId]; if (!me) return null
+  if (realH > realA) return _up(me.home_short) || null
+  if (realA > realH) return _up(me.away_short) || null
+  const nx = (ko || {})[KO_NEXT[matchId]]; if (!nx) return null
+  const mine = new Set([me.home_short, me.away_short].filter(Boolean).map(_up))
+  for (const t of [nx.home_short, nx.away_short]) if (t && mine.has(_up(t))) return _up(t)
+  return null
+}
+
+/** Qualifié pronostiqué : vainqueur pronostiqué au score, sinon (prono nul) le choix explicite. */
+export function koPredictedQualifier(matchId, predH, predA, qualifierShort, ko) {
+  const me = (ko || {})[matchId]; if (!me) return null
+  if (predH > predA) return _up(me.home_short) || null
+  if (predA > predH) return _up(me.away_short) || null
+  return qualifierShort ? _up(qualifierShort) : null
+}
+
+/** Points totaux d'un pari = barème + bonus qualifié (sur les matchs KO uniquement). */
+export function scoreBet(matchId, predH, predA, qualifierShort, realH, realA, ko) {
+  let pts = betPoints(predH, predA, realH, realA)
+  if (isKnockout(matchId)) {
+    const actual = koActualQualifier(matchId, realH, realA, ko)
+    const pred = koPredictedQualifier(matchId, predH, predA, qualifierShort, ko)
+    if (actual && pred && actual === pred) pts += KO_QUALIFIER_BONUS
+  }
+  return pts
+}
+
 /**
  * Règle un match ENTIÈREMENT via REST (sans la fonction SQL settle_match, peu fiable) :
  *   1) upsert du résultat officiel dans match_results ;
@@ -102,11 +152,25 @@ export async function reconcileScores(sb) {
   const results = {}
   if (rrRes.ok) for (const r of await rrRes.json()) results[r.match_id] = r
 
+  // Bracket éliminatoire → pour déduire le qualifié (bonus KO). Absent/à plat = pas de bonus.
+  const ko = {}
+  const koRes = await sb('knockout_teams?select=match_id,home_short,away_short')
+  if (koRes.ok) for (const r of await koRes.json()) ko[r.match_id] = r
+
   // Tous les paris en une fois (paginé : PostgREST plafonne à 1000 lignes).
+  // Tolérant : si la colonne qualifier_short n'existe pas encore (migration pas appliquée),
+  // on refait la lecture SANS elle — surtout ne jamais finir avec 0 pari (sinon scores remis à 0).
   const bets = []
+  let withQual = true
   for (let off = 0; ; off += 1000) {
-    const br = await sb(`bets?select=id,user_id,match_id,home_score,away_score,points,locked&order=id.asc&limit=1000&offset=${off}`)
-    if (!br.ok) break
+    const cols = withQual
+      ? 'id,user_id,match_id,home_score,away_score,qualifier_short,points,locked'
+      : 'id,user_id,match_id,home_score,away_score,points,locked'
+    const br = await sb(`bets?select=${cols}&order=id.asc&limit=1000&offset=${off}`)
+    if (!br.ok) {
+      if (withQual && off === 0) { withQual = false; off = -1000; continue }   // colonne absente → refetch
+      break
+    }
     const rows = await br.json()
     bets.push(...rows)
     if (rows.length < 1000) break
@@ -118,7 +182,7 @@ export async function reconcileScores(sb) {
     const r = results[b.match_id]
     let pts = b.points
     if (r) {
-      const exp = betPoints(b.home_score, b.away_score, r.home_score, r.away_score)
+      const exp = scoreBet(b.match_id, b.home_score, b.away_score, b.qualifier_short, r.home_score, r.away_score, ko)
       if (b.points !== exp || !b.locked) {
         await sb(`bets?id=eq.${b.id}`, {
           method: 'PATCH', headers: { Prefer: 'return=minimal' },

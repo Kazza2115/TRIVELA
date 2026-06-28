@@ -149,6 +149,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
 }) {
   const [tab,         setTab]         = useState<Tab>('phase')
   const [predictions, setPredictions] = useState<Predictions>({})
+  const [qualifiers,  setQualifiers]  = useState<Record<string, string>>({})   // KO : qualifié choisi par match
   const [confirmed,   setConfirmed]   = useState<Set<string>>(new Set())
   const [lockErrors,  setLockErrors]  = useState<Record<string, string>>({})
   const [favorites,   setFavorites]   = useState<string[]>([])
@@ -159,17 +160,21 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
     setFavorites(currentUser?.favorites ?? [])
     if (!currentUser) {
       setPredictions({})
+      setQualifiers({})
       setConfirmed(new Set())
       return
     }
     getBets(currentUser.id).then(bets => {
       const preds: Predictions = {}
+      const quals: Record<string, string> = {}
       const conf = new Set<string>()
       bets.forEach(b => {
         preds[b.matchId] = { home: b.homeScore, away: b.awayScore }
+        if (b.qualifier) quals[b.matchId] = b.qualifier
         conf.add(b.matchId)
       })
       setPredictions(preds)
+      setQualifiers(quals)
       setConfirmed(conf)
     })
   }, [currentUser])
@@ -338,6 +343,12 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
     setConfirmed(prev => { const s = new Set(prev); s.delete(id); return s })
   }
 
+  // KO : choix de l'équipe qui se qualifie (pertinent surtout pour un prono nul).
+  const setQualifier = (id: string, short: string) => {
+    setQualifiers(prev => (prev[id] === short ? prev : { ...prev, [id]: short }))
+    setConfirmed(prev => { const s = new Set(prev); s.delete(id); return s })
+  }
+
   const edit = (id: string) => {
     setConfirmed(prev => { const s = new Set(prev); s.delete(id); return s })
   }
@@ -347,6 +358,9 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
     const match = [...GROUP_MATCHES, ...koMatches].find(m => m.id === id)
     if (!match) return
     const pred = predictions[id] ?? { home: 0, away: 0 }
+    // Qualifié : pour un prono non-nul il est implicite (le vainqueur) → on n'enregistre le
+    // choix explicite que pour un prono nul sur un match éliminatoire.
+    const isDrawKo = match.round !== 'group' && pred.home === pred.away
     const { error } = await saveBet({
       userId: currentUser.id,
       matchId: id,
@@ -354,6 +368,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
       away: match.away.name,
       homeScore: pred.home,
       awayScore: pred.away,
+      qualifier: isDrawKo ? (qualifiers[id] ?? null) : null,
       stage: match.round === 'group'
         ? `Groupe ${match.group} · J${match.matchday}`
         : KO_LABELS[match.round as string] ?? String(match.round),
@@ -571,6 +586,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
           results={results} live={live} goals={goals} cards={cards} goalFlash={goalFlash}
           predictions={predictions} confirmed={confirmed} lockErrors={lockErrors} now={now}
           trends={trends} onOpenTrends={onOpenTrends} koFocus={koFocus}
+          qualifiers={qualifiers} koTeams={koTeams} onSetQualifier={setQualifier}
           onIncrement={setPrediction} onConfirm={confirm} onEdit={edit}
         />
       )}
@@ -668,14 +684,52 @@ function StandingsTable({ group, results, favorites, onToggleFavorite, thirdsQua
 }
 
 // ─── MatchCard ────────────────────────────────────────────────────────────
-function calcPoints(result: MatchResult, pred: { home: number; away: number }): number {
+// ── Bonus « qualifié » KO (déduit du bracket, comme côté serveur) ───────────
+const KO_QUALIFIER_BONUS = 2
+type KoAssign = Record<string, { home_short: string | null; away_short: string | null }>
+const KO_NEXT_SLOT: Record<string, string> = {
+  'r32-1': 'r16-1', 'r32-2': 'r16-1', 'r32-3': 'r16-2', 'r32-4': 'r16-2',
+  'r32-5': 'r16-3', 'r32-6': 'r16-3', 'r32-7': 'r16-4', 'r32-8': 'r16-4',
+  'r32-9': 'r16-5', 'r32-10': 'r16-5', 'r32-11': 'r16-6', 'r32-12': 'r16-6',
+  'r32-13': 'r16-7', 'r32-14': 'r16-7', 'r32-15': 'r16-8', 'r32-16': 'r16-8',
+  'r16-1': 'qf-1', 'r16-2': 'qf-1', 'r16-3': 'qf-2', 'r16-4': 'qf-2',
+  'r16-5': 'qf-3', 'r16-6': 'qf-3', 'r16-7': 'qf-4', 'r16-8': 'qf-4',
+  'qf-1': 'sf-1', 'qf-2': 'sf-1', 'qf-3': 'sf-2', 'qf-4': 'sf-2',
+  'sf-1': 'final', 'sf-2': 'final',
+}
+const isKoMatch = (id: string) => /^(r32|r16|qf|sf|3rd|final)/.test(id)
+const upShort = (s?: string | null) => (s ?? '').toUpperCase()
+function koActualQual(id: string, rH: number, rA: number, ko: KoAssign): string | null {
+  const me = ko[id]; if (!me) return null
+  if (rH > rA) return upShort(me.home_short) || null
+  if (rA > rH) return upShort(me.away_short) || null
+  const nx = ko[KO_NEXT_SLOT[id]]; if (!nx) return null
+  const mine = new Set([me.home_short, me.away_short].filter(Boolean).map(upShort))
+  for (const t of [nx.home_short, nx.away_short]) if (t && mine.has(upShort(t))) return upShort(t)
+  return null
+}
+function koPredQual(id: string, pH: number, pA: number, qualifier: string | null | undefined, ko: KoAssign): string | null {
+  const me = ko[id]; if (!me) return null
+  if (pH > pA) return upShort(me.home_short) || null
+  if (pA > pH) return upShort(me.away_short) || null
+  return qualifier ? upShort(qualifier) : null
+}
+
+function calcPoints(result: MatchResult, pred: { home: number; away: number },
+  match?: Match, qualifier?: string | null, ko?: KoAssign): number {
   const { homeScore: rH, awayScore: rA } = result
   const { home: pH, away: pA } = pred
-  if (rH === pH && rA === pA) return 5
-  if (rH > rA && pH > pA) return 3
-  if (rH < rA && pH < pA) return 3
-  if (rH === rA && pH === pA) return 4   // nul correctement pronostiqué (score inexact)
-  return 0
+  let pts =
+    rH === pH && rA === pA ? 5 :
+    rH > rA && pH > pA ? 3 :
+    rH < rA && pH < pA ? 3 :
+    rH === rA && pH === pA ? 4 : 0   // nul correctement pronostiqué (score inexact)
+  if (match && ko && isKoMatch(match.id)) {
+    const a = koActualQual(match.id, rH, rA, ko)
+    const p = koPredQual(match.id, pH, pA, qualifier, ko)
+    if (a && p && a === p) pts += KO_QUALIFIER_BONUS
+  }
+  return pts
 }
 
 interface MatchCardProps {
@@ -693,15 +747,20 @@ interface MatchCardProps {
   trend?: MatchTrend
   onOpenTrends?: (matchId: string) => void
   delay: number
+  qualifier?: string | null
+  koTeams?: KoAssign
   onIncrement: (side: 'home' | 'away', delta: number) => void
+  onSetQualifier?: (short: string) => void
   onConfirm: () => void
   onEdit: () => void
 }
 
-function MatchCard({ match, prediction, confirmed, lockError, result, liveData, goalSide, scorers, redCards, now, domId, trend, onOpenTrends, delay, onIncrement, onConfirm, onEdit }: MatchCardProps) {
+function MatchCard({ match, prediction, confirmed, lockError, result, liveData, goalSide, scorers, redCards, now, domId, trend, onOpenTrends, delay, qualifier, koTeams, onIncrement, onSetQualifier, onConfirm, onEdit }: MatchCardProps) {
   const pred   = prediction ?? { home: 0, away: 0 }
   const isTBD  = match.home.code === 'un'
   const locked = isMatchLocked(match)
+  // KO + prono nul : on propose de choisir l'équipe qui se qualifie (bonus +2 si correct).
+  const showQualifier = !isTBD && match.round !== 'group' && pred.home === pred.away && !result
 
   const nowTs      = now ?? Date.now()
   const finished   = !!result
@@ -910,6 +969,33 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
         </div>
       )}
 
+      {/* KO + prono nul : qui se qualifie ? (bonus +2) */}
+      {showQualifier && (
+        <div style={{ padding: '0 16px 10px' }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-3)',
+            textTransform: 'uppercase', marginBottom: 6 }}>
+            Qui se qualifie ? <span style={{ color: '#A07828' }}>+2 si correct</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {[match.home, match.away].map(t => {
+              const on = qualifier === t.short
+              return (
+                <button key={t.short} disabled={locked} onClick={() => onSetQualifier?.(t.short)} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  padding: '7px 8px', borderRadius: 9, cursor: locked ? 'default' : 'pointer',
+                  background: on ? 'rgba(200,155,60,0.14)' : 'var(--bg-fill)',
+                  border: `1px solid ${on ? '#C89B3C' : 'var(--border)'}`,
+                  color: on ? '#A07828' : 'var(--text-2)', fontSize: 12, fontWeight: 700,
+                }}>
+                  <img src={`https://flagcdn.com/w20/${t.code}.png`} alt="" style={{ width: 18, height: 12, borderRadius: 2, objectFit: 'cover' }} />
+                  {t.short}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -928,14 +1014,14 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
           ) : null}
         </div>
         {result && confirmed && prediction ? (() => {
-          const pts = calcPoints(result, prediction)
-          const colors: Record<number, string> = { 5: '#22c55e', 3: '#A07828', 1: '#6b7280', 0: '#dc2626' }
+          const pts = calcPoints(result, prediction, match, qualifier, koTeams)
+          const hi = pts >= 5, mid = pts > 0 && pts < 5
           return (
             <div style={{
               padding: '4px 10px', borderRadius: 8,
-              background: pts === 5 ? 'rgba(34,197,94,0.12)' : pts === 3 ? 'rgba(200,155,60,0.12)' : 'rgba(110,110,115,0.1)',
-              border: `1px solid ${pts > 0 ? (pts === 5 ? 'rgba(34,197,94,0.3)' : 'rgba(200,155,60,0.3)') : 'rgba(110,110,115,0.2)'}`,
-              fontSize: 12, fontWeight: 700, color: colors[pts] ?? 'var(--text-3)',
+              background: hi ? 'rgba(34,197,94,0.12)' : mid ? 'rgba(200,155,60,0.12)' : 'rgba(110,110,115,0.1)',
+              border: `1px solid ${hi ? 'rgba(34,197,94,0.3)' : mid ? 'rgba(200,155,60,0.3)' : 'rgba(110,110,115,0.2)'}`,
+              fontSize: 12, fontWeight: 700, color: hi ? '#22c55e' : mid ? '#A07828' : '#dc2626',
             }}>
               {pts > 0 ? '+' : ''}{pts} pts
             </div>
@@ -1178,7 +1264,10 @@ interface KOData {
   trends: Record<string, MatchTrend>
   onOpenTrends?: (matchId: string) => void
   koFocus?: { id: string; nonce: number } | null
+  qualifiers: Record<string, string>
+  koTeams: KoAssign
   onIncrement: (id: string, side: 'home' | 'away', delta: number) => void
+  onSetQualifier: (id: string, short: string) => void
   onConfirm: (id: string) => void
   onEdit: (id: string) => void
 }
@@ -1237,6 +1326,25 @@ function BetArea({ match, data }: { match: Match; data: KOData }) {
             <MiniStepper value={pred.away}
               onUp={() => data.onIncrement(id, 'away', 1)} onDown={() => data.onIncrement(id, 'away', -1)} />
           </div>
+          {match.round !== 'group' && pred.home === pred.away && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 8.5, fontWeight: 700, color: 'var(--text-3)', letterSpacing: 0.3, textAlign: 'center' }}>
+                QUALIFIÉ ? <span style={{ color: '#A07828' }}>+2</span>
+              </span>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[match.home, match.away].map(t => {
+                  const on = data.qualifiers[id] === t.short
+                  return (
+                    <button key={t.short} onClick={() => data.onSetQualifier(id, t.short)} style={{
+                      flex: 1, padding: '3px 0', borderRadius: 6, cursor: 'pointer', fontSize: 9.5, fontWeight: 800,
+                      background: on ? 'rgba(200,155,60,0.16)' : 'var(--bg-fill)',
+                      border: `1px solid ${on ? '#C89B3C' : 'var(--border)'}`, color: on ? '#A07828' : 'var(--text-2)',
+                    }}>{t.short}</button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           {confirmed ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
               <span style={{ fontSize: 11, color: '#22c55e', fontWeight: 700 }}>✓ {pred.home}–{pred.away}</span>
@@ -1280,7 +1388,7 @@ function BracketCell({ match, data, expanded, alwaysBet, onSelect }: {
   const confirmed = data.confirmed.has(id)
   const pred = data.predictions[id]
   const showBet = !!alwaysBet && !result && !isLive
-  const pts = result && confirmed && pred ? calcPoints(result, pred) : null
+  const pts = result && confirmed && pred ? calcPoints(result, pred, match, data.qualifiers[id], data.koTeams) : null
   return (
     <div onClick={() => onSelect(id)} style={{
       width: '100%', display: 'flex', flexDirection: 'column', gap: 3,
@@ -1449,8 +1557,9 @@ function DesktopBracket({ data }: { data: KOData }) {
             liveData={data.live[sel.id]} goalSide={data.goalFlash[sel.id]}
             scorers={data.goals[sel.id]} redCards={data.cards[sel.id]}
             trend={data.trends[sel.id]} onOpenTrends={data.onOpenTrends}
-            delay={0}
+            delay={0} qualifier={data.qualifiers[sel.id]} koTeams={data.koTeams}
             onIncrement={(s, d) => data.onIncrement(sel.id, s, d)}
+            onSetQualifier={(s) => data.onSetQualifier(sel.id, s)}
             onConfirm={() => data.onConfirm(sel.id)}
             onEdit={() => data.onEdit(sel.id)}
           />
@@ -1545,8 +1654,9 @@ function KnockoutList({ data }: { data: KOData }) {
                       liveData={data.live[m.id]} goalSide={data.goalFlash[m.id]}
                       scorers={data.goals[m.id]} redCards={data.cards[m.id]}
                       trend={data.trends[m.id]} onOpenTrends={data.onOpenTrends}
-                      delay={i * 30}
+                      delay={i * 30} qualifier={data.qualifiers[m.id]} koTeams={data.koTeams}
                       onIncrement={(s, d) => data.onIncrement(m.id, s, d)}
+                      onSetQualifier={(s) => data.onSetQualifier(m.id, s)}
                       onConfirm={() => data.onConfirm(m.id)}
                       onEdit={() => data.onEdit(m.id)}
                     />

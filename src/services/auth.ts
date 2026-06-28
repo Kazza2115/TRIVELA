@@ -25,6 +25,7 @@ export interface BetRecord {
   homeScore: number
   awayScore: number
   stage: string
+  qualifier?: string | null   // KO : équipe choisie comme qualifiée (utile pour un prono nul)
   createdAt: number
 }
 
@@ -407,24 +408,29 @@ export async function getLeaderboard(): Promise<UserProfile[]> {
 
 export async function saveBet(bet: Omit<BetRecord, 'id' | 'createdAt'>): Promise<{ error?: string }> {
   if (supabaseConfigured) {
-    const res = await authFetch('POST', 'bets', {
-      user_id:    bet.userId,
-      match_id:   bet.matchId,
-      home:       bet.home,
-      away:       bet.away,
-      home_score: bet.homeScore,
-      away_score: bet.awayScore,
-      stage:      bet.stage,
-    })
+    // On n'envoie qualifier_short que s'il est choisi (prono nul KO). Si la colonne n'existe
+    // pas encore (migration pas appliquée), on réessaie sans elle → le pari s'enregistre quand même.
+    const base = {
+      user_id: bet.userId, match_id: bet.matchId, home: bet.home, away: bet.away,
+      home_score: bet.homeScore, away_score: bet.awayScore, stage: bet.stage,
+    }
+    const withQual = bet.qualifier != null ? { ...base, qualifier_short: bet.qualifier } : base
+    let res = await authFetch('POST', 'bets', withQual)
+    if (!res.ok && bet.qualifier != null && res.status !== 409) {
+      res = await authFetch('POST', 'bets', base)   // colonne absente → fallback sans qualifier
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
       // locked = bet already exists and match is locked
       if (res.status === 409 || (err as any)?.code === '23505') {
         // Try UPDATE if not locked
-        const upd = await authFetch('PATCH', `bets?user_id=eq.${bet.userId}&match_id=eq.${bet.matchId}&locked=eq.false`, {
-          home_score: bet.homeScore,
-          away_score: bet.awayScore,
-        })
+        const updFull: Record<string, unknown> = { home_score: bet.homeScore, away_score: bet.awayScore }
+        if (bet.qualifier != null) updFull.qualifier_short = bet.qualifier
+        let upd = await authFetch('PATCH', `bets?user_id=eq.${bet.userId}&match_id=eq.${bet.matchId}&locked=eq.false`, updFull)
+        if (!upd.ok && bet.qualifier != null) {
+          upd = await authFetch('PATCH', `bets?user_id=eq.${bet.userId}&match_id=eq.${bet.matchId}&locked=eq.false`,
+            { home_score: bet.homeScore, away_score: bet.awayScore })
+        }
         if (!upd.ok) return { error: 'Pari verrouillé — modification impossible.' }
         return {}
       }
@@ -457,6 +463,7 @@ export async function getBets(userId: string): Promise<BetRecord[]> {
       homeScore: b.home_score as number,
       awayScore: b.away_score as number,
       stage:     b.stage     as string,
+      qualifier: (b.qualifier_short as string | null) ?? null,
       createdAt: new Date(b.created_at as string).getTime(),
     }))
   }
