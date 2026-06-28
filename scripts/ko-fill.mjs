@@ -7,6 +7,7 @@
 //                         DEUX équipes sont connues. Ne touche jamais une affectation 'admin'.
 //
 // Idempotent. Lecture seule de l'API ; écriture Supabase uniquement si APPLY=1. À retirer après usage.
+// Relance 2026-06-28 : contrôle de l'état de knockout_teams après réordonnancement du bracket.
 import { buildFixtureMap, shortOf } from './wc-map.mjs'
 
 const KEY = process.env.API_FOOTBALL_KEY
