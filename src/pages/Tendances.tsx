@@ -1,20 +1,25 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import PageLayout from './PageLayout'
 import TrendBar, { trendPercents } from '../components/TrendBar'
-import { GROUP_MATCHES, KNOCKOUT_MATCHES, matchKickoffUTC } from '../data/wc2026Matches'
+import { GROUP_MATCHES, knockoutWithTeams, matchKickoffUTC } from '../data/wc2026Matches'
 import type { Match } from '../data/wc2026Matches'
 import {
-  getMatchTrends, getMatchOdds, getMatchPlayerBets,
+  getMatchTrends, getMatchOdds, getMatchPlayerBets, getKnockoutTeams,
 } from '../services/auth'
-import type { UserProfile, MatchTrend, MatchOdds, PlayerBet } from '../services/auth'
+import type { UserProfile, MatchTrend, MatchOdds, PlayerBet, KnockoutTeamRow } from '../services/auth'
 
 const KO_LABELS: Record<string, string> = {
   r32: 'Tour des 32', r16: 'Huitièmes', qf: 'Quarts', sf: 'Demi-finales', '3rd': '3e place', final: 'Finale',
 }
 
-// Matchs sélectionnables : ceux qui ont deux équipes connues (les KO sont TBD au début).
-function selectableMatches(): Match[] {
-  return [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
+// Matchs sélectionnables : phase de groupes + éliminatoires, ces dernières avec leurs vraies
+// équipes injectées depuis le bracket (knockout_teams). On ne garde que les affiches dont les
+// deux équipes sont connues (les KO restent TBD tant que le bracket ne les a pas remplies).
+function selectableMatches(koTeams: Record<string, KnockoutTeamRow>): Match[] {
+  const assign = Object.fromEntries(
+    Object.entries(koTeams).map(([id, r]) => [id, { home_short: r.home_short, away_short: r.away_short }]),
+  )
+  return [...GROUP_MATCHES, ...knockoutWithTeams(assign)]
     .filter(m => m.home.code !== 'un' && m.away.code !== 'un')
     .sort((a, b) => (matchKickoffUTC(a) ?? 0) - (matchKickoffUTC(b) ?? 0))
 }
@@ -36,7 +41,16 @@ export default function Tendances({ onBack, focusMatchId, currentUser }: {
   focusMatchId?: string | null
   currentUser: UserProfile | null
 }) {
-  const matches = useMemo(selectableMatches, [])
+  // Bracket éliminatoire : on charge les affectations d'équipes pour faire apparaître les KO.
+  const [koTeams, setKoTeams] = useState<Record<string, KnockoutTeamRow>>({})
+  useEffect(() => {
+    let alive = true
+    const load = () => getKnockoutTeams().then(t => { if (alive) setKoTeams(t) }).catch(() => {})
+    load()
+    const iv = setInterval(load, 60000)
+    return () => { alive = false; clearInterval(iv) }
+  }, [])
+  const matches = useMemo(() => selectableMatches(koTeams), [koTeams])
 
   // Sélection par défaut : le match demandé, sinon le plus proche (en cours / à venir), sinon le dernier.
   const defaultId = useMemo(() => {
