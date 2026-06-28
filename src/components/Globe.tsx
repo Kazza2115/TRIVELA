@@ -3,7 +3,7 @@ import * as d3 from 'd3'
 import { feature } from 'topojson-client'
 import type { Topology } from 'topojson-specification'
 import CountryPopup from './CountryPopup'
-import { todaysMatches, matchKickoffUTC, teamColor, teamByShort } from '../data/wc2026Matches'
+import { matchKickoffUTC, teamColor, teamByShort, KNOCKOUT_MATCHES } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
 import { getBets, getLive, getResults, subscribeToLive, getKnockoutTeams } from '../services/auth'
 import type { UserProfile } from '../services/auth'
@@ -707,13 +707,20 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
         // ne sont plus affichés.
         const resolveKoMatches = (): Match[] => {
           const ko = koTeamsRef.current
-          return todaysMatches()
-            .filter(m => m.round !== 'group')
+          // Jour courant (Europe/Zurich). On part de KNOCKOUT_MATCHES (pas de todaysMatches,
+          // qui exclut les affiches TBD AVANT qu'on injecte les équipes du bracket).
+          const dayStr = (ms: number) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' })
+          const today = dayStr(Date.now())
+          return KNOCKOUT_MATCHES
             .map(m => {
               const a = ko[m.id]
               return a ? { ...m, home: teamByShort(a.home_short) ?? m.home, away: teamByShort(a.away_short) ?? m.away } : m
             })
-            .filter(m => m.home.code !== 'un' && m.away.code !== 'un')   // équipes connues
+            .filter(m => {
+              if (m.home.code === 'un' || m.away.code === 'un') return false   // équipes connues
+              const k = matchKickoffUTC(m)
+              return k != null && dayStr(k) === today                          // affiche DU JOUR
+            })
         }
 
         // (Re)construit drapeaux + arcs. Rappelé quand le bracket se charge (équipes connues).
