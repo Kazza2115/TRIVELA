@@ -261,9 +261,12 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
 
   // Affectations d'équipes des phases éliminatoires (bracket rempli au fil des qualifs).
   const [koTeams, setKoTeams] = useState<Record<string, KnockoutTeamRow>>({})
+  const [koLoaded, setKoLoaded] = useState(false)            // 1re lecture du bracket faite ?
+  // Cible de saut initial vers une affiche éliminatoire (ouverture sur le prochain match).
+  const [koFocus, setKoFocus] = useState<{ id: string; nonce: number } | null>(null)
   useEffect(() => {
     let alive = true
-    const load = () => getKnockoutTeams().then(t => { if (alive) setKoTeams(t) })
+    const load = () => getKnockoutTeams().then(t => { if (alive) { setKoTeams(t); setKoLoaded(true) } })
     load()
     const iv = setInterval(load, 60000)
     return () => { alive = false; clearInterval(iv) }
@@ -283,14 +286,15 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
     return () => clearTimeout(t)
   }, [focus])
 
-  // À l'ouverture de la page : on se place DIRECTEMENT sur le match le plus proche
-  // (en cours sinon le prochain à venir, sinon le dernier joué) — plus besoin de tout
-  // faire défiler. Une seule fois, et seulement si aucun saut "EN DIRECT" n'est demandé.
+  // À l'ouverture de la page : on se place DIRECTEMENT sur le PROCHAIN match de tout le
+  // tournoi — en cours, sinon le prochain à venir, sinon le dernier joué — qu'il soit en
+  // phase de groupes ou en éliminatoires. On bascule sur le bon onglet puis on défile.
+  // Une seule fois, après le 1er chargement du bracket, et si aucun saut "EN DIRECT" demandé.
   const didInitialScroll = useRef(false)
   useEffect(() => {
-    if (didInitialScroll.current || focus || tab !== 'phase') return
+    if (didInitialScroll.current || focus || !koLoaded) return
     const nowTs = Date.now()
-    const cand = GROUP_MATCHES
+    const cand = [...GROUP_MATCHES, ...koMatches]
       .filter(m => m.home.code !== 'un' && m.away.code !== 'un')
       .map(m => ({ id: m.id, k: KICKOFF_MS.get(m.id) }))
       .filter((x): x is { id: string; k: number } => x.k != null)
@@ -300,12 +304,19 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
     const lastPast = [...cand].sort((a, b) => b.k - a.k)[0]
     const targetId = (live ?? upcoming ?? lastPast)?.id
     if (!targetId) return
-    const t = setTimeout(() => {
-      const el = document.getElementById(`match-${targetId}`)
-      if (el) { el.scrollIntoView({ behavior: 'auto', block: 'center' }); didInitialScroll.current = true }
-    }, 350)
-    return () => clearTimeout(t)
-  }, [tab, focus])
+    didInitialScroll.current = true
+    const isKo = !GROUP_MATCHES.some(m => m.id === targetId)
+    if (isKo) {
+      // Vue éliminatoires : KnockoutView passe en mode Liste et défile jusqu'à l'affiche.
+      setTab('eliminatoires')
+      setKoFocus({ id: targetId, nonce: nowTs })
+    } else {
+      setTab('phase')
+      setTimeout(() => {
+        document.getElementById(`match-${targetId}`)?.scrollIntoView({ behavior: 'auto', block: 'center' })
+      }, 350)
+    }
+  }, [koLoaded, koMatches, focus])
 
   const toggleFavorite = (short: string) => {
     if (!currentUser) { onOpenAuth(); return }
@@ -559,7 +570,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
           koMatches={koMatches}
           results={results} live={live} goals={goals} cards={cards} goalFlash={goalFlash}
           predictions={predictions} confirmed={confirmed} lockErrors={lockErrors} now={now}
-          trends={trends} onOpenTrends={onOpenTrends}
+          trends={trends} onOpenTrends={onOpenTrends} koFocus={koFocus}
           onIncrement={setPrediction} onConfirm={confirm} onEdit={edit}
         />
       )}
@@ -1166,6 +1177,7 @@ interface KOData {
   now: number
   trends: Record<string, MatchTrend>
   onOpenTrends?: (matchId: string) => void
+  koFocus?: { id: string; nonce: number } | null
   onIncrement: (id: string, side: 'home' | 'away', delta: number) => void
   onConfirm: (id: string) => void
   onEdit: (id: string) => void
@@ -1551,6 +1563,17 @@ function KnockoutList({ data }: { data: KOData }) {
 
 function KnockoutView(data: KOData) {
   const [view, setView] = useState<'bracket' | 'list'>('bracket')
+  // Ouverture sur le prochain match : on bascule en vue Liste (scroll vertical fiable)
+  // puis on défile jusqu'à l'affiche ciblée.
+  const koFocus = data.koFocus
+  useEffect(() => {
+    if (!koFocus) return
+    setView('list')
+    const t = setTimeout(() => {
+      document.getElementById(`match-${koFocus.id}`)?.scrollIntoView({ behavior: 'auto', block: 'center' })
+    }, 420)
+    return () => clearTimeout(t)
+  }, [koFocus?.nonce])   // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
       <div style={{

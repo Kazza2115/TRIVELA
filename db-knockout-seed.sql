@@ -23,24 +23,27 @@ alter table public.knockout_teams enable row level security;
 drop policy if exists knockout_read on public.knockout_teams;
 create policy knockout_read on public.knockout_teams for select using (true);
 
--- ── Tour des 32 (28 juin – 4 juil) — affiches réelles issues de la phase de groupes ──
+-- ── Tour des 32 — slots = positions du TABLEAU officiel FIFA (pas l'ordre des horaires) ──
+-- L'arbre de l'app appaire r32-1&r32-2 → r16-1, r32-3&r32-4 → r16-2, etc. ; on place donc
+-- chaque affiche dans son vrai créneau de bracket pour que les chemins 8es/quarts/demies
+-- soient corrects. (No de match FIFA en commentaire.)
 insert into public.knockout_teams (match_id, home_short, away_short, source, updated_at) values
-  ('r32-1',  'ZAF', 'CAN', 'api', now()),   -- Afrique du Sud — Canada
-  ('r32-2',  'BRA', 'JPN', 'api', now()),   -- Brésil — Japon
-  ('r32-3',  'GER', 'PAR', 'api', now()),   -- Allemagne — Paraguay
-  ('r32-4',  'NED', 'MAR', 'api', now()),   -- Pays-Bas — Maroc
-  ('r32-5',  'CIV', 'NOR', 'api', now()),   -- Côte d'Ivoire — Norvège
-  ('r32-6',  'FRA', 'SWE', 'api', now()),   -- France — Suède
-  ('r32-7',  'MEX', 'ECU', 'api', now()),   -- Mexique — Équateur
-  ('r32-8',  'ENG', 'COD', 'api', now()),   -- Angleterre — RD Congo
-  ('r32-9',  'BEL', 'SEN', 'api', now()),   -- Belgique — Sénégal
-  ('r32-10', 'USA', 'BIH', 'api', now()),   -- États-Unis — Bosnie-Herzégovine
-  ('r32-11', 'ESP', 'AUT', 'api', now()),   -- Espagne — Autriche
-  ('r32-12', 'POR', 'CRO', 'api', now()),   -- Portugal — Croatie
-  ('r32-13', 'SUI', 'DZA', 'api', now()),   -- Suisse — Algérie
-  ('r32-14', 'AUS', 'EGY', 'api', now()),   -- Australie — Égypte
-  ('r32-15', 'ARG', 'CPV', 'api', now()),   -- Argentine — Cap-Vert
-  ('r32-16', 'COL', 'GHA', 'api', now())    -- Colombie — Ghana
+  ('r32-1',  'GER', 'PAR', 'api', now()),   -- M74  Allemagne — Paraguay
+  ('r32-2',  'FRA', 'SWE', 'api', now()),   -- M77  France — Suède
+  ('r32-3',  'ZAF', 'CAN', 'api', now()),   -- M73  Afrique du Sud — Canada
+  ('r32-4',  'NED', 'MAR', 'api', now()),   -- M75  Pays-Bas — Maroc
+  ('r32-5',  'POR', 'CRO', 'api', now()),   -- M83  Portugal — Croatie
+  ('r32-6',  'ESP', 'AUT', 'api', now()),   -- M84  Espagne — Autriche
+  ('r32-7',  'USA', 'BIH', 'api', now()),   -- M81  États-Unis — Bosnie-Herzégovine
+  ('r32-8',  'BEL', 'SEN', 'api', now()),   -- M82  Belgique — Sénégal
+  ('r32-9',  'BRA', 'JPN', 'api', now()),   -- M76  Brésil — Japon
+  ('r32-10', 'CIV', 'NOR', 'api', now()),   -- M78  Côte d'Ivoire — Norvège
+  ('r32-11', 'MEX', 'ECU', 'api', now()),   -- M79  Mexique — Équateur
+  ('r32-12', 'ENG', 'COD', 'api', now()),   -- M80  Angleterre — RD Congo
+  ('r32-13', 'ARG', 'CPV', 'api', now()),   -- M86  Argentine — Cap-Vert
+  ('r32-14', 'AUS', 'EGY', 'api', now()),   -- M88  Australie — Égypte
+  ('r32-15', 'SUI', 'DZA', 'api', now()),   -- M85  Suisse — Algérie
+  ('r32-16', 'COL', 'GHA', 'api', now())    -- M87  Colombie — Ghana
 on conflict (match_id) do update
   set home_short = excluded.home_short,
       away_short = excluded.away_short,

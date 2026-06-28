@@ -283,22 +283,24 @@ const TBD: Team = { name: 'À déterminer', short: 'TBD', code: 'un' }
 
 export const KNOCKOUT_MATCHES: Match[] = [
   // Round of 32 — 16 matches (28 juin – 3 juil)
-  { id:'r32-1',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'28 Juin', time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-2',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'28 Juin', time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-3',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'29 Juin', time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-4',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'29 Juin', time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-5',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'30 Juin', time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-6',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'30 Juin', time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-7',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'1 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-8',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'1 Juil',  time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-9',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'2 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-10', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'2 Juil',  time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-11', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'3 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-12', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'3 Juil',  time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-13', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'4 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-14', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'4 Juil',  time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-15', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'5 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r32-16', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'5 Juil',  time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
+  // Slots = positions du TABLEAU officiel FIFA (r32-1 & r32-2 → r16-1, etc.).
+  // Date/heure (UTC) = vrai calendrier de l'affiche occupant le slot.
+  { id:'r32-1',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'29 Juin', time:'20:30', venue:'À confirmer', city:'—', status:'upcoming' },  // M74
+  { id:'r32-2',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'30 Juin', time:'21:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M77
+  { id:'r32-3',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'28 Juin', time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M73
+  { id:'r32-4',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'30 Juin', time:'01:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M75
+  { id:'r32-5',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'2 Juil',  time:'23:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M83
+  { id:'r32-6',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'2 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M84
+  { id:'r32-7',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'2 Juil',  time:'00:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M81
+  { id:'r32-8',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'1 Juil',  time:'20:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M82
+  { id:'r32-9',  group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'29 Juin', time:'17:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M76
+  { id:'r32-10', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'30 Juin', time:'17:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M78
+  { id:'r32-11', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'1 Juil',  time:'01:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M79
+  { id:'r32-12', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'1 Juil',  time:'16:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M80
+  { id:'r32-13', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'3 Juil',  time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M86
+  { id:'r32-14', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'3 Juil',  time:'18:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M88
+  { id:'r32-15', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'3 Juil',  time:'03:00', venue:'À confirmer', city:'—', status:'upcoming' },  // M85
+  { id:'r32-16', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'4 Juil',  time:'01:30', venue:'À confirmer', city:'—', status:'upcoming' },  // M87
 
   // Round of 16 — 8 matches (6 – 9 juil)
   { id:'r16-1', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'6 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },

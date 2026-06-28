@@ -228,6 +228,18 @@ const KO_ROUNDS = [
   { re: /final/i,                     prefix: 'final', n: 1  },
 ]
 
+// Tour des 32 → créneau du TABLEAU (bracket officiel FIFA), et non l'ordre des horaires.
+// Clé = les deux codes courts des équipes, triés et joints par '|'. Les slots r32-1..16
+// suivent l'arbre du tableau de l'app (r32-1 & r32-2 → r16-1, etc.) : ainsi les chemins
+// 8es/quarts/demies sont corrects. (Les affiches sont figées depuis la fin des poules.)
+export const R32_SLOT_BY_TEAMS = {
+  'GER|PAR': 'r32-1',  'FRA|SWE': 'r32-2',  'CAN|ZAF': 'r32-3',  'MAR|NED': 'r32-4',
+  'CRO|POR': 'r32-5',  'AUT|ESP': 'r32-6',  'BIH|USA': 'r32-7',  'BEL|SEN': 'r32-8',
+  'BRA|JPN': 'r32-9',  'CIV|NOR': 'r32-10', 'ECU|MEX': 'r32-11', 'COD|ENG': 'r32-12',
+  'ARG|CPV': 'r32-13', 'AUS|EGY': 'r32-14', 'DZA|SUI': 'r32-15', 'COL|GHA': 'r32-16',
+}
+const r32Key = (hs, as) => [hs, as].sort().join('|')
+
 /**
  * Construit le mapping FIABLE fixture_id → notre match_id pour TOUTE la compétition
  * (groupes par équipes/journée, élimination directe par tour + ordre chronologique).
@@ -250,11 +262,17 @@ export function buildFixtureMap(fixtures, validIds) {
     const ko = KO_ROUNDS.find(k => k.re.test(round))
     if (!ko) { unmatched.push(`${f.teams?.home?.name} vs ${f.teams?.away?.name} [${round}]`); continue }
     const ts = Date.parse(f.fixture?.date || '') || 0
-    ;(buckets[ko.prefix] ||= []).push({ fid, ts })
+    ;(buckets[ko.prefix] ||= []).push({ fid, ts, hs: shortOf(f.teams?.home?.name), as: shortOf(f.teams?.away?.name) })
   }
   for (const ko of KO_ROUNDS) {
     const arr = buckets[ko.prefix]
     if (!arr) continue
+    // Tour des 32 : si TOUTES les affiches sont identifiables par leurs équipes, on place
+    // chaque match dans son VRAI créneau du tableau (bracket officiel FIFA), pas par l'horaire.
+    if (ko.prefix === 'r32' && arr.every(x => x.hs && x.as && R32_SLOT_BY_TEAMS[r32Key(x.hs, x.as)])) {
+      for (const x of arr) map.set(x.fid, R32_SLOT_BY_TEAMS[r32Key(x.hs, x.as)])
+      continue
+    }
     arr.sort((a, b) => a.ts - b.ts)
     arr.forEach((x, i) => map.set(x.fid, ko.n === 1 ? ko.prefix : `${ko.prefix}-${i + 1}`))
   }
