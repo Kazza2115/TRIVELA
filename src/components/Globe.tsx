@@ -881,14 +881,21 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
               else if (fin.a > fin.h && hid != null) losers.add(hid)
             }
           }
-          // Pays éliminés (sortis en poules ou perdants d'un match KO) → éteints (gris sombre).
+          // Pays éliminés (sortis en poules ou perdants KO) → ÉTEINTS : on remplace directement
+          // leur couleur par un gris sombre (le filtre CSS sur un <path> SVG n'est pas fiable selon
+          // les navigateurs). Ré-appliqué à chaque passage pour résister à toute autre écriture ;
+          // les pays encore en lice ne sont touchés QUE s'ils repassent de « éteint » à « vivant ».
           qualifiedIds.forEach(id => {
-            const desired: 'out' | 'normal' = (reached.has(id) && !losers.has(id)) ? 'normal' : 'out'
-            if (countryFxRef.current.get(id) === desired) return
-            countryFxRef.current.set(id, desired)
+            const out = !(reached.has(id) && !losers.has(id))
             const sel = svg.selectAll(`.country-${id}`)
             if (sel.empty()) return
-            sel.classed('globe-country-out', desired === 'out')
+            if (out) {
+              sel.attr('fill', '#222B38').attr('opacity', 0.55)
+              countryFxRef.current.set(id, 'out')
+            } else if (countryFxRef.current.get(id) === 'out') {
+              sel.attr('fill', landColor(id)).attr('opacity', 1)
+              countryFxRef.current.set(id, 'normal')
+            }
           })
         }
         paintCountries()
