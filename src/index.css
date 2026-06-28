@@ -123,17 +123,16 @@ html, body {
   50%      { transform: scale(1.4) rotate(7deg) translateY(-2px); opacity: 1; }
 }
 /* ─── Globe : mise en scène des matchs éliminatoires ─────────────────────── */
-/* Pays EN FEU pendant un match (flammes aux couleurs du pays). */
+/* Langues de feu autour du drapeau — ondulation organique (sway + étirement doux). */
 @keyframes globeFlame {
-  0%   { transform: scaleY(0.90) scaleX(1.04) translateY(0);      opacity: 0.92; }
-  25%  { transform: scaleY(1.16) scaleX(0.92) translateY(-0.7px); opacity: 1;    }
-  50%  { transform: scaleY(0.97) scaleX(1.06) translateY(0);      opacity: 0.85; }
-  75%  { transform: scaleY(1.22) scaleX(0.88) translateY(-1px);   opacity: 1;    }
-  100% { transform: scaleY(0.90) scaleX(1.04) translateY(0);      opacity: 0.92; }
+  0%   { transform: scaleY(1)    scaleX(1)    skewX(0deg);  opacity: 0.88; }
+  30%  { transform: scaleY(1.12) scaleX(0.95) skewX(3.5deg);opacity: 1;    }
+  55%  { transform: scaleY(0.95) scaleX(1.05) skewX(-2deg); opacity: 0.82; }
+  80%  { transform: scaleY(1.09) scaleX(0.97) skewX(2.5deg);opacity: 1;    }
+  100% { transform: scaleY(1)    scaleX(1)    skewX(0deg);  opacity: 0.88; }
 }
-.globe-flame-anim { animation: globeFlame 0.5s ease-in-out infinite;
+.globe-flame-anim { animation: globeFlame 0.85s ease-in-out infinite;
   transform-origin: 50% 100%; transform-box: fill-box; will-change: transform; }
-.globe-flame-anim.s1 { animation-duration: 0.63s; animation-delay: -0.21s; }
 
 /* Gagnant PROJETÉ EN L'AIR (hologramme) : flotte + scintille jusqu'au prochain match. */
 @keyframes globeHoloBob {
@@ -153,12 +152,13 @@ html, body {
 }
 .globe-flag-out { animation: globeExtinguish 1.3s ease-out forwards; }
 
-/* Pays dont l'INTÉRIEUR s'embrase pendant son match (sur le remplissage feu). */
+/* Pays en match : on garde sa couleur normale + un halo chaud discret (pas de
+   remplissage feu brut) — ce sont les flammes autour du drapeau qui font le feu. */
 @keyframes globeCountryFire {
-  0%, 100% { filter: brightness(1)    drop-shadow(0 0 4px rgba(255,120,20,.85)); }
-  50%      { filter: brightness(1.38) drop-shadow(0 0 10px rgba(255,175,45,1));  }
+  0%, 100% { filter: brightness(1.03) drop-shadow(0 0 5px rgba(255,120,20,.5));  }
+  50%      { filter: brightness(1.13) drop-shadow(0 0 11px rgba(255,160,40,.8)); }
 }
-.globe-country-fire { animation: globeCountryFire 0.46s ease-in-out infinite; }
+.globe-country-fire { animation: globeCountryFire 0.95s ease-in-out infinite; }
 
 /* Pays ÉLIMINÉ / perdant : éteint (gris sombre). Filtre seul → ne touche pas le remplissage. */
 @keyframes globeCountryOut {

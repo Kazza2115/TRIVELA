@@ -525,13 +525,13 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
     // ── Defs ──────────────────────────────────────────────────────────
     const defs = svg.append('defs')
 
-    // Remplissage « feu » d'un pays en match (chaud en bas, braises en haut).
-    const fireGrad = defs.append('radialGradient').attr('id', 'fire-grad')
-      .attr('cx', '0.5').attr('cy', '0.92').attr('r', '0.95')
-    fireGrad.append('stop').attr('offset', '0%').attr('stop-color', '#FFF1A8')
-    fireGrad.append('stop').attr('offset', '32%').attr('stop-color', '#FF9A1F')
-    fireGrad.append('stop').attr('offset', '68%').attr('stop-color', '#E8431E')
-    fireGrad.append('stop').attr('offset', '100%').attr('stop-color', '#7A1003')
+    // Dégradé d'une langue de feu (base rouge profond → orange → pointe jaune clair).
+    const flameGrad = defs.append('linearGradient').attr('id', 'flame-grad')
+      .attr('x1', '0').attr('y1', '1').attr('x2', '0').attr('y2', '0')   // bas → haut
+    flameGrad.append('stop').attr('offset', '0%').attr('stop-color', '#B81E0A')
+    flameGrad.append('stop').attr('offset', '42%').attr('stop-color', '#FF6A1F')
+    flameGrad.append('stop').attr('offset', '76%').attr('stop-color', '#FFB52E')
+    flameGrad.append('stop').attr('offset', '100%').attr('stop-color', '#FFF3B0')
 
     // Faisceau d'hologramme (gagnant projeté) — dégradé vertical cyan qui s'estompe vers le haut.
     const beamGrad = defs.append('linearGradient').attr('id', 'holo-beam-grad')
@@ -731,14 +731,24 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
         const HOLO_LIFT = POLE_H + FLAG_H + 40   // gagnant projeté HAUT (grand hologramme)
         arcs.forEach((arc, i) => {
           arc.flags.forEach((fl, s) => {
-            // ── Pays EN FEU (match en cours) — flammes aux couleurs du pays, derrière le drapeau ──
+            // ── Match en cours : le DRAPEAU brûle — cluster de langues de feu tout autour ──
+            // (derrière le drapeau, qui reste lisible au-dessus). Plusieurs langues décalées
+            // en phase/échelle → feu organique plutôt qu'une flamme unique « brute ».
             const flame = gArcs.append('g').attr('class', `mflame m-${i}-${s}`)
               .attr('opacity', 0).style('pointer-events', 'none')
-            const flameAnim = flame.append('g').attr('class', `globe-flame-anim${s ? ' s1' : ''}`)
-            flameAnim.append('path').attr('d', FLAME_OUTER).attr('fill', fl.color)
-              .attr('opacity', 0.9).style('filter', `drop-shadow(0 0 3px ${fl.color})`)
-            flameAnim.append('path').attr('d', FLAME_INNER).attr('fill', brighten(fl.color, 0.30))
-            flameAnim.append('path').attr('d', FLAME_CORE).attr('fill', '#FFF6E0').attr('opacity', 0.92)
+            const TONGUES = [
+              { x: -9, sc: 0.78, d: -0.05 }, { x: -4.5, sc: 1.06, d: -0.34 },
+              { x: 0,  sc: 1.38, d: 0.0   }, { x: 4.5,  sc: 1.10, d: -0.52 },
+              { x: 9,  sc: 0.82, d: -0.20 },
+            ]
+            for (const tg of TONGUES) {
+              const pos  = flame.append('g').attr('transform', `translate(${tg.x},6) scale(${tg.sc})`)
+              const anim = pos.append('g').attr('class', 'globe-flame-anim').style('animation-delay', `${tg.d}s`)
+              anim.append('path').attr('d', FLAME_OUTER).attr('fill', 'url(#flame-grad)')
+                .style('filter', 'drop-shadow(0 0 3px rgba(255,140,30,.9))')
+              anim.append('path').attr('d', FLAME_INNER).attr('fill', '#FF8A1E').attr('opacity', 0.85)
+              anim.append('path').attr('d', FLAME_CORE).attr('fill', '#FFF3B0').attr('opacity', 0.9)
+            }
 
             gArcs.append('ellipse').attr('class', `mflag-shadow m-${i}-${s}`)
               .attr('fill', 'rgba(0,0,0,0.4)')
@@ -822,8 +832,8 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
               pole.attr('x1', x).attr('y1', y).attr('x2', x).attr('y2', y - POLE_H).attr('opacity', 1)
               img.attr('x', fx).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 1)
               edge.attr('x', fx).attr('y', fy).attr('width', FLAG_W).attr('height', FLAG_H).attr('opacity', 0.9)
-              // Feu pendant le match (les deux pays).
-              flame.attr('transform', `translate(${x},${y})`).attr('opacity', isLive ? 1 : 0)
+              // Feu pendant le match : cluster centré sur le DRAPEAU (pas sur le pied du mât).
+              flame.attr('transform', `translate(${x},${y - POLE_H - FLAG_H / 2})`).attr('opacity', isLive ? 1 : 0)
               // Perdant qui s'éteint (vire au gris/sombre) ; gagnant projeté en hologramme.
               const isLoser = finished && winnerSide >= 0 && s !== winnerSide
               img.classed('globe-flag-out', isLoser)
@@ -898,7 +908,8 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
             const sel = svg.selectAll(`.country-${id}`)
             if (sel.empty()) return
             if (desired === 'fire') {
-              sel.attr('fill', 'url(#fire-grad)').classed('globe-country-out', false).classed('globe-country-fire', true)
+              // Couleur normale + halo chaud discret (le feu vient des flammes autour du drapeau).
+              sel.attr('fill', landColor(id)).classed('globe-country-out', false).classed('globe-country-fire', true)
             } else if (desired === 'out') {
               sel.attr('fill', landColor(id)).classed('globe-country-fire', false).classed('globe-country-out', true)
             } else {
