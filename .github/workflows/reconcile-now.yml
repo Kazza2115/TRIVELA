@@ -3,7 +3,7 @@ name: Reconcile now (classement)
 on:
   workflow_dispatch:
   push:
-    branches: [claude/jolly-archimedes-53jcrc]
+    branches: [claude/jolly-archimedes-53jcrc, claude/world-cup-qualifiers-update-z9ehtl]
     paths: ['scripts/reconcile-now.mjs', '.github/workflows/reconcile-now.yml']
 jobs:
   reconcile:
