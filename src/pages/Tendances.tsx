@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import PageLayout from './PageLayout'
 import TrendBar, { trendPercents } from '../components/TrendBar'
-import { GROUP_MATCHES, knockoutWithTeams, matchKickoffUTC } from '../data/wc2026Matches'
+import { GROUP_MATCHES, knockoutWithTeams, matchKickoffUTC, teamByShort } from '../data/wc2026Matches'
 import type { Match } from '../data/wc2026Matches'
 import {
   getMatchTrends, getMatchOdds, getMatchPlayerBets, getKnockoutTeams,
@@ -321,7 +321,7 @@ function PlayerPronos({ match, started, loading, bets, trend, currentUserId, onR
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <OutcomeColumn label={match.home.name} flag={match.home.code}
                 bets={groups.home} currentUserId={currentUserId} accent="#16a34a" />
-              <OutcomeColumn label="Match nul" flag={null}
+              <OutcomeColumn label="Match nul" flag={null} showQualifier
                 bets={groups.draw} currentUserId={currentUserId} accent="#CA8A04" />
               <OutcomeColumn label={match.away.name} flag={match.away.code}
                 bets={groups.away} currentUserId={currentUserId} accent="#dc2626" />
@@ -346,9 +346,9 @@ function PlayerPronos({ match, started, loading, bets, trend, currentUserId, onR
 }
 
 // Colonne d'une issue : libellé (drapeau + nom) + liste des joueurs ayant pronostiqué cette issue.
-function OutcomeColumn({ label, flag, bets, currentUserId, accent }: {
+function OutcomeColumn({ label, flag, bets, currentUserId, accent, showQualifier }: {
   label: string; flag: string | null; bets: PlayerBet[]
-  currentUserId: string | null; accent: string
+  currentUserId: string | null; accent: string; showQualifier?: boolean
 }) {
   return (
     <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)' }}>
@@ -391,6 +391,19 @@ function OutcomeColumn({ label, flag, bets, currentUserId, accent }: {
                   fontFamily: "'Bebas Neue', cursive", fontSize: 15, letterSpacing: 1,
                   color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums',
                 }}>{b.homeScore}–{b.awayScore}</span>
+                {showQualifier && b.qualifier && (() => {
+                  const qt = teamByShort(b.qualifier)
+                  return (
+                    <span title={`Qualifié choisi : ${qt?.name ?? b.qualifier}`} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+                      fontSize: 10, fontWeight: 800, letterSpacing: 0.3, padding: '1px 7px', borderRadius: 999,
+                      color: '#A07828', background: 'rgba(200,155,60,0.12)', border: '1px solid rgba(200,155,60,0.35)',
+                    }}>
+                      🥅 {qt?.code && <img src={`https://flagcdn.com/w20/${qt.code}.png`} alt="" style={{ width: 15, height: 10, borderRadius: 2, objectFit: 'cover' }} />}
+                      {b.qualifier}
+                    </span>
+                  )
+                })()}
                 {b.points != null && (
                   <span style={{
                     fontSize: 10, fontWeight: 800, padding: '1px 7px', borderRadius: 6,

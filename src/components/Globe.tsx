@@ -156,6 +156,19 @@ const CONF_CENTER: Record<string, [number, number]> = {
   OFC:      [170, -25],
 }
 
+// Affiche KO → affiche du tour suivant (le vainqueur y est reporté). Sert à déduire le
+// perdant d'un match nul réglé aux tirs au but (T.A.B.), que le score seul ne révèle pas.
+const KO_NEXT_SLOT: Record<string, string> = {
+  'r32-1': 'r16-1', 'r32-2': 'r16-1', 'r32-3': 'r16-2', 'r32-4': 'r16-2',
+  'r32-5': 'r16-3', 'r32-6': 'r16-3', 'r32-7': 'r16-4', 'r32-8': 'r16-4',
+  'r32-9': 'r16-5', 'r32-10': 'r16-5', 'r32-11': 'r16-6', 'r32-12': 'r16-6',
+  'r32-13': 'r16-7', 'r32-14': 'r16-7', 'r32-15': 'r16-8', 'r32-16': 'r16-8',
+  'r16-1': 'qf-1', 'r16-2': 'qf-1', 'r16-3': 'qf-2', 'r16-4': 'qf-2',
+  'r16-5': 'qf-3', 'r16-6': 'qf-3', 'r16-7': 'qf-4', 'r16-8': 'qf-4',
+  'qf-1': 'sf-1', 'qf-2': 'sf-1', 'qf-3': 'sf-2', 'qf-4': 'sf-2',
+  'sf-1': 'final', 'sf-2': 'final',
+}
+
 // FIFA rank range across all qualified countries (for global normalisation)
 const _fifaRanks   = Object.values(QUALIFIED).map(q => q.fifaRank)
 const FIFA_RANK_MIN = Math.min(..._fifaRanks)   // 1  (Argentina)
@@ -886,6 +899,18 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
             if (fin) {
               if (fin.h > fin.a && aid != null) losers.add(aid)
               else if (fin.a > fin.h && hid != null) losers.add(hid)
+              else if (fin.h === fin.a) {
+                // Nul → T.A.B. : le perdant est l'équipe de l'affiche absente du tour suivant.
+                const nx = ko[KO_NEXT_SLOT[mid]]
+                const mine = new Set([row.home_short, row.away_short].filter(Boolean).map(s => s!.toUpperCase()))
+                let q: string | null = null
+                if (nx) for (const t of [nx.home_short, nx.away_short]) if (t && mine.has(t.toUpperCase())) q = t.toUpperCase()
+                if (q) {
+                  const qid = idOfShort(q)
+                  if (qid === hid && aid != null) losers.add(aid)
+                  else if (qid === aid && hid != null) losers.add(hid)
+                }
+              }
             }
           }
           // Pays éliminés (sortis en poules ou perdants KO) → ÉTEINTS en gris sombre. À la première

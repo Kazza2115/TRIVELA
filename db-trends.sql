@@ -44,15 +44,18 @@ grant execute on function public.match_trends() to anon, authenticated;
 -- home_score / away_score ne sont dévoilés QUE si : c'est mon propre prono, OU le
 -- pari est verrouillé, OU le coup d'envoi est passé. Sinon NULL (et revealed=false)
 -- → impossible de copier le score d'un autre avant le match.
+-- Renvoie aussi qualifier_short : l'équipe choisie comme qualifiée pour un prono nul
+-- (matchs à élimination directe). Dévoilé selon la même règle anti-copie que le score.
 create or replace function public.match_player_bets(p_match_id text)
 returns table (
-  user_id      uuid,
-  pseudo       text,
-  country_code text,
-  home_score   int,
-  away_score   int,
-  points       int,
-  revealed     boolean
+  user_id        uuid,
+  pseudo         text,
+  country_code   text,
+  home_score     int,
+  away_score     int,
+  qualifier_short text,
+  points         int,
+  revealed       boolean
 )
 language sql
 security definer
@@ -65,6 +68,7 @@ as $$
     p.country_code,
     case when reveal.ok then b.home_score end as home_score,
     case when reveal.ok then b.away_score end as away_score,
+    case when reveal.ok then b.qualifier_short end as qualifier_short,
     b.points,
     reveal.ok                                 as revealed
   from public.bets b

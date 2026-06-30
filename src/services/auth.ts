@@ -555,6 +555,7 @@ export interface PlayerBet {
   countryCode: string
   homeScore:   number | null
   awayScore:   number | null
+  qualifier:   string | null   // KO : équipe choisie comme qualifiée (prono nul), masquée avant le coup d'envoi
   points:      number | null
   revealed:    boolean
 }
@@ -570,6 +571,7 @@ export async function getMatchPlayerBets(matchId: string): Promise<PlayerBet[]> 
     countryCode: (b.country_code as string) ?? 'un',
     homeScore:   b.home_score == null ? null : Number(b.home_score),
     awayScore:   b.away_score == null ? null : Number(b.away_score),
+    qualifier:   (b.qualifier_short as string) ?? null,
     points:      b.points == null ? null : Number(b.points),
     revealed:    !!b.revealed,
   }))
