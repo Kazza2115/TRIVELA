@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import PageLayout from './PageLayout'
-import { GROUP_MATCHES, KNOCKOUT_MATCHES, matchKickoffUTC } from '../data/wc2026Matches'
+import { GROUP_MATCHES, knockoutWithTeams, matchKickoffUTC } from '../data/wc2026Matches'
 import type { Match } from '../data/wc2026Matches'
-import { getMentionables, getResults, adminGetBet, adminSetBet } from '../services/auth'
-import type { UserProfile } from '../services/auth'
+import { getMentionables, getResults, getKnockoutTeams, adminGetBet, adminSetBet } from '../services/auth'
+import type { UserProfile, KnockoutTeamRow } from '../services/auth'
 
 const GOLD = '#C89B3C'
 const KO_LABELS: Record<string, string> = {
@@ -24,6 +24,8 @@ export default function AdminBets({ onBack, currentUser }: {
 }) {
   const [players, setPlayers] = useState<Player[]>([])
   const [settled, setSettled] = useState<Set<string>>(new Set())
+  const [koTeams, setKoTeams] = useState<Record<string, KnockoutTeamRow>>({})
+  const [qualifier, setQualifier] = useState<string | null>(null)   // KO : qualifié choisi (prono nul)
   const [selPlayer, setSelPlayer] = useState<Player | null>(null)
   const [selMatchId, setSelMatchId] = useState<string>('')
   const [score, setScore] = useState<{ home: number; away: number }>({ home: 0, away: 0 })
@@ -38,18 +40,30 @@ export default function AdminBets({ onBack, currentUser }: {
     if (!currentUser?.isAdmin) return
     getMentionables().then(ps => setPlayers(ps.sort((a, b) => a.pseudo.localeCompare(b.pseudo, 'fr', { sensitivity: 'base' }))))
     getResults().then(rs => setSettled(new Set(rs.map(r => r.matchId))))
+    getKnockoutTeams().then(setKoTeams)
   }, [currentUser])
 
-  // Matchs éditables : équipes connues + non encore réglés, triés par coup d'envoi.
-  const matches = useMemo(() => [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
-    .filter(m => m.home.code !== 'un' && m.away.code !== 'un' && !settled.has(m.id))
-    .sort((a, b) => (matchKickoffUTC(a) ?? 0) - (matchKickoffUTC(b) ?? 0)), [settled])
+  // Affiches éliminatoires avec leurs vraies équipes (injectées depuis knockout_teams).
+  const koMatches = useMemo(() => knockoutWithTeams(
+    Object.fromEntries(Object.entries(koTeams).map(([id, r]) => [id, { home_short: r.home_short, away_short: r.away_short }]))
+  ), [koTeams])
+
+  // Matchs éditables, triés par coup d'envoi :
+  //   • phase de groupes : seulement les matchs PAS encore joués (comme avant) ;
+  //   • éliminatoires : toutes les affiches dont les équipes sont connues — y compris
+  //     déjà jouées, pour permettre une correction (le worker recalcule alors les points).
+  const matches = useMemo(() => {
+    const groups = GROUP_MATCHES.filter(m => m.home.code !== 'un' && m.away.code !== 'un' && !settled.has(m.id))
+    const kos = koMatches.filter(m => m.home.code !== 'un' && m.away.code !== 'un')
+    return [...groups, ...kos].sort((a, b) => (matchKickoffUTC(a) ?? 0) - (matchKickoffUTC(b) ?? 0))
+  }, [settled, koMatches])
 
   const match = matches.find(m => m.id === selMatchId) ?? null
 
   // Pré-remplit le score à partir du prono existant (ou 0-0).
   const loadExisting = useCallback(() => {
     if (!selPlayer || !selMatchId) return
+    setQualifier(null)   // le qualifié n'est pas pré-rempli : l'admin le choisit si besoin
     adminGetBet(selPlayer.id, selMatchId).then(b => {
       setScore(b ? { home: b.home, away: b.away } : { home: 0, away: 0 })
       setExisting(!!b)
@@ -61,6 +75,8 @@ export default function AdminBets({ onBack, currentUser }: {
     ? players.filter(p => p.pseudo.toLowerCase().includes(query.trim().toLowerCase()))
     : players
 
+  // Prono nul sur une affiche éliminatoire → on demande quel pays se qualifie (bonus +2).
+  const isKoDraw = !!match && match.round !== 'group' && score.home === score.away
   const save = async () => {
     if (!selPlayer || !match) return
     setSaving(true); setMsg(null)
@@ -69,10 +85,14 @@ export default function AdminBets({ onBack, currentUser }: {
       home: match.home.name, away: match.away.name,
       homeScore: score.home, awayScore: score.away,
       stage: stageLabel(match),
+      qualifier: isKoDraw ? qualifier : null,
     })
     setSaving(false)
     if (error) setMsg({ ok: false, text: error })
-    else { setMsg({ ok: true, text: `Pronostic enregistré pour ${selPlayer.pseudo} : ${match.home.short} ${score.home}–${score.away} ${match.away.short}` }); setExisting(true) }
+    else {
+      const qLbl = isKoDraw && qualifier ? ` · qualifié ${qualifier}` : ''
+      setMsg({ ok: true, text: `Pronostic enregistré pour ${selPlayer.pseudo} : ${match.home.short} ${score.home}–${score.away} ${match.away.short}${qLbl}` }); setExisting(true)
+    }
   }
 
   if (!currentUser?.isAdmin) {
@@ -90,8 +110,8 @@ export default function AdminBets({ onBack, currentUser }: {
     <PageLayout onBack={onBack} accentColor={GOLD} flag="✏️" title="ÉDITER PRONOS" subtitle="Saisir / corriger le pronostic d'un joueur">
       <div style={{ fontSize: 11, color: 'var(--text-2)', lineHeight: 1.6, padding: '11px 14px', marginBottom: 16,
         background: 'rgba(200,155,60,0.07)', border: '1px solid rgba(200,155,60,0.25)', borderRadius: 12 }}>
-        Permet d'ajouter ou corriger le pronostic d'un joueur (ex. oubli avant le blocage). Le verrou de temps est ignoré,
-        mais un match <b>déjà joué</b> ne peut pas être modifié.
+        Permet d'ajouter ou corriger le pronostic d'un joueur (ex. oubli avant le blocage). Le verrou de temps est ignoré.
+        Les affiches éliminatoires sont incluses (même déjà jouées) : les points sont alors recalculés automatiquement.
       </div>
 
       {/* ── Joueur ─────────────────────────────────────────────── */}
@@ -122,7 +142,7 @@ export default function AdminBets({ onBack, currentUser }: {
       </div>
 
       {/* ── Match ──────────────────────────────────────────────── */}
-      <Label>Match (non joué)</Label>
+      <Label>Match</Label>
       <div style={{ position: 'relative', marginBottom: 16 }}>
         <Picker onClick={() => setMatchOpen(o => !o)} open={matchOpen}>
           {match ? (
@@ -164,6 +184,30 @@ export default function AdminBets({ onBack, currentUser }: {
             </div>
             <Side code={match.away.code} short={match.away.short} right />
           </div>
+
+          {/* Prono nul en phase finale → qui se qualifie (tirs au but) : bonus +2 */}
+          {isKoDraw && (
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textAlign: 'center', marginBottom: 8 }}>
+                Match nul — qui se qualifie ? <span style={{ color: '#A07828' }}>(+2)</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[match.home, match.away].map(t => {
+                  const on = qualifier === t.short
+                  return (
+                    <button key={t.short} onClick={() => setQualifier(on ? null : t.short)} style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      padding: '8px 0', borderRadius: 10, cursor: 'pointer', fontSize: 13, fontWeight: 800,
+                      background: on ? 'rgba(200,155,60,0.16)' : 'var(--bg-fill)',
+                      border: `1px solid ${on ? '#C89B3C' : 'var(--border)'}`, color: on ? '#A07828' : 'var(--text-2)',
+                    }}>
+                      <img src={`https://flagcdn.com/w20/${t.code}.png`} alt="" style={flagStyle} />{t.short}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           <button onClick={save} disabled={saving} style={{
             width: '100%', marginTop: 16, padding: '11px 0', borderRadius: 10, border: 'none',

@@ -306,18 +306,26 @@ async function handleAdminBet(path, req, env) {
   }
 
   // /admin/set-bet
-  const { userId, matchId, home, away, homeScore, awayScore, stage } = body
+  const { userId, matchId, home, away, homeScore, awayScore, stage, qualifier } = body
   if (!userId || !matchId || homeScore == null || awayScore == null || homeScore < 0 || awayScore < 0) {
     return jsonRes({ error: 'Données invalides.' }, 400)
   }
+  const qualif = (qualifier || '').toString().trim().toUpperCase() || null   // KO : qualifié choisi (prono nul)
   const rr = await sb(`match_results?match_id=eq.${matchId}&select=home_score,away_score`)
   const res = rr.ok ? (await rr.json())[0] : null
   const settled = !!res
   const row = { user_id: userId, match_id: matchId, home, away, home_score: homeScore, away_score: awayScore, stage, locked: settled }
-  if (settled) row.points = betPoints(homeScore, awayScore, res.home_score, res.away_score)
-  const up = await sb('bets?on_conflict=user_id,match_id', {
+  if (qualif) row.qualifier_short = qualif
+  if (settled) row.points = betPoints(homeScore, awayScore, res.home_score, res.away_score)   // placeholder ; reconcile applique le bonus KO
+  let up = await sb('bets?on_conflict=user_id,match_id', {
     method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify([row]),
   })
+  if (!up.ok && qualif) {   // repli si la colonne qualifier_short n'existe pas encore
+    const { qualifier_short, ...rowNoQ } = row
+    up = await sb('bets?on_conflict=user_id,match_id', {
+      method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify([rowNoQ]),
+    })
+  }
   if (!up.ok) return jsonRes({ error: `Échec écriture (${up.status}).` }, 500)
   if (settled) { try { await reconcileScores(sb) } catch { /* ignore */ } }
   return jsonRes({ ok: true, settled, points: settled ? row.points : null })

@@ -690,7 +690,7 @@ export async function adminGetBet(userId: string, matchId: string): Promise<{ ho
 /** Crée / corrige le prono d'un joueur (admin ; contourne le verrou de temps). */
 export async function adminSetBet(params: {
   userId: string; matchId: string; home: string; away: string
-  homeScore: number; awayScore: number; stage: string
+  homeScore: number; awayScore: number; stage: string; qualifier?: string | null
 }): Promise<{ error?: string }> {
   if (!supabaseConfigured) return { error: 'Indisponible hors-ligne.' }
   await ensureFreshToken()
@@ -701,6 +701,7 @@ export async function adminSetBet(params: {
         token: _jwt, userId: params.userId, matchId: params.matchId,
         home: params.home, away: params.away,
         homeScore: params.homeScore, awayScore: params.awayScore, stage: params.stage,
+        qualifier: params.qualifier ?? null,
       }),
     })
     const d = await res.json().catch(() => ({}))
