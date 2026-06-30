@@ -1490,7 +1490,14 @@ function DesktopBracket({ data }: { data: KOData }) {
   const minW = 8 * W + 8 * CW + W + 16
   return (
     <>
-      <div style={{ overflowX: 'auto', scrollbarWidth: 'none', paddingBottom: 8 }}>
+      {/* Carte pannable : sur téléphone le tableau (large + haut) tient dans une zone
+          bornée qu'on fait défiler dans les 2 sens (◀▶ et ▲▼), au lieu d'allonger la page. */}
+      <div style={{
+        overflow: 'auto', scrollbarWidth: 'thin', WebkitOverflowScrolling: 'touch',
+        touchAction: 'pan-x pan-y', overscrollBehavior: 'contain',
+        maxHeight: 'min(72vh, 720px)', paddingBottom: 8,
+        border: '1px solid var(--border)', borderRadius: 12, background: 'var(--bg)',
+      }}>
         <div style={{ display: 'flex', gap: 0, minWidth: minW, height: BR_H, alignItems: 'stretch' }}>
           {/* ── Côté gauche ── */}
           <RoundColumn {...colP} width={W} label="32es" ids={['r32-1', 'r32-2', 'r32-3', 'r32-4', 'r32-5', 'r32-6', 'r32-7', 'r32-8']} />
@@ -1686,7 +1693,7 @@ function KnockoutView(data: KOData) {
         borderRadius: 12, fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6,
       }}>
         {view === 'bracket'
-          ? 'Touchez un match du tableau (faites défiler ◀ ▶) pour pronostiquer juste en dessous.'
+          ? 'Touchez un match du tableau (faites défiler ◀ ▶ ▲ ▼) pour pronostiquer juste en dessous. Vue « Liste » plus pratique sur téléphone.'
           : 'Tous les matchs à élimination directe, les uns après les autres, dans l’ordre des dates.'}{' '}
         Les drapeaux des qualifiés apparaissent après la phase de groupes.
       </div>

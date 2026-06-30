@@ -8,7 +8,7 @@
 // fenêtre de jeu (coup d'envoi → fin). Hors match, le cron sort immédiatement après
 // 2 lectures Supabase (gratuites) → ZÉRO appel à l'API football. Cette fenêtre est
 // déterminée à partir de match_schedule (kickoff) et de match_results (déjà réglé).
-import { buildFixtureMap, orient, settleViaRest, reconcileScores, betPoints, shortOf, SETTLE_GRACE_MS } from '../scripts/wc-map.mjs'
+import { buildFixtureMap, orient, settleViaRest, reconcileScores, betPoints, shortOf, propagateKnockout, SETTLE_GRACE_MS } from '../scripts/wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const API = 'https://v3.football.api-sports.io'
@@ -113,7 +113,11 @@ async function syncKnockoutTeams(sb, all, fxMap) {
     const want = []
     for (const f of (all || [])) {
       const id = fxMap.get(f.fixture?.id)
-      if (!id || !/^(r32|r16|qf|sf|3rd|final)/.test(id)) continue
+      // On ne fixe ici QUE les affiches du tour des 32 (les équipes de base). Les tours
+      // suivants (R16→finale) sont reconstruits par propagation des vainqueurs réglés
+      // (rebuildBracketFromResults) → l'arbre suit le vrai bracket et se met à jour
+      // après chaque match, sans dépendre de l'ordre des fixtures de l'API.
+      if (!id || !/^r32/.test(id)) continue
       const hs = shortOf(f.teams?.home?.name)
       const as = shortOf(f.teams?.away?.name)
       if (!hs || !as) continue   // équipes pas encore déterminées → on ne touche pas
@@ -130,6 +134,50 @@ async function syncKnockoutTeams(sb, all, fxMap) {
       if (ex && ex.source === 'admin') continue                              // override manuel prioritaire
       if (ex && ex.home_short === w.hs && ex.away_short === w.as) continue    // déjà à jour
       rows.push({ match_id: w.id, home_short: w.hs, away_short: w.as, source: 'api', updated_at: new Date().toISOString() })
+    }
+    if (!rows.length) return 0
+    await sb('knockout_teams?on_conflict=match_id', {
+      method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(rows),
+    })
+    return rows.length
+  } catch { return 0 }
+}
+
+// Reconstruit l'arbre du tableau (R16 → finale) en propageant le vainqueur de chaque
+// affiche RÉGLÉE dans son créneau du tour suivant (HOME si slot impair, AWAY si pair) —
+// donc selon le vrai bracket FIFA, et mis à jour APRÈS CHAQUE MATCH. Le vainqueur d'un
+// match nul (tirs au but) est lu sur l'API (drapeau `winner`). Respecte les overrides
+// manuels (source 'admin'). Zéro appel API supplémentaire (réutilise `all`).
+async function rebuildBracketFromResults(sb, all, fxMap) {
+  try {
+    const rr = await sb('match_results?select=match_id,home_score,away_score')
+    if (!rr.ok) return 0
+    const results = {}
+    for (const r of await rr.json()) results[r.match_id] = r
+    const kr = await sb('knockout_teams?select=match_id,home_short,away_short,source')
+    if (!kr.ok) return 0
+    const ko = {}, src = {}
+    for (const r of await kr.json()) { ko[r.match_id] = r; src[r.match_id] = r.source }
+    // Vainqueurs aux tirs au but (matchs nuls) depuis l'API : drapeau teams.*.winner.
+    const tab = {}
+    for (const f of (all || [])) {
+      const id = fxMap.get(f.fixture?.id)
+      if (!id || !/^(r32|r16|qf|sf|3rd|final)/.test(id)) continue
+      const gh = f.goals?.home, ga = f.goals?.away
+      if (gh == null || ga == null || gh !== ga) continue   // pas un nul
+      const wName = f.teams?.home?.winner ? f.teams?.home?.name : f.teams?.away?.winner ? f.teams?.away?.name : null
+      const ws = shortOf(wName)
+      if (ws) tab[id] = ws
+    }
+    const derived = propagateKnockout(ko, results, tab)
+    const rows = []
+    for (const [mid, t] of Object.entries(derived)) {
+      if (src[mid] === 'admin') continue                    // override manuel prioritaire
+      const hs = t.home_short ?? null, as = t.away_short ?? null
+      const cur = ko[mid]
+      if (cur && cur.home_short === hs && cur.away_short === as) continue   // déjà à jour
+      rows.push({ match_id: mid, home_short: hs, away_short: as, source: 'api', updated_at: new Date().toISOString() })
     }
     if (!rows.length) return 0
     await sb('knockout_teams?on_conflict=match_id', {
@@ -239,6 +287,8 @@ async function runLoop(env) {
   // Bracket : remplit les affiches éliminatoires connues (réutilise `all`, zéro appel API).
   try { await syncKnockoutTeams(sb, all, fxMap) } catch (e) { console.log('ko-sync err', String(e)) }
   try { await settleAll(api, sb, all, fxMap) } catch (e) { console.log('settle err', String(e)) }
+  // Arbre du tableau mis à jour après chaque match (propagation des vainqueurs).
+  try { await rebuildBracketFromResults(sb, all, fxMap) } catch (e) { console.log('bracket err', String(e)) }
   // Classement réconcilié après règlement (idempotent, insensible aux courses).
   try { await reconcileScores(sb) } catch (e) { console.log('reconcile err', String(e)) }
   for (let i = 0; i < 5; i++) {
@@ -352,12 +402,14 @@ export default {
     let ko = 0
     try { ko = await syncKnockoutTeams(sb, all, fxMap) } catch { /* ignore */ }
     const settled = await settleAll(api, sb, all, fxMap)
+    let bracket = 0
+    try { bracket = await rebuildBracketFromResults(sb, all, fxMap) } catch { /* ignore */ }
     const n = await poll(api, sb, fxMap)
     // Réconciliation du classement à CHAQUE ping (recalcul désormais léger) :
     // settleViaRest verrouille les points mais ne touche pas profiles.score, donc
     // c'est ici (ou le cron) qui remet score = somme des points, sans dépendre du cron.
     let reconciled = 0
     try { reconciled = await reconcileScores(sb) } catch { /* ignore */ }
-    return new Response(`live: ${n} (map: ${fxMap.size}, settled: ${settled}, reconciled: ${reconciled}, ko: ${ko})`)
+    return new Response(`live: ${n} (map: ${fxMap.size}, settled: ${settled}, reconciled: ${reconciled}, ko: ${ko}, bracket: ${bracket})`)
   },
 }

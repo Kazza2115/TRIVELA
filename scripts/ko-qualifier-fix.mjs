@@ -31,11 +31,13 @@ for (const r of await (await sb('match_results?select=match_id,home_score,away_s
 // l'ancienne valeur du slot, qui pouvait contenir des données chronologiques erronées
 // (c'est ce qui mettait le Maroc à tort en r16-1.away).
 const derived = propagateKnockout(ko, results, TAB_WINNERS)
+// source 'api' (et non 'admin') : le worker (rebuildBracketFromResults) doit pouvoir
+// continuer à mettre à jour ces créneaux après chaque match (ex. remplir le 2e qualifié).
 const rows = Object.entries(derived).map(([match_id, t]) => ({
   match_id,
   home_short: t.home_short ?? null,
   away_short: t.away_short ?? null,
-  source: 'admin',
+  source: 'api',
   updated_at: new Date().toISOString(),
 }))
 
