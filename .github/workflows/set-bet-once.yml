@@ -1,7 +1,7 @@
 name: Set bet once (ponctuel)
 on:
   push:
-    branches: [claude/jolly-archimedes-53jcrc]
+    branches: [claude/jolly-archimedes-53jcrc, claude/world-cup-qualifiers-update-z9ehtl]
     paths: ['scripts/set-bet-once.mjs', '.github/workflows/set-bet-once.yml']
   workflow_dispatch:
 jobs:
@@ -13,25 +13,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # KAZA · Belgique-Nouvelle-Zélande (J3) : Belgique 3-1 → orientation match NZL 1 - BEL 3
+      # Evita · Pays-Bas-Maroc (16es / r32-4) : Maroc 1 - Pays-Bas 0
+      #   → orientation match NED(dom) vs MAR(ext) : home(NED)=0, away(MAR)=1.
+      #   Match réglé 1-1 (Maroc qualifié aux t.a.b.) → bon vainqueur Maroc = +3 (via reconcile).
       - run: node scripts/set-bet-once.mjs
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          BET_PSEUDO: 'KAZA'
-          BET_MATCH_ID: 'gG-md3-nzl-bel'
-          BET_HOME_NAME: 'Nouvelle-Zélande'
-          BET_AWAY_NAME: 'Belgique'
-          BET_HOME: '1'
-          BET_AWAY: '3'
-          BET_STAGE: 'Groupe G · J3'
-      # KAZA · Égypte-Iran (J3) : Égypte 2-1
-      - run: node scripts/set-bet-once.mjs
-        env:
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          BET_PSEUDO: 'KAZA'
-          BET_MATCH_ID: 'gG-md3-egy-irn'
-          BET_HOME_NAME: 'Égypte'
-          BET_AWAY_NAME: 'Iran'
-          BET_HOME: '2'
+          BET_PSEUDO: 'Evita'
+          BET_MATCH_ID: 'r32-4'
+          BET_HOME_NAME: 'Pays-Bas'
+          BET_AWAY_NAME: 'Maroc'
+          BET_HOME: '0'
           BET_AWAY: '1'
-          BET_STAGE: 'Groupe G · J3'
+          BET_STAGE: '16es de finale'
