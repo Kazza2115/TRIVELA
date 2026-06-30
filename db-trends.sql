@@ -46,7 +46,9 @@ grant execute on function public.match_trends() to anon, authenticated;
 -- → impossible de copier le score d'un autre avant le match.
 -- Renvoie aussi qualifier_short : l'équipe choisie comme qualifiée pour un prono nul
 -- (matchs à élimination directe). Dévoilé selon la même règle anti-copie que le score.
-create or replace function public.match_player_bets(p_match_id text)
+-- (drop d'abord : on ne peut pas changer le type de retour d'une fonction existante.)
+drop function if exists public.match_player_bets(text);
+create function public.match_player_bets(p_match_id text)
 returns table (
   user_id        uuid,
   pseudo         text,
