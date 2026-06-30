@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import PageLayout from './PageLayout'
 import { GROUP_MATCHES, GROUPS, ALL_MATCHES, matchKickoffUTC, knockoutWithTeams } from '../data/wc2026Matches'
+import { pointsBadge, ptsLabel } from '../utils/pointsBadge'
 import type { Match, Team } from '../data/wc2026Matches'
 import { saveBet, saveFavorites, getBets, subscribeToResults, getResults, getLive, subscribeToLive, getMatchGoals, getMatchCards, subscribeToMatchGoals, getMatchTrends, getKnockoutTeams } from '../services/auth'
 import type { KnockoutTeamRow } from '../services/auth'
@@ -1032,15 +1033,10 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
         </div>
         {result && confirmed && prediction ? (() => {
           const pts = calcPoints(result, prediction, match, qualifier, koTeams)
-          const hi = pts >= 5, mid = pts > 0 && pts < 5
+          const bd = pointsBadge(pts)
           return (
-            <div style={{
-              padding: '4px 10px', borderRadius: 8,
-              background: hi ? 'rgba(34,197,94,0.12)' : mid ? 'rgba(200,155,60,0.12)' : 'rgba(110,110,115,0.1)',
-              border: `1px solid ${hi ? 'rgba(34,197,94,0.3)' : mid ? 'rgba(200,155,60,0.3)' : 'rgba(110,110,115,0.2)'}`,
-              fontSize: 12, fontWeight: 700, color: hi ? '#22c55e' : mid ? '#A07828' : '#dc2626',
-            }}>
-              {pts > 0 ? '+' : ''}{pts} pts
+            <div className={bd.className} style={{ padding: '4px 10px', borderRadius: 8, fontSize: 12, ...bd.style }}>
+              {ptsLabel(pts)} pts
             </div>
           )
         })() : result ? (
@@ -1433,13 +1429,10 @@ function BracketCell({ match, data, expanded, alwaysBet, onSelect }: {
       )}
       {result && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 2 }}>
-          {pts != null ? (
-            <span style={{
-              fontSize: 9, fontWeight: 800, padding: '1px 7px', borderRadius: 6,
-              color: pts === 5 ? '#22c55e' : pts > 0 ? '#A07828' : 'var(--text-3)',
-              background: pts === 5 ? 'rgba(34,197,94,0.12)' : pts > 0 ? 'rgba(200,155,60,0.12)' : 'rgba(110,110,115,0.1)',
-            }}>{pts > 0 ? '+' : ''}{pts} pts</span>
-          ) : (
+          {pts != null ? (() => {
+            const bd = pointsBadge(pts)
+            return <span className={bd.className} style={{ fontSize: 9, padding: '1px 7px', borderRadius: 6, ...bd.style }}>{ptsLabel(pts)} pts</span>
+          })() : (
             <span style={{ fontSize: 8, color: 'var(--text-3)', fontWeight: 600, letterSpacing: 0.4, textTransform: 'uppercase' }}>terminé</span>
           )}
         </div>

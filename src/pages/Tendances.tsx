@@ -7,6 +7,7 @@ import {
   getMatchTrends, getMatchOdds, getMatchPlayerBets, getKnockoutTeams,
 } from '../services/auth'
 import type { UserProfile, MatchTrend, MatchOdds, PlayerBet, KnockoutTeamRow } from '../services/auth'
+import { pointsBadge, ptsLabel } from '../utils/pointsBadge'
 
 const KO_LABELS: Record<string, string> = {
   r32: 'Tour des 32', r16: 'Huitièmes', qf: 'Quarts', sf: 'Demi-finales', '3rd': '3e place', final: 'Finale',
@@ -404,13 +405,14 @@ function OutcomeColumn({ label, flag, bets, currentUserId, accent, showQualifier
                     </span>
                   )
                 })()}
-                {b.points != null && (
-                  <span style={{
-                    fontSize: 10, fontWeight: 800, padding: '1px 7px', borderRadius: 6,
-                    color: b.points === 5 ? '#22c55e' : b.points > 0 ? '#A07828' : 'var(--text-3)',
-                    background: b.points === 5 ? 'rgba(34,197,94,0.12)' : b.points > 0 ? 'rgba(200,155,60,0.12)' : 'rgba(110,110,115,0.1)',
-                  }}>{b.points > 0 ? '+' : ''}{b.points}</span>
-                )}
+                {b.points != null && (() => {
+                  const bd = pointsBadge(b.points)
+                  return (
+                    <span className={bd.className} style={{ fontSize: 10, padding: '1px 7px', borderRadius: 6, ...bd.style }}>
+                      {ptsLabel(b.points)}
+                    </span>
+                  )
+                })()}
               </div>
             )
           })}

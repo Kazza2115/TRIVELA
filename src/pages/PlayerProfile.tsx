@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import PageLayout from './PageLayout'
 import { ALL_MATCHES, knockoutWithTeams } from '../data/wc2026Matches'
+import { pointsBadge, ptsLabel } from '../utils/pointsBadge'
 import type { Match, KnockoutAssign } from '../data/wc2026Matches'
 import {
   getPublicBets, getResults, getRatings, getComments, getCommentReactions,
@@ -463,15 +464,15 @@ function BetSocialCard({
         )}
 
         {/* Points badge */}
-        {pts !== null && (
-          <div style={{
-            minWidth: 30, textAlign: 'center', padding: '3px 6px', borderRadius: 8,
-            fontFamily: "'Bebas Neue', cursive", fontSize: 16,
-            background: pts === 5 ? 'rgba(34,197,94,0.14)' : pts >= 3 ? 'rgba(200,155,60,0.14)' : 'rgba(110,110,115,0.1)',
-            border: `1px solid ${pts === 5 ? 'rgba(34,197,94,0.35)' : pts >= 3 ? 'rgba(200,155,60,0.3)' : 'rgba(110,110,115,0.2)'}`,
-            color: pts === 5 ? '#16a34a' : pts >= 3 ? '#A07828' : 'var(--text-3)',
-          }}>+{pts}</div>
-        )}
+        {pts !== null && (() => {
+          const bd = pointsBadge(pts)
+          return (
+            <div className={bd.className} style={{
+              minWidth: 30, textAlign: 'center', padding: '3px 6px', borderRadius: 8,
+              fontFamily: "'Bebas Neue', cursive", fontSize: 16, ...bd.style,
+            }}>{ptsLabel(pts)}</div>
+          )
+        })()}
       </div>
 
       {/* Rating + comment toggle */}

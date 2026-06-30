@@ -10,7 +10,7 @@ const sb = (p, i = {}) => fetch(`${SUPA_URL}/rest/v1/${p}`, {
   ...i, headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json', ...(i.headers || {}) },
 })
 
-// Bracket + résultats.
+// Bracket + résultats. (Relance 2026-06-30 : diagnostic bracket cassé.)
 const ko = {}
 for (const r of await (await sb('knockout_teams?select=match_id,home_short,away_short,source')).json()) ko[r.match_id] = r
 const results = {}
