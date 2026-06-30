@@ -17,6 +17,7 @@ const AWAY_NM  = process.env.BET_AWAY_NAME
 const HOME     = Number(process.env.BET_HOME)
 const AWAY     = Number(process.env.BET_AWAY)
 const STAGE    = process.env.BET_STAGE || ''
+const QUALIF   = (process.env.BET_QUALIFIER || '').trim().toUpperCase() || null   // KO : qualifié choisi (prono nul)
 if (!PSEUDO || !MATCH_ID || !HOME_NM || !AWAY_NM || !Number.isFinite(HOME) || !Number.isFinite(AWAY)) {
   console.error('❌ Paramètres manquants (BET_PSEUDO, BET_MATCH_ID, BET_HOME_NAME, BET_AWAY_NAME, BET_HOME, BET_AWAY).'); process.exit(1)
 }
@@ -35,14 +36,22 @@ const res = rr.ok ? (await rr.json())[0] : null
 const settled = !!res
 console.log(`Match ${MATCH_ID} : ${settled ? `RÉGLÉ ${res.home_score}-${res.away_score}` : 'pas encore réglé'}`)
 
-// 3) Upsert du prono.
+// 3) Upsert du prono. (qualifier_short : utile pour un prono NUL en phase KO → bonus +2.)
 const row = { user_id: prof.id, match_id: MATCH_ID, home: HOME_NM, away: AWAY_NM, home_score: HOME, away_score: AWAY, stage: STAGE, locked: settled }
-if (settled) row.points = betPoints(HOME, AWAY, res.home_score, res.away_score)
-const up = await sb('bets?on_conflict=user_id,match_id', {
+if (QUALIF) row.qualifier_short = QUALIF
+if (settled) row.points = betPoints(HOME, AWAY, res.home_score, res.away_score)   // placeholder ; reconcileScores recalcule avec le bonus KO
+let up = await sb('bets?on_conflict=user_id,match_id', {
   method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify([row]),
 })
+// Repli si la colonne qualifier_short n'existe pas encore (migration non appliquée).
+if (!up.ok && QUALIF) {
+  const { qualifier_short, ...rowNoQ } = row
+  up = await sb('bets?on_conflict=user_id,match_id', {
+    method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify([rowNoQ]),
+  })
+}
 if (!up.ok) { console.error(`❌ Échec écriture (${up.status}) : ${await up.text()}`); process.exit(1) }
-console.log(`✅ Prono enregistré : ${HOME_NM} ${HOME}-${AWAY} ${AWAY_NM}${settled ? ` → ${row.points} pt(s)` : ''}`)
+console.log(`✅ Prono enregistré : ${HOME_NM} ${HOME}-${AWAY} ${AWAY_NM}${QUALIF ? ` · qualifié ${QUALIF}` : ''}${settled ? ` → ${row.points} pt(s) (avant bonus KO)` : ''}`)
 
 // 4) Si réglé, réconcilie le classement (score = somme des points).
 if (settled) {

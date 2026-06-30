@@ -13,16 +13,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # Evita · Pays-Bas-Maroc (16es / r32-4) : Maroc 1 - Pays-Bas 0
-      #   → orientation match NED(dom) vs MAR(ext) : home(NED)=0, away(MAR)=1.
-      #   Match réglé 1-1 (Maroc qualifié aux t.a.b.) → bon vainqueur Maroc = +3 (via reconcile).
+      # Dyran · Côte d'Ivoire-Norvège (16es / r32-10) : prono NUL 1-1, qualifié = Norvège.
+      #   Orientation match CIV(dom) vs NOR(ext) : home(CIV)=1, away(NOR)=1, qualifier=NOR.
       - run: node scripts/set-bet-once.mjs
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          BET_PSEUDO: 'Evita'
-          BET_MATCH_ID: 'r32-4'
-          BET_HOME_NAME: 'Pays-Bas'
-          BET_AWAY_NAME: 'Maroc'
-          BET_HOME: '0'
+          BET_PSEUDO: 'Dyran'
+          BET_MATCH_ID: 'r32-10'
+          BET_HOME_NAME: "Côte d'Ivoire"
+          BET_AWAY_NAME: 'Norvège'
+          BET_HOME: '1'
           BET_AWAY: '1'
+          BET_QUALIFIER: 'NOR'
           BET_STAGE: '16es de finale'
