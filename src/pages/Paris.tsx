@@ -1185,36 +1185,6 @@ function cardShort(c: RedCard): string {
   return `${name}${min}`
 }
 
-function BracketScorers({ scorers, redCards = [] }: { scorers: Scorer[]; redCards?: RedCard[] }) {
-  if (!scorers.length && !redCards.length) return null
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginTop: 1 }}>
-      {scorers.map((s, i) => (
-        <div key={`g${i}`} style={{
-          display: 'flex', alignItems: 'center', gap: 3,
-          justifyContent: s.side === 'home' ? 'flex-start' : 'flex-end',
-          fontSize: 8, color: 'var(--text-2)', lineHeight: 1.2,
-        }}>
-          {s.side === 'away' && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span>}
-          <span style={{ fontSize: 8 }}>⚽</span>
-          {s.side === 'home' && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scorerShort(s)}</span>}
-        </div>
-      ))}
-      {redCards.map((c, i) => (
-        <div key={`r${i}`} style={{
-          display: 'flex', alignItems: 'center', gap: 3,
-          justifyContent: c.side === 'home' ? 'flex-start' : 'flex-end',
-          fontSize: 8, color: 'var(--text-2)', lineHeight: 1.2,
-        }}>
-          {c.side === 'away' && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cardShort(c)}</span>}
-          <span style={{ fontSize: 8 }}>🟥</span>
-          {c.side === 'home' && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cardShort(c)}</span>}
-        </div>
-      ))}
-    </div>
-  )
-}
-
 // ─── Knockout bracket — double tableau de tournoi ──────────────────────────
 function MiniTeam({ team, score, win, dim, fire }: {
   team: Team; score: number | null; win: boolean; dim: boolean; fire?: boolean
@@ -1418,7 +1388,9 @@ function BracketCell({ match, data, expanded, alwaysBet, onSelect }: {
       <MiniTeam team={match.home} score={hs} win={homeWin || tabWin === upShort(match.home.short)} dim={awayWin || (!!tabWin && tabWin === upShort(match.away.short))} fire={fireHome} />
       <div style={{ height: 1, background: 'var(--sep)' }} />
       <MiniTeam team={match.away} score={as} win={awayWin || tabWin === upShort(match.away.short)} dim={homeWin || (!!tabWin && tabWin === upShort(match.home.short))} fire={fireAway} />
-      <BracketScorers scorers={data.goals[id] ?? []} redCards={data.cards[id] ?? []} />
+      {/* Pas de liste de buteurs ici : elle ferait exploser la hauteur des cases et
+          désaligne tout le tableau (surtout avec les tireurs aux t.a.b.). Les buteurs
+          restent visibles en vue Liste et dans la carte du match sélectionné. */}
       {tabWinName && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 1 }}>
           <span style={{
@@ -1510,7 +1482,7 @@ function DesktopBracket({ data }: { data: KOData }) {
   const onSelect = (id: string) => setSelected(id)
   const W = 118   // largeur d'une colonne de matchs
   const CW = 22   // largeur d'une colonne de connecteurs
-  const BR_H = 588
+  const BR_H = 704   // hauteur : ~85px par case de 32es → une case réglée (équipes + t.a.b. + pts) tient sans déborder
   const finalMatch = data.koMatches.find(m => m.id === 'final')!
   const thirdMatch = data.koMatches.find(m => m.id === '3rd')!
   const sel = data.koMatches.find(m => m.id === selected)
