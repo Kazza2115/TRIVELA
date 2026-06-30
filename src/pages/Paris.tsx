@@ -699,6 +699,12 @@ const KO_NEXT_SLOT: Record<string, string> = {
 }
 const isKoMatch = (id: string) => /^(r32|r16|qf|sf|3rd|final)/.test(id)
 const upShort = (s?: string | null) => (s ?? '').toUpperCase()
+/** Vainqueur aux tirs au but d'un match KO nul réglé (code court), sinon null. */
+function tabWinnerShort(match: Match | undefined, result: MatchResult | undefined, ko?: KoAssign): string | null {
+  if (!match || !result || !ko || !isKoMatch(match.id)) return null
+  if (result.homeScore !== result.awayScore) return null   // pas un nul → pas de T.A.B.
+  return koActualQual(match.id, result.homeScore, result.awayScore, ko)
+}
 function koActualQual(id: string, rH: number, rA: number, ko: KoAssign): string | null {
   const me = ko[id]; if (!me) return null
   if (rH > rA) return upShort(me.home_short) || null
@@ -1003,11 +1009,24 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
           {lockError ? (
             <span style={{ color: '#dc2626', fontWeight: 700 }}>🔒 {lockError}</span>
           ) : result ? (
-            <span style={{ fontWeight: 700, color: 'var(--text-2)', letterSpacing: 0.3 }}>
-              FT&thinsp;
-              <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 13, letterSpacing: 1 }}>
-                {result.homeScore}–{result.awayScore}
+            <span style={{ fontWeight: 700, color: 'var(--text-2)', letterSpacing: 0.3, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span>
+                FT&thinsp;
+                <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 13, letterSpacing: 1 }}>
+                  {result.homeScore}–{result.awayScore}
+                </span>
               </span>
+              {(() => {
+                const tw = tabWinnerShort(match, result, koTeams)
+                const name = tw === upShort(match.home.short) ? match.home.short
+                  : tw === upShort(match.away.short) ? match.away.short : null
+                return name ? (
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 800, padding: '1px 7px', borderRadius: 5, letterSpacing: 0.3,
+                    color: '#A07828', background: 'rgba(200,155,60,0.14)',
+                  }}>🥅 {name} aux t.a.b.</span>
+                ) : null
+              })()}
             </span>
           ) : null}
         </div>
@@ -1387,6 +1406,9 @@ function BracketCell({ match, data, expanded, alwaysBet, onSelect }: {
   const pred = data.predictions[id]
   const showBet = !!alwaysBet && !result && !isLive
   const pts = result && confirmed && pred ? calcPoints(result, pred, match, data.qualifiers[id], data.koTeams) : null
+  const tabWin = tabWinnerShort(match, result, data.koTeams)
+  const tabWinName = tabWin === upShort(match.home.short) ? match.home.short
+    : tabWin === upShort(match.away.short) ? match.away.short : null
   return (
     <div onClick={() => onSelect(id)} style={{
       width: '100%', display: 'flex', flexDirection: 'column', gap: 3,
@@ -1397,10 +1419,18 @@ function BracketCell({ match, data, expanded, alwaysBet, onSelect }: {
       animation: isLive ? 'livePulse 1.6s ease-in-out infinite' : undefined,
       transition: 'border-color 0.15s, background 0.15s',
     }}>
-      <MiniTeam team={match.home} score={hs} win={homeWin} dim={awayWin} fire={fireHome} />
+      <MiniTeam team={match.home} score={hs} win={homeWin || tabWin === upShort(match.home.short)} dim={awayWin || (!!tabWin && tabWin === upShort(match.away.short))} fire={fireHome} />
       <div style={{ height: 1, background: 'var(--sep)' }} />
-      <MiniTeam team={match.away} score={as} win={awayWin} dim={homeWin} fire={fireAway} />
+      <MiniTeam team={match.away} score={as} win={awayWin || tabWin === upShort(match.away.short)} dim={homeWin || (!!tabWin && tabWin === upShort(match.home.short))} fire={fireAway} />
       <BracketScorers scorers={data.goals[id] ?? []} redCards={data.cards[id] ?? []} />
+      {tabWinName && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 1 }}>
+          <span style={{
+            fontSize: 8, fontWeight: 800, padding: '1px 6px', borderRadius: 5, letterSpacing: 0.3,
+            color: '#A07828', background: 'rgba(200,155,60,0.14)', whiteSpace: 'nowrap',
+          }}>🥅 {tabWinName} aux t.a.b.</span>
+        </div>
+      )}
       {result && (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: 2 }}>
           {pts != null ? (

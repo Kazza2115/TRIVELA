@@ -54,7 +54,7 @@ export const KO_QUALIFIER_BONUS = 2
 const KO_ID_RE = /^(r32|r16|qf|sf|3rd|final)/
 // Affiche → affiche du tour suivant (le vainqueur y est reporté). Sert à déduire le
 // qualifié d'un match nul (réglé aux T.A.B.) directement depuis le bracket.
-const KO_NEXT = {
+export const KO_NEXT = {
   'r32-1': 'r16-1', 'r32-2': 'r16-1', 'r32-3': 'r16-2', 'r32-4': 'r16-2',
   'r32-5': 'r16-3', 'r32-6': 'r16-3', 'r32-7': 'r16-4', 'r32-8': 'r16-4',
   'r32-9': 'r16-5', 'r32-10': 'r16-5', 'r32-11': 'r16-6', 'r32-12': 'r16-6',
@@ -66,6 +66,54 @@ const KO_NEXT = {
 }
 const _up = s => (s || '').toUpperCase()
 export const isKnockout = id => KO_ID_RE.test(id || '')
+
+/** Affiche du tour suivant + position (le vainqueur d'un slot impair va à HOME, pair à AWAY). */
+export function koNextPos(id) {
+  const slot = KO_NEXT[id]; if (!slot) return null
+  const n = parseInt((id.split('-')[1] || '1'), 10)
+  return { slot, pos: n % 2 === 1 ? 'home' : 'away' }
+}
+
+/** Vainqueur / perdant (codes courts) d'un match KO réglé. Nul → besoin du vainqueur T.A.B. explicite. */
+function koWinLoss(id, me, r, tabWinners) {
+  if (!me) return null
+  const H = _up(me.home_short), A = _up(me.away_short)
+  if (!H || !A) return null
+  if (r.home_score > r.away_score) return { win: H, loss: A }
+  if (r.away_score > r.home_score) return { win: A, loss: H }
+  const w = _up((tabWinners || {})[id] || '')          // match nul → vainqueur aux tirs au but (donné)
+  if (!w || (w !== H && w !== A)) return null
+  return { win: w, loss: w === H ? A : H }
+}
+
+/**
+ * Reconstruit l'arbre du tableau (R16 → finale) à partir des RÉSULTATS, en propageant le
+ * vainqueur de chaque affiche dans son créneau du tour suivant (HOME pour un slot impair,
+ * AWAY pour un pair) — donc selon le VRAI bracket FIFA, jamais selon l'horaire. Le perdant
+ * des demies va à la petite finale. Pour les matchs nuls (T.A.B.), le vainqueur est fourni
+ * via `tabWinners` { match_id → code court }. Idempotent et déterministe.
+ * @returns { slot_id → { home_short?, away_short? } } pour les slots déterminés.
+ */
+export function propagateKnockout(koTeams, results, tabWinners) {
+  const out = {}
+  const ensure = s => (out[s] ||= {})
+  const order = [
+    ...Array.from({ length: 16 }, (_, i) => `r32-${i + 1}`),
+    ...Array.from({ length: 8 }, (_, i) => `r16-${i + 1}`),
+    ...Array.from({ length: 4 }, (_, i) => `qf-${i + 1}`),
+    'sf-1', 'sf-2',
+  ]
+  for (const id of order) {
+    const r = (results || {})[id]; if (!r) continue
+    const me = out[id] || (koTeams || {})[id]              // équipes propagées si dispo, sinon bracket figé
+    const wl = koWinLoss(id, me, r, tabWinners); if (!wl) continue
+    const np = koNextPos(id)
+    if (np) ensure(np.slot)[`${np.pos}_short`] = wl.win
+    if (id === 'sf-1') ensure('3rd').home_short = wl.loss   // perdants des demies → petite finale
+    if (id === 'sf-2') ensure('3rd').away_short = wl.loss
+  }
+  return out
+}
 
 /** Vrai qualifié d'une affiche KO : vainqueur au score, sinon (nul → T.A.B.) l'équipe de
  *  cette affiche qui figure au tour suivant. Déduit du bracket (knockout_teams). null si indéterminé. */
@@ -316,6 +364,54 @@ export const R32_SLOT_BY_TEAMS = {
 }
 const r32Key = (hs, as) => [hs, as].sort().join('|')
 
+// ── Placement STRUCTUREL des affiches R16→finale (par arbre, jamais par horaire) ──
+// Équipes possibles de chaque slot R32 (les 2 équipes de l'affiche), pour propager les
+// sous-arbres vers le haut et placer toute affiche KO dans son vrai créneau du bracket.
+const R32_SLOT_TEAMS = (() => {
+  const m = {}
+  for (const [key, slot] of Object.entries(R32_SLOT_BY_TEAMS)) m[slot] = key.split('|').map(_up)
+  return m
+})()
+const _prevPrefix = { r16: 'r32', qf: 'r16', sf: 'qf', final: 'sf' }
+/** Les deux affiches du tour précédent qui alimentent un slot (feeders), HOME puis AWAY. */
+function koFeeders(slot) {
+  const [pfx, kStr] = slot.split('-')
+  const prev = _prevPrefix[pfx]; if (!prev) return null
+  const k = parseInt(kStr || '1', 10)
+  return prev === 'sf' ? ['sf-1', 'sf-2'] : [`${prev}-${2 * k - 1}`, `${prev}-${2 * k}`]
+}
+const _teamSetCache = {}
+/** Ensemble des équipes susceptibles d'atteindre ce slot (union récursive des feeders). */
+function koTeamSet(slot) {
+  if (_teamSetCache[slot]) return _teamSetCache[slot]
+  let set
+  if (R32_SLOT_TEAMS[slot]) set = new Set(R32_SLOT_TEAMS[slot])
+  else {
+    const fd = koFeeders(slot)
+    set = new Set()
+    if (fd) for (const f of fd) for (const t of koTeamSet(f)) set.add(t)
+  }
+  return (_teamSetCache[slot] = set)
+}
+const KO_SLOT_COUNT = { r16: 8, qf: 4, sf: 2, final: 1 }
+/**
+ * Créneau du tableau d'une affiche KO (R16→finale) à partir des équipes : on cherche le slot
+ * dont un feeder contient une équipe et l'autre feeder l'autre équipe. Robuste à l'ordre des
+ * horaires. Renvoie le match_id du slot, ou null si indéterminable (équipes inconnues).
+ */
+export function koSlotForFixture(prefix, hs, as) {
+  const H = _up(hs), A = _up(as)
+  if (!H || !A) return null
+  const n = KO_SLOT_COUNT[prefix]; if (!n) return null
+  for (let k = 1; k <= n; k++) {
+    const slot = n === 1 ? prefix : `${prefix}-${k}`
+    const fd = koFeeders(slot); if (!fd) continue
+    const L = koTeamSet(fd[0]), R = koTeamSet(fd[1])
+    if ((L.has(H) && R.has(A)) || (L.has(A) && R.has(H))) return slot
+  }
+  return null
+}
+
 /**
  * Construit le mapping FIABLE fixture_id → notre match_id pour TOUTE la compétition
  * (groupes par équipes/journée, élimination directe par tour + ordre chronologique).
@@ -347,6 +443,29 @@ export function buildFixtureMap(fixtures, validIds) {
     // chaque match dans son VRAI créneau du tableau (bracket officiel FIFA), pas par l'horaire.
     if (ko.prefix === 'r32' && arr.every(x => x.hs && x.as && R32_SLOT_BY_TEAMS[r32Key(x.hs, x.as)])) {
       for (const x of arr) map.set(x.fid, R32_SLOT_BY_TEAMS[r32Key(x.hs, x.as)])
+      continue
+    }
+    // R16 → finale : placement STRUCTUREL (par arbre) quand les équipes sont connues —
+    // garantit que 8es/quarts/demies/finale s'enchaînent au bon endroit du tableau.
+    // La petite finale (3rd, slot unique) et les affiches non identifiables retombent
+    // sur l'ordre chronologique.
+    if (ko.prefix !== '3rd' && ko.n > 0) {
+      const placed = new Set()
+      const leftovers = []
+      for (const x of arr) {
+        const slot = koSlotForFixture(ko.prefix, x.hs, x.as)
+        if (slot && !placed.has(slot)) { map.set(x.fid, slot); placed.add(slot) }
+        else leftovers.push(x)
+      }
+      if (leftovers.length) {   // repli chronologique sur les créneaux restants
+        leftovers.sort((a, b) => a.ts - b.ts)
+        let k = 1
+        for (const x of leftovers) {
+          while (placed.has(`${ko.prefix}-${k}`)) k++
+          const slot = ko.n === 1 ? ko.prefix : `${ko.prefix}-${k}`
+          map.set(x.fid, slot); placed.add(slot); k++
+        }
+      }
       continue
     }
     arr.sort((a, b) => a.ts - b.ts)
