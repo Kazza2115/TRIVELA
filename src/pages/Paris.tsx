@@ -1488,17 +1488,52 @@ function DesktopBracket({ data }: { data: KOData }) {
   const sel = data.koMatches.find(m => m.id === selected)
   const colP = { data, selected, onSelect }
   const minW = 8 * W + 8 * CW + W + 16
+
+  // Zoom : par défaut le tableau est AJUSTÉ à la largeur de l'écran (vue d'ensemble
+  // complète), puis on peut agrandir pour lire et faire défiler. Indispensable sur
+  // téléphone où le tableau (≈1250px) ne tient pas.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [zoom, setZoom] = useState<number | null>(null)   // null → suit l'ajustement
+  const [fit, setFit] = useState(1)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const measure = () => { const w = el.clientWidth; if (w > 0) setFit(Math.min(1, +(w / minW).toFixed(3))) }
+    measure()
+    const ro = new ResizeObserver(measure); ro.observe(el)
+    return () => ro.disconnect()
+  }, [minW])
+  const scale = zoom ?? fit
+  const clampZoom = (z: number) => Math.max(Math.min(fit, 1), Math.min(1.4, +z.toFixed(3)))
+  const zBtn: React.CSSProperties = {
+    width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center',
+    borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-fill)',
+    color: 'var(--text-1)', fontSize: 16, fontWeight: 800, cursor: 'pointer', lineHeight: 1, padding: 0,
+  }
   return (
     <>
-      {/* Carte pannable : sur téléphone le tableau (large + haut) tient dans une zone
-          bornée qu'on fait défiler dans les 2 sens (◀▶ et ▲▼), au lieu d'allonger la page. */}
-      <div style={{
+      {/* Barre de zoom : « Ajuster » = tout le tableau à l'écran ; +/− pour lire. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <button onClick={() => setZoom(fit)} style={{
+          height: 30, padding: '0 12px', borderRadius: 8, border: '1px solid var(--border)',
+          background: Math.abs(scale - fit) < 0.005 ? 'rgba(200,155,60,0.16)' : 'var(--bg-fill)',
+          color: Math.abs(scale - fit) < 0.005 ? '#A07828' : 'var(--text-1)', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+        }}>⤢ Ajuster</button>
+        <button onClick={() => setZoom(clampZoom(scale - 0.15))} style={zBtn} aria-label="Dézoomer">−</button>
+        <span style={{ minWidth: 42, textAlign: 'center', fontSize: 12, fontWeight: 700, color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>{Math.round(scale * 100)}%</span>
+        <button onClick={() => setZoom(clampZoom(scale + 0.15))} style={zBtn} aria-label="Zoomer">+</button>
+        <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-3)' }}>glissez pour explorer</span>
+      </div>
+      {/* Carte pannable : le tableau (large + haut) tient dans une zone bornée qu'on
+          fait défiler dans les 2 sens (◀▶ et ▲▼), et zoomable via la barre ci-dessus. */}
+      <div ref={scrollRef} style={{
         overflow: 'auto', scrollbarWidth: 'thin', WebkitOverflowScrolling: 'touch',
         touchAction: 'pan-x pan-y', overscrollBehavior: 'contain',
-        maxHeight: 'min(72vh, 720px)', paddingBottom: 8,
+        maxHeight: 'min(74vh, 760px)', paddingBottom: 8,
         border: '1px solid var(--border)', borderRadius: 12, background: 'var(--bg)',
       }}>
-        <div style={{ display: 'flex', gap: 0, minWidth: minW, height: BR_H, alignItems: 'stretch' }}>
+        <div style={{ width: minW * scale, height: BR_H * scale, position: 'relative', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 0, width: minW, minWidth: minW, height: BR_H, alignItems: 'stretch', transform: `scale(${scale})`, transformOrigin: 'top left' }}>
           {/* ── Côté gauche ── */}
           <RoundColumn {...colP} width={W} label="32es" ids={['r32-1', 'r32-2', 'r32-3', 'r32-4', 'r32-5', 'r32-6', 'r32-7', 'r32-8']} />
           <ConnectorColumn pairs={4} side="left" width={CW} />
@@ -1538,6 +1573,7 @@ function DesktopBracket({ data }: { data: KOData }) {
           <RoundColumn {...colP} width={W} label="8es" ids={['r16-5', 'r16-6', 'r16-7', 'r16-8']} />
           <ConnectorColumn pairs={4} side="right" width={CW} />
           <RoundColumn {...colP} width={W} label="32es" ids={['r32-9', 'r32-10', 'r32-11', 'r32-12', 'r32-13', 'r32-14', 'r32-15', 'r32-16']} />
+        </div>
         </div>
       </div>
 
