@@ -13,16 +13,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # Dyran · Côte d'Ivoire-Norvège (16es / r32-10) : prono NUL 1-1, qualifié = Norvège.
-      #   Orientation match CIV(dom) vs NOR(ext) : home(CIV)=1, away(NOR)=1, qualifier=NOR.
+      # KAZA · Mexique-Équateur (16es / r32-11) : Mexique 1 - Équateur 0.
+      #   Orientation match MEX(dom) vs ECU(ext) : home(MEX)=1, away(ECU)=0.
       - run: node scripts/set-bet-once.mjs
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          BET_PSEUDO: 'Dyran'
-          BET_MATCH_ID: 'r32-10'
-          BET_HOME_NAME: "Côte d'Ivoire"
-          BET_AWAY_NAME: 'Norvège'
+          BET_PSEUDO: 'KAZA'
+          BET_MATCH_ID: 'r32-11'
+          BET_HOME_NAME: 'Mexique'
+          BET_AWAY_NAME: 'Équateur'
           BET_HOME: '1'
-          BET_AWAY: '1'
-          BET_QUALIFIER: 'NOR'
+          BET_AWAY: '0'
           BET_STAGE: '16es de finale'
