@@ -302,33 +302,33 @@ export const KNOCKOUT_MATCHES: Match[] = [
   { id:'r32-15', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'3 Juil',  time:'03:00', venue:'BC Place',              city:'Vancouver',     status:'upcoming' },  // M85
   { id:'r32-16', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'4 Juil',  time:'01:30', venue:'Arrowhead Stadium',     city:'Kansas City',   status:'upcoming' },  // M87
 
-  // Round of 16 — 8 matches (dates de l'API-Football, UTC ; les 2 dernières encore à planifier)
+  // Round of 16 — 8 matches (dates officielles FIFA, UTC ; l'API confirme r16-1..6, r16-7/8 planifiées 7 juil)
   { id:'r16-1', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'4 Juil',  time:'21:00', venue:'À confirmer', city:'—', status:'upcoming' },
   { id:'r16-2', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'4 Juil',  time:'17:00', venue:'À confirmer', city:'—', status:'upcoming' },
   { id:'r16-3', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'6 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
   { id:'r16-4', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'7 Juil',  time:'00:00', venue:'À confirmer', city:'—', status:'upcoming' },
   { id:'r16-5', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'5 Juil',  time:'20:00', venue:'À confirmer', city:'—', status:'upcoming' },
   { id:'r16-6', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'6 Juil',  time:'00:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r16-7', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'9 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r16-8', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'9 Juil',  time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
+  { id:'r16-7', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'7 Juil',  time:'16:00', venue:'Mercedes-Benz Stadium', city:'Atlanta',   status:'upcoming' },
+  { id:'r16-8', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'7 Juil',  time:'20:00', venue:'BC Place',              city:'Vancouver', status:'upcoming' },
 
-  // Quarterfinals — 4 matches (11 – 12 juil)
-  { id:'qf-1', group:'Quarts', round:'qf', home:TBD, away:TBD, date:'11 Juil', time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'qf-2', group:'Quarts', round:'qf', home:TBD, away:TBD, date:'11 Juil', time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'qf-3', group:'Quarts', round:'qf', home:TBD, away:TBD, date:'12 Juil', time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'qf-4', group:'Quarts', round:'qf', home:TBD, away:TBD, date:'12 Juil', time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
+  // Quarterfinals — 4 matches (9 – 12 juil UTC) — stades officiels FIFA
+  { id:'qf-1', group:'Quarts', round:'qf', home:TBD, away:TBD, date:'9 Juil',  time:'20:00', venue:'Gillette Stadium',  city:'Boston',      status:'upcoming' },
+  { id:'qf-2', group:'Quarts', round:'qf', home:TBD, away:TBD, date:'10 Juil', time:'19:00', venue:'SoFi Stadium',      city:'Los Angeles', status:'upcoming' },
+  { id:'qf-3', group:'Quarts', round:'qf', home:TBD, away:TBD, date:'11 Juil', time:'21:00', venue:'Hard Rock Stadium', city:'Miami',       status:'upcoming' },
+  { id:'qf-4', group:'Quarts', round:'qf', home:TBD, away:TBD, date:'12 Juil', time:'01:00', venue:'Arrowhead Stadium', city:'Kansas City', status:'upcoming' },
 
   // Semifinals — 2 matches (14 – 15 juil) — stades officiels FIFA
   { id:'sf-1', group:'Demi-finales', round:'sf', home:TBD, away:TBD,
-    date:'15 Juil', time:'00:00', venue:'AT&T Stadium',          city:'Dallas',  status:'upcoming' },
+    date:'14 Juil', time:'19:00', venue:'AT&T Stadium',          city:'Dallas',  status:'upcoming' },
   { id:'sf-2', group:'Demi-finales', round:'sf', home:TBD, away:TBD,
-    date:'16 Juil', time:'00:00', venue:'Mercedes-Benz Stadium', city:'Atlanta', status:'upcoming' },
+    date:'15 Juil', time:'19:00', venue:'Mercedes-Benz Stadium', city:'Atlanta', status:'upcoming' },
 
   // 3rd place (18 juil) + Final (19 juil)
   { id:'3rd', group:'3e place', round:'3rd', home:TBD, away:TBD,
-    date:'18 Juil', time:'22:00', venue:'Hard Rock Stadium', city:'Miami',    status:'upcoming' },
+    date:'18 Juil', time:'21:00', venue:'Hard Rock Stadium', city:'Miami',    status:'upcoming' },
   { id:'final', group:'Finale', round:'final', home:TBD, away:TBD,
-    date:'19 Juil', time:'20:00', venue:'MetLife Stadium',   city:'New York', status:'upcoming' },
+    date:'19 Juil', time:'19:00', venue:'MetLife Stadium',   city:'New York', status:'upcoming' },
 ]
 
 export const ALL_MATCHES = [...GROUP_MATCHES, ...KNOCKOUT_MATCHES]
