@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import PageLayout from './PageLayout'
-import { GROUP_MATCHES, GROUPS, ALL_MATCHES, matchKickoffUTC, knockoutWithTeams } from '../data/wc2026Matches'
+import { GROUP_MATCHES, GROUPS, ALL_MATCHES, matchKickoffUTC, knockoutWithTeams, applySchedule } from '../data/wc2026Matches'
 import { pointsBadge, ptsLabel } from '../utils/pointsBadge'
 import type { Match, Team } from '../data/wc2026Matches'
-import { saveBet, saveFavorites, getBets, subscribeToResults, getResults, getLive, subscribeToLive, getMatchGoals, getMatchCards, subscribeToMatchGoals, getMatchTrends, getKnockoutTeams } from '../services/auth'
+import { saveBet, saveFavorites, getBets, subscribeToResults, getResults, getLive, subscribeToLive, getMatchGoals, getMatchCards, subscribeToMatchGoals, getMatchTrends, getKnockoutTeams, getMatchSchedule } from '../services/auth'
 import type { KnockoutTeamRow } from '../services/auth'
 import type { UserProfile, MatchResult, LiveScore, Scorer, RedCard, MatchTrend } from '../services/auth'
 import { track } from '../services/analytics'
@@ -270,17 +270,21 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
   const [koLoaded, setKoLoaded] = useState(false)            // 1re lecture du bracket faite ?
   // Cible de saut initial vers une affiche éliminatoire (ouverture sur le prochain match).
   const [koFocus, setKoFocus] = useState<{ id: string; nonce: number } | null>(null)
+  const [schedule, setSchedule] = useState<Record<string, string>>({})   // match_id → coup d'envoi (API)
   useEffect(() => {
     let alive = true
-    const load = () => getKnockoutTeams().then(t => { if (alive) { setKoTeams(t); setKoLoaded(true) } })
+    const load = () => {
+      getKnockoutTeams().then(t => { if (alive) { setKoTeams(t); setKoLoaded(true) } })
+      getMatchSchedule().then(s => { if (alive) setSchedule(s) })
+    }
     load()
     const iv = setInterval(load, 60000)
     return () => { alive = false; clearInterval(iv) }
   }, [])
-  // Matchs éliminatoires avec les vraies équipes injectées (TBD sinon).
-  const koMatches = useMemo(() => knockoutWithTeams(
+  // Matchs éliminatoires : vraies équipes (TBD sinon) + vraies dates (match_schedule / API).
+  const koMatches = useMemo(() => applySchedule(knockoutWithTeams(
     Object.fromEntries(Object.entries(koTeams).map(([id, r]) => [id, { home_short: r.home_short, away_short: r.away_short }]))
-  ), [koTeams])
+  ), schedule), [koTeams, schedule])
 
   // Saut vers un match (bouton "EN DIRECT")
   useEffect(() => {

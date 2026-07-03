@@ -302,13 +302,13 @@ export const KNOCKOUT_MATCHES: Match[] = [
   { id:'r32-15', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'3 Juil',  time:'03:00', venue:'BC Place',              city:'Vancouver',     status:'upcoming' },  // M85
   { id:'r32-16', group:'Tour 32', round:'r32', home:TBD, away:TBD, date:'4 Juil',  time:'01:30', venue:'Arrowhead Stadium',     city:'Kansas City',   status:'upcoming' },  // M87
 
-  // Round of 16 — 8 matches (6 – 9 juil)
-  { id:'r16-1', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'6 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r16-2', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'6 Juil',  time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r16-3', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'7 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r16-4', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'7 Juil',  time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r16-5', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'8 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
-  { id:'r16-6', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'8 Juil',  time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
+  // Round of 16 — 8 matches (dates de l'API-Football, UTC ; les 2 dernières encore à planifier)
+  { id:'r16-1', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'4 Juil',  time:'21:00', venue:'À confirmer', city:'—', status:'upcoming' },
+  { id:'r16-2', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'4 Juil',  time:'17:00', venue:'À confirmer', city:'—', status:'upcoming' },
+  { id:'r16-3', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'6 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
+  { id:'r16-4', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'7 Juil',  time:'00:00', venue:'À confirmer', city:'—', status:'upcoming' },
+  { id:'r16-5', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'5 Juil',  time:'20:00', venue:'À confirmer', city:'—', status:'upcoming' },
+  { id:'r16-6', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'6 Juil',  time:'00:00', venue:'À confirmer', city:'—', status:'upcoming' },
   { id:'r16-7', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'9 Juil',  time:'19:00', venue:'À confirmer', city:'—', status:'upcoming' },
   { id:'r16-8', group:'8èmes', round:'r16', home:TBD, away:TBD, date:'9 Juil',  time:'22:00', venue:'À confirmer', city:'—', status:'upcoming' },
 
@@ -366,6 +366,30 @@ export function knockoutWithTeams(assign: KnockoutAssign): Match[] {
 const FR_MONTHS_MAP: Record<string, number> = {
   Jan: 0, Fév: 1, Mar: 2, Avr: 3, Mai: 4, Juin: 5,
   Juil: 6, Aoû: 7, Sep: 8, Oct: 9, Nov: 10, Déc: 11,
+}
+
+// Abréviations de mois (index → libellé), pour reformater un kickoff en date/heure UTC.
+const FR_MONTH_ABBR = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc']
+const _p2 = (n: number) => String(n).padStart(2, '0')
+
+/**
+ * Remplace date/time d'un match par le coup d'envoi RÉEL (match_schedule, aligné sur
+ * l'API), formaté en UTC comme le reste des données. Permet à l'app d'afficher les vraies
+ * dates (et de les tenir à jour au fil des matchs) sans redéploiement.
+ */
+export function matchWithKickoff(m: Match, kickoffISO?: string | null): Match {
+  if (!kickoffISO) return m
+  const d = new Date(kickoffISO)
+  if (isNaN(d.getTime())) return m
+  const date = `${d.getUTCDate()} ${FR_MONTH_ABBR[d.getUTCMonth()]}`
+  const time = `${_p2(d.getUTCHours())}:${_p2(d.getUTCMinutes())}`
+  return m.date === date && m.time === time ? m : { ...m, date, time }
+}
+
+/** Applique les coups d'envoi réels (match_id → ISO) à une liste de matchs. */
+export function applySchedule(matches: Match[], sched: Record<string, string> | null | undefined): Match[] {
+  if (!sched) return matches
+  return matches.map(m => matchWithKickoff(m, sched[m.id]))
 }
 
 /** Coup d'envoi d'un match en ms UTC (les dates sont stockées en UTC). */

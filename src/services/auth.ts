@@ -727,6 +727,20 @@ export async function getKnockoutTeams(): Promise<Record<string, KnockoutTeamRow
   } catch { return {} }
 }
 
+/** Coups d'envoi réels (source de vérité API) : { match_id → ISO }. Lecture publique. */
+export async function getMatchSchedule(): Promise<Record<string, string>> {
+  if (!supabaseConfigured) return {}
+  try {
+    const res = await fetch(`${SUPA_URL}/rest/v1/match_schedule?select=match_id,kickoff`, {
+      headers: { apikey: SUPA_ANON, Authorization: `Bearer ${SUPA_ANON}` },
+    })
+    if (!res.ok) return {}
+    const out: Record<string, string> = {}
+    for (const r of await res.json()) if (r.kickoff) out[r.match_id] = r.kickoff as string
+    return out
+  } catch { return {} }
+}
+
 /** Admin : fixe (ou efface, si shorts nuls) les équipes d'une affiche éliminatoire. */
 export async function adminSetKnockout(params: {
   matchId: string; homeShort: string | null; awayShort: string | null

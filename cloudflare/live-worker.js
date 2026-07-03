@@ -188,6 +188,29 @@ async function rebuildBracketFromResults(sb, all, fxMap) {
   } catch { return 0 }
 }
 
+// Coups d'envoi (match_schedule) tenus à jour depuis l'API : dates toujours correctes
+// (affichage + verrou), y compris quand l'API planifie/replanifie les tours suivants.
+// Réutilise les fixtures déjà chargées (`all`) → zéro appel API supplémentaire.
+async function syncSchedule(sb, all, fxMap) {
+  try {
+    const cur = {}
+    const er = await sb('match_schedule?select=match_id,kickoff')
+    if (er.ok) for (const r of await er.json()) cur[r.match_id] = r.kickoff ? new Date(r.kickoff).toISOString() : null
+    const rows = []
+    for (const f of (all || [])) {
+      const id = fxMap.get(f.fixture?.id), dt = f.fixture?.date
+      if (!id || !dt) continue
+      const iso = new Date(dt).toISOString()
+      if (cur[id] !== iso) rows.push({ match_id: id, kickoff: iso })   // n'écrit que les changements
+    }
+    if (!rows.length) return 0
+    await sb('match_schedule?on_conflict=match_id', {
+      method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(rows),
+    })
+    return rows.length
+  } catch { return 0 }
+}
+
 async function settleOne(api, sb, id, f, haveGoals) {
   const o = orient(id, f)   // score ré-orienté vers notre match_id (points corrects)
   // Règlement 100 % REST (résultat + points + classement, auto-correcteur).
@@ -286,6 +309,7 @@ async function runLoop(env) {
   const { map: fxMap, all } = await buildContext(api, sb)
   // Bracket : remplit les affiches éliminatoires connues (réutilise `all`, zéro appel API).
   try { await syncKnockoutTeams(sb, all, fxMap) } catch (e) { console.log('ko-sync err', String(e)) }
+  try { await syncSchedule(sb, all, fxMap) } catch (e) { console.log('sched-sync err', String(e)) }
   try { await settleAll(api, sb, all, fxMap) } catch (e) { console.log('settle err', String(e)) }
   // Arbre du tableau mis à jour après chaque match (propagation des vainqueurs).
   try { await rebuildBracketFromResults(sb, all, fxMap) } catch (e) { console.log('bracket err', String(e)) }
