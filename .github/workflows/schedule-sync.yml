@@ -1,0 +1,25 @@
+name: Schedule sync (ponctuel)
+on:
+  push:
+    branches: [claude/world-cup-qualifiers-update-z9ehtl]
+    paths: ['scripts/schedule-sync.mjs', '.github/workflows/schedule-sync.yml']
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Écrire dans match_schedule (sinon rapport seul)"
+        type: boolean
+        default: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/schedule-sync.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          APPLY: ${{ (github.event_name == 'workflow_dispatch' && inputs.apply) && '1' || '' }}
