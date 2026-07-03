@@ -1,0 +1,18 @@
+name: Date check (ponctuel)
+on:
+  push:
+    branches: [claude/world-cup-qualifiers-update-z9ehtl]
+    paths: ['scripts/date-check.mjs', '.github/workflows/date-check.yml']
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/date-check.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
