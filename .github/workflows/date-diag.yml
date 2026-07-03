@@ -1,0 +1,19 @@
+name: Date diag (ponctuel)
+on:
+  push:
+    branches: [claude/world-cup-qualifiers-update-z9ehtl]
+    paths: ['scripts/date-diag.mjs', '.github/workflows/date-diag.yml']
+  workflow_dispatch:
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/date-diag.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
