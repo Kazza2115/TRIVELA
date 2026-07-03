@@ -1,0 +1,24 @@
+name: Ping quotidien (reprise API)
+# Reprend tout l'état de la Coupe du Monde depuis l'API chaque matin : classement,
+# règlement des matchs manqués, bracket (r32 + propagation R16→finale) et dates.
+# Filet de sécurité indépendant du worker → aucune vérification manuelle nécessaire.
+on:
+  schedule:
+    - cron: '0 6 * * *'   # 08:00 heure suisse (CEST = UTC+2, été / Coupe du Monde)
+  workflow_dispatch:
+  push:
+    branches: [claude/world-cup-qualifiers-update-z9ehtl]
+    paths: ['scripts/daily-sync.mjs', '.github/workflows/daily-sync.yml']
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/daily-sync.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
