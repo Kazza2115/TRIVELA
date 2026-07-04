@@ -1,0 +1,19 @@
+name: KO state check (ponctuel)
+on:
+  push:
+    branches: [claude/world-cup-qualifiers-update-z9ehtl]
+    paths: ['scripts/ko-state-check.mjs', '.github/workflows/ko-state-check.yml']
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/ko-state-check.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
