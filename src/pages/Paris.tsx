@@ -91,6 +91,11 @@ function isMatchLive(match: Match, now: number): boolean {
   return utc !== null && now >= utc && now < utc + LIVE_MS
 }
 
+// Premier coup d'envoi de la phase à élimination directe (dates statiques UTC).
+const KO_STAGE_START = Math.min(
+  ...ALL_MATCHES.filter(m => /^(r32|r16|qf|sf|3rd|final)/.test(m.id)).map(m => KICKOFF_MS.get(m.id) ?? Infinity),
+)
+
 // ─── Classement d'un groupe (calculé à partir des résultats) ─────────────────
 interface StandRow {
   team: Team; played: number; win: number; draw: number; loss: number
@@ -148,7 +153,10 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
   focus?: { id: string; nonce: number } | null
   onOpenTrends?: (matchId: string) => void
 }) {
-  const [tab,         setTab]         = useState<Tab>('phase')
+  // Onglet par défaut : « Éliminatoires » dès que la phase KO a commencé (les matchs du
+  // jour y vivent, classés par date) ; « Phase de groupes » avant. Sinon le match du jour
+  // n'apparaîtrait qu'en haut (EN DIRECT) et plus dans aucune section de date.
+  const [tab,         setTab]         = useState<Tab>(() => Date.now() >= KO_STAGE_START ? 'eliminatoires' : 'phase')
   const [predictions, setPredictions] = useState<Predictions>({})
   const [qualifiers,  setQualifiers]  = useState<Record<string, string>>({})   // KO : qualifié choisi par match
   const [confirmed,   setConfirmed]   = useState<Set<string>>(new Set())
@@ -1775,7 +1783,9 @@ function KnockoutList({ data }: { data: KOData }) {
 }
 
 function KnockoutView(data: KOData) {
-  const [view, setView] = useState<'bracket' | 'list'>('bracket')
+  // Vue « Liste » par défaut : les matchs du jour apparaissent à leur date (comme la
+  // phase de groupes) ; le Tableau (branche du tournoi) reste à un tap.
+  const [view, setView] = useState<'bracket' | 'list'>('list')
   // Ouverture sur le prochain match : on bascule en vue Liste (scroll vertical fiable)
   // puis on défile jusqu'à l'affiche ciblée.
   const koFocus = data.koFocus
