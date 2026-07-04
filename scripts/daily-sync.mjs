@@ -12,6 +12,7 @@
 // Reproduit EXACTEMENT la logique du worker (syncKnockoutTeams / rebuildBracketFromResults /
 // syncSchedule) pour servir de filet indépendant si le worker rate un passage. Idempotent :
 // n'écrit QUE les changements. Zéro action manuelle requise.
+// Relance manuelle 2026-07-03 : « actualise bien le classement » (réconciliation prod).
 import { buildFixtureMap, orient, settleViaRest, reconcileScores, propagateKnockout, shortOf } from './wc-map.mjs'
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
