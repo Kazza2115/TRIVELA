@@ -205,24 +205,20 @@ export async function settleViaRest(sb, matchId, homeScore, awayScore) {
  * Insensible aux courses (worker + crons en parallèle), zéro quota API.
  * @returns nombre de profils corrigés
  */
-// Au-delà de ce délai après le règlement d'un match, les points de ses paris sont
-// FIGÉS : le résultat est final et, pour un match KO aux T.A.B., le qualifié (bonus
-// +2/+6/+7) est connu dès le règlement puis propagé en < 1 min. Ce gel garantit que les
-// points « arrêtent de bouger » — plus aucune ré-écriture sur les matchs déjà terminés.
-export const SCORE_FREEZE_MS = 3 * 60 * 60 * 1000   // 3 h
-
 export async function reconcileScores(sb) {
   // Lectures GROUPÉES (≈ 4 requêtes au lieu de ~65) → tient dans les limites du
   // worker Cloudflare (sous-requêtes), donc le recalcul aboutit toujours.
-  const rrRes = await sb('match_results?select=match_id,home_score,away_score,settled_at')
+  const rrRes = await sb('match_results?select=match_id,home_score,away_score')
   const results = {}
   if (rrRes.ok) for (const r of await rrRes.json()) results[r.match_id] = r
-  const nowMs = Date.now()
 
-  // Bracket éliminatoire → pour déduire le qualifié (bonus KO). Absent/à plat = pas de bonus.
+  // Bracket éliminatoire → pour déduire le qualifié (bonus KO +2/+6/+7).
+  // Si la lecture échoue, on NE recalcule AUCUN pari de match KO nul (voir garde plus
+  // bas) : un trou de données ne doit JAMAIS rétrograder un bonus déjà attribué.
   const ko = {}
   const koRes = await sb('knockout_teams?select=match_id,home_short,away_short')
-  if (koRes.ok) for (const r of await koRes.json()) ko[r.match_id] = r
+  const koOk = koRes.ok
+  if (koOk) for (const r of await koRes.json()) ko[r.match_id] = r
 
   // Tous les paris en une fois (paginé : PostgREST plafonne à 1000 lignes).
   // Tolérant : si la colonne qualifier_short n'existe pas encore (migration pas appliquée),
@@ -249,13 +245,15 @@ export async function reconcileScores(sb) {
     const r = results[b.match_id]
     let pts = b.points
     if (r) {
-      // Point figé : pari déjà verrouillé ET match réglé depuis > SCORE_FREEZE_MS → on
-      // NE recalcule PAS (les points ne bougent plus). On (re)calcule seulement :
-      //   • les paris pas encore verrouillés (paris tardifs à rattraper), ou
-      //   • les matchs réglés récemment (fenêtre de finalisation : le bonus KO se fixe).
-      const settledMs = Date.parse(r.settled_at || '')
-      const frozen = b.locked && Number.isFinite(settledMs) && (nowMs - settledMs) > SCORE_FREEZE_MS
-      if (!frozen) {
+      // Garde anti-« points qui bougent » : sur un match KO NUL (T.A.B.), le bonus
+      // qualifié dépend du bracket (knockout_teams). Si le bracket est illisible ou que
+      // le qualifié n'y est pas (encore/plus) déductible, on GARDE les points stockés
+      // d'un pari verrouillé — jamais de rétrogradation due à un trou de données.
+      // Dès que le qualifié est déductible, le recalcul est autoritaire et STABLE
+      // (le bracket propagé ne change plus) → les points se figent d'eux-mêmes.
+      const koDraw = isKnockout(b.match_id) && r.home_score === r.away_score
+      const qUnknown = koDraw && (!koOk || !koActualQualifier(b.match_id, r.home_score, r.away_score, ko))
+      if (!(qUnknown && b.locked)) {
         const exp = scoreBet(b.match_id, b.home_score, b.away_score, b.qualifier_short, r.home_score, r.away_score, ko)
         if (b.points !== exp || !b.locked) {
           await sb(`bets?id=eq.${b.id}`, {
