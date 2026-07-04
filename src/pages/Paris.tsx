@@ -1095,40 +1095,57 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
 // paresseux + cache mémoire (dédoublonne les appels quand plusieurs cartes s'affichent).
 const _playerBetsCache = new Map<string, PlayerBet[]>()
 function MatchPlayers({ matchId }: { matchId: string }) {
+  const [open, setOpen] = useState(false)
   const [bets, setBets] = useState<PlayerBet[] | null>(_playerBetsCache.get(matchId) ?? null)
+  // Chargement paresseux : on n'interroge l'API que lorsque le joueur ouvre le bloc.
   useEffect(() => {
+    if (!open || _playerBetsCache.has(matchId)) return
     let alive = true
-    if (_playerBetsCache.has(matchId)) { setBets(_playerBetsCache.get(matchId)!); return }
     getMatchPlayerBets(matchId).then(b => { _playerBetsCache.set(matchId, b); if (alive) setBets(b) })
     return () => { alive = false }
-  }, [matchId])
+  }, [open, matchId])
   const rows = (bets ?? []).filter(b => b.revealed && b.homeScore != null)
-  if (rows.length === 0) return null
-  rows.sort((a, b) => (b.points ?? -1) - (a.points ?? -1))
+    .sort((a, b) => (b.points ?? -1) - (a.points ?? -1))
   return (
-    <div style={{ borderTop: '1px solid var(--border)', padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: 2 }}>
+    <div style={{ borderTop: '1px solid var(--border)' }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+        padding: '9px 16px', background: 'none', border: 'none', cursor: 'pointer',
+        fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-3)', textTransform: 'uppercase',
+      }}>
+        <span style={{ fontSize: 11, transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', display: 'inline-block' }}>▸</span>
         Pronostics des joueurs
-      </div>
-      {rows.map(b => {
-        const pts = b.points ?? 0
-        const bd = pointsBadge(pts)
-        return (
-          <div key={b.userId} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img src={`https://flagcdn.com/w20/${b.countryCode}.png`} alt="" style={{ width: 18, height: 12, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} />
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.pseudo}</span>
-            {b.qualifier && (
-              <span style={{ fontSize: 9.5, fontWeight: 700, color: '#A07828', whiteSpace: 'nowrap' }}>🥅 {b.qualifier}</span>
-            )}
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
-              {b.homeScore}–{b.awayScore}
-            </span>
-            <span className={bd.className} style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 6, minWidth: 30, textAlign: 'center', ...bd.style }}>
-              {ptsLabel(pts)}
-            </span>
-          </div>
-        )
-      })}
+        <span style={{ flex: 1 }} />
+        <span style={{ fontSize: 9, color: 'var(--text-3)', textTransform: 'none', letterSpacing: 0 }}>
+          {open ? 'masquer' : 'afficher'}
+        </span>
+      </button>
+      {open && rows.length > 0 && (
+        <div style={{ padding: '0 16px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {rows.map(b => {
+            const pts = b.points ?? 0
+            const bd = pointsBadge(pts)
+            return (
+              <div key={b.userId} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <img src={`https://flagcdn.com/w20/${b.countryCode}.png`} alt="" style={{ width: 18, height: 12, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.pseudo}</span>
+                {b.qualifier && (
+                  <span style={{ fontSize: 9.5, fontWeight: 700, color: '#A07828', whiteSpace: 'nowrap' }}>🥅 {b.qualifier}</span>
+                )}
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
+                  {b.homeScore}–{b.awayScore}
+                </span>
+                <span className={bd.className} style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 6, minWidth: 30, textAlign: 'center', ...bd.style }}>
+                  {ptsLabel(pts)}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+      {open && bets != null && rows.length === 0 && (
+        <div style={{ padding: '0 16px 10px', fontSize: 11, color: 'var(--text-3)' }}>Aucun prono à afficher.</div>
+      )}
     </div>
   )
 }
