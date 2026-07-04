@@ -3,8 +3,8 @@ import PageLayout from './PageLayout'
 import { GROUP_MATCHES, GROUPS, ALL_MATCHES, matchKickoffUTC, knockoutWithTeams, applySchedule } from '../data/wc2026Matches'
 import { pointsBadge, ptsLabel } from '../utils/pointsBadge'
 import type { Match, Team } from '../data/wc2026Matches'
-import { saveBet, saveFavorites, getBets, subscribeToResults, getResults, getLive, subscribeToLive, getMatchGoals, getMatchCards, subscribeToMatchGoals, getMatchTrends, getKnockoutTeams, getMatchSchedule } from '../services/auth'
-import type { KnockoutTeamRow } from '../services/auth'
+import { saveBet, saveFavorites, getBets, subscribeToResults, getResults, getLive, subscribeToLive, getMatchGoals, getMatchCards, subscribeToMatchGoals, getMatchTrends, getKnockoutTeams, getMatchSchedule, getMatchPlayerBets } from '../services/auth'
+import type { KnockoutTeamRow, PlayerBet } from '../services/auth'
 import type { UserProfile, MatchResult, LiveScore, Scorer, RedCard, MatchTrend } from '../services/auth'
 import { track } from '../services/analytics'
 import TrendBar from '../components/TrendBar'
@@ -568,7 +568,7 @@ export default function Paris({ onBack, currentUser, onOpenAuth, focus, onOpenTr
                           result={results[m.id]} now={now}
                           liveData={live[m.id]} goalSide={goalFlash[m.id]}
                           scorers={goals[m.id]} redCards={cards[m.id]}
-                          trend={trends[m.id]} onOpenTrends={onOpenTrends}
+                          trend={trends[m.id]} onOpenTrends={onOpenTrends} showPlayers
                           delay={i * 30}
                           onIncrement={(s, d) => setPrediction(m.id, s, d)}
                           onConfirm={() => confirm(m.id)}
@@ -755,6 +755,7 @@ interface MatchCardProps {
   domId?: string
   trend?: MatchTrend
   onOpenTrends?: (matchId: string) => void
+  showPlayers?: boolean
   delay: number
   qualifier?: string | null
   koTeams?: KoAssign
@@ -764,7 +765,7 @@ interface MatchCardProps {
   onEdit: () => void
 }
 
-function MatchCard({ match, prediction, confirmed, lockError, result, liveData, goalSide, scorers, redCards, now, domId, trend, onOpenTrends, delay, qualifier, koTeams, onIncrement, onSetQualifier, onConfirm, onEdit }: MatchCardProps) {
+function MatchCard({ match, prediction, confirmed, lockError, result, liveData, goalSide, scorers, redCards, now, domId, trend, onOpenTrends, showPlayers, delay, qualifier, koTeams, onIncrement, onSetQualifier, onConfirm, onEdit }: MatchCardProps) {
   const pred   = prediction ?? { home: 0, away: 0 }
   const isTBD  = match.home.code === 'un'
   const locked = isMatchLocked(match)
@@ -1083,6 +1084,51 @@ function MatchCard({ match, prediction, confirmed, lockError, result, liveData, 
           )
         )}
       </div>
+      {result && showPlayers && <MatchPlayers matchId={match.id} />}
+    </div>
+  )
+}
+
+// ─── Récap des pronos joueur par joueur (badges +6/+7 spéciaux) ──────────────
+// Affiché sous un match TERMINÉ de l'onglet Paris : chaque joueur, son prono et ses
+// points, avec la pastille dorée (+6) / feu (+7) identique à Tendances. Chargement
+// paresseux + cache mémoire (dédoublonne les appels quand plusieurs cartes s'affichent).
+const _playerBetsCache = new Map<string, PlayerBet[]>()
+function MatchPlayers({ matchId }: { matchId: string }) {
+  const [bets, setBets] = useState<PlayerBet[] | null>(_playerBetsCache.get(matchId) ?? null)
+  useEffect(() => {
+    let alive = true
+    if (_playerBetsCache.has(matchId)) { setBets(_playerBetsCache.get(matchId)!); return }
+    getMatchPlayerBets(matchId).then(b => { _playerBetsCache.set(matchId, b); if (alive) setBets(b) })
+    return () => { alive = false }
+  }, [matchId])
+  const rows = (bets ?? []).filter(b => b.revealed && b.homeScore != null)
+  if (rows.length === 0) return null
+  rows.sort((a, b) => (b.points ?? -1) - (a.points ?? -1))
+  return (
+    <div style={{ borderTop: '1px solid var(--border)', padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: 'var(--text-3)', textTransform: 'uppercase', marginBottom: 2 }}>
+        Pronostics des joueurs
+      </div>
+      {rows.map(b => {
+        const pts = b.points ?? 0
+        const bd = pointsBadge(pts)
+        return (
+          <div key={b.userId} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <img src={`https://flagcdn.com/w20/${b.countryCode}.png`} alt="" style={{ width: 18, height: 12, borderRadius: 2, objectFit: 'cover', flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-1)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.pseudo}</span>
+            {b.qualifier && (
+              <span style={{ fontSize: 9.5, fontWeight: 700, color: '#A07828', whiteSpace: 'nowrap' }}>🥅 {b.qualifier}</span>
+            )}
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', fontVariantNumeric: 'tabular-nums' }}>
+              {b.homeScore}–{b.awayScore}
+            </span>
+            <span className={bd.className} style={{ fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 6, minWidth: 30, textAlign: 'center', ...bd.style }}>
+              {ptsLabel(pts)}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -1596,7 +1642,7 @@ function DesktopBracket({ data }: { data: KOData }) {
             result={data.results[sel.id]} now={data.now}
             liveData={data.live[sel.id]} goalSide={data.goalFlash[sel.id]}
             scorers={data.goals[sel.id]} redCards={data.cards[sel.id]}
-            trend={data.trends[sel.id]} onOpenTrends={data.onOpenTrends}
+            trend={data.trends[sel.id]} onOpenTrends={data.onOpenTrends} showPlayers
             delay={0} qualifier={data.qualifiers[sel.id]} koTeams={data.koTeams}
             onIncrement={(s, d) => data.onIncrement(sel.id, s, d)}
             onSetQualifier={(s) => data.onSetQualifier(sel.id, s)}
@@ -1693,7 +1739,7 @@ function KnockoutList({ data }: { data: KOData }) {
                       result={data.results[m.id]} now={data.now}
                       liveData={data.live[m.id]} goalSide={data.goalFlash[m.id]}
                       scorers={data.goals[m.id]} redCards={data.cards[m.id]}
-                      trend={data.trends[m.id]} onOpenTrends={data.onOpenTrends}
+                      trend={data.trends[m.id]} onOpenTrends={data.onOpenTrends} showPlayers
                       delay={i * 30} qualifier={data.qualifiers[m.id]} koTeams={data.koTeams}
                       onIncrement={(s, d) => data.onIncrement(m.id, s, d)}
                       onSetQualifier={(s) => data.onSetQualifier(m.id, s)}

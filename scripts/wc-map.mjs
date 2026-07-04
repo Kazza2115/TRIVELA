@@ -205,12 +205,19 @@ export async function settleViaRest(sb, matchId, homeScore, awayScore) {
  * Insensible aux courses (worker + crons en parallèle), zéro quota API.
  * @returns nombre de profils corrigés
  */
+// Au-delà de ce délai après le règlement d'un match, les points de ses paris sont
+// FIGÉS : le résultat est final et, pour un match KO aux T.A.B., le qualifié (bonus
+// +2/+6/+7) est connu dès le règlement puis propagé en < 1 min. Ce gel garantit que les
+// points « arrêtent de bouger » — plus aucune ré-écriture sur les matchs déjà terminés.
+export const SCORE_FREEZE_MS = 3 * 60 * 60 * 1000   // 3 h
+
 export async function reconcileScores(sb) {
   // Lectures GROUPÉES (≈ 4 requêtes au lieu de ~65) → tient dans les limites du
   // worker Cloudflare (sous-requêtes), donc le recalcul aboutit toujours.
-  const rrRes = await sb('match_results?select=match_id,home_score,away_score')
+  const rrRes = await sb('match_results?select=match_id,home_score,away_score,settled_at')
   const results = {}
   if (rrRes.ok) for (const r of await rrRes.json()) results[r.match_id] = r
+  const nowMs = Date.now()
 
   // Bracket éliminatoire → pour déduire le qualifié (bonus KO). Absent/à plat = pas de bonus.
   const ko = {}
@@ -242,13 +249,21 @@ export async function reconcileScores(sb) {
     const r = results[b.match_id]
     let pts = b.points
     if (r) {
-      const exp = scoreBet(b.match_id, b.home_score, b.away_score, b.qualifier_short, r.home_score, r.away_score, ko)
-      if (b.points !== exp || !b.locked) {
-        await sb(`bets?id=eq.${b.id}`, {
-          method: 'PATCH', headers: { Prefer: 'return=minimal' },
-          body: JSON.stringify({ points: exp, locked: true }),
-        })
-        pts = exp
+      // Point figé : pari déjà verrouillé ET match réglé depuis > SCORE_FREEZE_MS → on
+      // NE recalcule PAS (les points ne bougent plus). On (re)calcule seulement :
+      //   • les paris pas encore verrouillés (paris tardifs à rattraper), ou
+      //   • les matchs réglés récemment (fenêtre de finalisation : le bonus KO se fixe).
+      const settledMs = Date.parse(r.settled_at || '')
+      const frozen = b.locked && Number.isFinite(settledMs) && (nowMs - settledMs) > SCORE_FREEZE_MS
+      if (!frozen) {
+        const exp = scoreBet(b.match_id, b.home_score, b.away_score, b.qualifier_short, r.home_score, r.away_score, ko)
+        if (b.points !== exp || !b.locked) {
+          await sb(`bets?id=eq.${b.id}`, {
+            method: 'PATCH', headers: { Prefer: 'return=minimal' },
+            body: JSON.stringify({ points: exp, locked: true }),
+          })
+          pts = exp
+        }
       }
     }
     sums[b.user_id] = (sums[b.user_id] || 0) + (pts || 0)
