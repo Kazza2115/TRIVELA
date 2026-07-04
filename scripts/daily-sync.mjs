@@ -82,8 +82,11 @@ async function rebuildBracketFromResults(all, fxMap) {
   const rows = []
   for (const [mid, t] of Object.entries(derived)) {
     if (src[mid] === 'admin') continue                    // override manuel prioritaire
-    const hs = t.home_short ?? null, as = t.away_short ?? null
     const cur = ko[mid]
+    // Écriture MONOTONE : une propagation « inconnue » (null — drapeaux winner absents
+    // d'une réponse API) n'efface JAMAIS une équipe déjà placée (cf. worker).
+    const hs = t.home_short ?? cur?.home_short ?? null
+    const as = t.away_short ?? cur?.away_short ?? null
     if (cur && cur.home_short === hs && cur.away_short === as) continue   // déjà à jour
     rows.push({ match_id: mid, home_short: hs, away_short: as, source: 'api', updated_at: new Date().toISOString() })
   }
