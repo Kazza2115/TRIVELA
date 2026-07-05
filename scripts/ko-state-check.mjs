@@ -1,4 +1,4 @@
-// Relance 2026-07-05 : résultat r16-1 (PAR-FRA) non réglé — audit du statut API.
+// Relance 2026-07-05 (2) : contrôle de la propagation qf-3 après règlement de BRA-NOR.
 // Ponctuel (lecture seule) : état COMPLET du bracket éliminatoire pour audit.
 //   1) knockout_teams tel quel (slot, équipes, source, dernière maj) ;
 //   2) match_results des matchs KO ;
