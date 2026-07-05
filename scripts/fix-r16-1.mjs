@@ -1,3 +1,4 @@
+// Relance 2 : propagation FRA → qf-1 après correctif de la dérivation partielle.
 // Ponctuel : règle r16-1 (Paraguay - France, 8e de finale du 4 juil) que l'API n'a pas
 // remonté à temps. Stratégie :
 //   • si l'API donne le match TERMINÉ → règlement normal (score API réorienté + buteurs) ;

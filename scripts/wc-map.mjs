@@ -105,7 +105,14 @@ export function propagateKnockout(koTeams, results, tabWinners) {
   ]
   for (const id of order) {
     const r = (results || {})[id]; if (!r) continue
-    const me = out[id] || (koTeams || {})[id]              // équipes propagées si dispo, sinon bracket figé
+    // Équipes de l'affiche : dérivées si disponibles, complétées PAR CÔTÉ depuis le
+    // bracket stocké. Une dérivation PARTIELLE (ex. vainqueur t.a.b. indéterminable car
+    // drapeaux absents de la réponse API) ne doit pas masquer la ligne complète en base.
+    const der = out[id], base = (koTeams || {})[id]
+    const me = (der || base) && {
+      home_short: der?.home_short ?? base?.home_short,
+      away_short: der?.away_short ?? base?.away_short,
+    }
     const wl = koWinLoss(id, me, r, tabWinners); if (!wl) continue
     const np = koNextPos(id)
     if (np) ensure(np.slot)[`${np.pos}_short`] = wl.win
