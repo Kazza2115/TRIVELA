@@ -1,0 +1,19 @@
+name: Fix r16-1 PAR-FRA (ponctuel)
+on:
+  push:
+    branches: [claude/world-cup-qualifiers-update-z9ehtl]
+    paths: ['scripts/fix-r16-1.mjs', '.github/workflows/fix-r16-1.yml']
+  workflow_dispatch:
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/fix-r16-1.mjs
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
