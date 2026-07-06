@@ -17,6 +17,19 @@ const SETTLE = [
       { p: 'E. Haaland', s: 'away', t: 90 },
     ],
   },
+  // r16-6 : Mexique 2-3 Angleterre (6 juil) — Quiñones, R. Jiménez (pen) ; doublé
+  // Bellingham (1re mi-temps), H. Kane (pen). Rouge : J. Quansah (ENG).
+  {
+    id: 'r16-6', home: 2, away: 3,
+    scorers: [
+      { p: 'J. Quiñones', s: 'home', t: null },
+      { p: 'R. Jiménez', s: 'home', t: null, pen: true },
+      { p: 'J. Bellingham', s: 'away', t: null },
+      { p: 'J. Bellingham', s: 'away', t: null },
+      { p: 'H. Kane', s: 'away', t: null, pen: true },
+    ],
+    cards: [{ p: 'J. Quansah', s: 'away', t: null }],
+  },
 ]
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
@@ -45,12 +58,15 @@ for (const m of SETTLE) {
   } else {
     const res = await settleViaRest(sb, m.id, m.home, m.away)
     console.log(`  🛟 réglé avec le score OFFICIEL : ${m.home}-${m.away} (changed=${res.changed})`)
-    if (m.scorers?.length) {
+    if (m.scorers?.length || m.cards?.length) {
+      const row = { match_id: m.id, updated_at: new Date().toISOString() }
+      if (m.scorers?.length) row.scorers = m.scorers
+      if (m.cards?.length) row.cards = m.cards
       await sb('match_goals?on_conflict=match_id', {
         method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-        body: JSON.stringify([{ match_id: m.id, scorers: m.scorers, updated_at: new Date().toISOString() }]),
+        body: JSON.stringify([row]),
       })
-      console.log(`  ⚽ buteurs écrits (${m.scorers.length}).`)
+      console.log(`  ⚽ buteurs écrits (${m.scorers?.length ?? 0})${m.cards?.length ? ` · 🟥 cartons (${m.cards.length})` : ''}.`)
     }
   }
 }
