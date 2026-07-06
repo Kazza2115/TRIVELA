@@ -30,6 +30,11 @@ const SETTLE = [
     ],
     cards: [{ p: 'J. Quansah', s: 'away', t: null }],
   },
+  // r16-3 : Portugal 0-1 Espagne (6 juil) — M. Merino (90e+).
+  {
+    id: 'r16-3', home: 0, away: 1,
+    scorers: [{ p: 'M. Merino', s: 'away', t: 90 }],
+  },
 ]
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
