@@ -58,6 +58,10 @@ const SETTLE = [
       { p: 'E. Fernández', s: 'home', t: 90 },
     ],
   },
+  // r16-8 : Suisse 0-0 Colombie, 4-3 aux T.A.B. (7 juil, Vancouver) — Kobel décisif.
+  // `tab` = vainqueur aux tirs au but (remplace le drapeau winner de l'API absente) :
+  // indispensable pour propager la Suisse en qf-4 et attribuer les bonus +2/+6/+7.
+  { id: 'r16-8', home: 0, away: 0, tab: 'SUI', scorers: [] },
 ]
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
@@ -114,6 +118,8 @@ for (const f of all) {
   const ws = shortOf(f.teams?.home?.winner ? f.teams?.home?.name : f.teams?.away?.winner ? f.teams?.away?.name : null)
   if (ws) tab[id] = ws
 }
+// Vainqueurs T.A.B. fournis manuellement (fixture absente de l'API → pas de drapeau winner).
+for (const m of SETTLE) if (m.tab) tab[m.id] = m.tab
 const derived = propagateKnockout(ko, results, tab)
 const rows = []
 for (const [mid, t] of Object.entries(derived)) {
