@@ -35,6 +35,17 @@ const SETTLE = [
     id: 'r16-3', home: 0, away: 1,
     scorers: [{ p: 'M. Merino', s: 'away', t: 90 }],
   },
+  // r16-4 : USA 1-4 Belgique (7 juil) — Tillman (cf) ; De Ketelaere x2, Vanaken 57e, Lukaku 90e+.
+  {
+    id: 'r16-4', home: 1, away: 4,
+    scorers: [
+      { p: 'M. Tillman', s: 'home', t: null },
+      { p: 'C. De Ketelaere', s: 'away', t: null },
+      { p: 'C. De Ketelaere', s: 'away', t: null },
+      { p: 'H. Vanaken', s: 'away', t: 57 },
+      { p: 'R. Lukaku', s: 'away', t: 90 },
+    ],
+  },
 ]
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
