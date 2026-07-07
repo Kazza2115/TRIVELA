@@ -46,6 +46,18 @@ const SETTLE = [
       { p: 'R. Lukaku', s: 'away', t: 90 },
     ],
   },
+  // r16-7 : Argentine 3-2 Égypte (7 juil) — renversement 0-2 → 3-2 : Romero 79e,
+  // Messi 83e, E. Fernández 90+3 ; Y. Ibrahim 15e, M. Zico 67e pour l'Égypte.
+  {
+    id: 'r16-7', home: 3, away: 2,
+    scorers: [
+      { p: 'Y. Ibrahim', s: 'away', t: 15 },
+      { p: 'M. Zico', s: 'away', t: 67 },
+      { p: 'C. Romero', s: 'home', t: 79 },
+      { p: 'L. Messi', s: 'home', t: 83 },
+      { p: 'E. Fernández', s: 'home', t: 90 },
+    ],
+  },
 ]
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
