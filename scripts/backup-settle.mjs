@@ -62,6 +62,14 @@ const SETTLE = [
   // `tab` = vainqueur aux tirs au but (remplace le drapeau winner de l'API absente) :
   // indispensable pour propager la Suisse en qf-4 et attribuer les bonus +2/+6/+7.
   { id: 'r16-8', home: 0, away: 0, tab: 'SUI', scorers: [] },
+  // qf-1 : France 2-0 Maroc (9 juil) — Mbappé 60e (pen raté en 1re), Dembélé 66e.
+  {
+    id: 'qf-1', home: 2, away: 0,
+    scorers: [
+      { p: 'K. Mbappé', s: 'home', t: 60 },
+      { p: 'O. Dembélé', s: 'home', t: 66 },
+    ],
+  },
 ]
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
