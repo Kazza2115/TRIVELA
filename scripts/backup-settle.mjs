@@ -70,6 +70,15 @@ const SETTLE = [
       { p: 'O. Dembélé', s: 'home', t: 66 },
     ],
   },
+  // qf-2 : Espagne 2-1 Belgique (10 juil) — F. Ruiz ; De Ketelaere ; Merino 87e.
+  {
+    id: 'qf-2', home: 2, away: 1,
+    scorers: [
+      { p: 'F. Ruiz', s: 'home', t: null },
+      { p: 'C. De Ketelaere', s: 'away', t: null },
+      { p: 'M. Merino', s: 'home', t: 87 },
+    ],
+  },
 ]
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
