@@ -79,6 +79,15 @@ const SETTLE = [
       { p: 'M. Merino', s: 'home', t: 87 },
     ],
   },
+  // qf-3 : Norvège 1-2 Angleterre a.p. (11 juil) — Schjelderup 36e ; Bellingham 45+2 & 93e.
+  {
+    id: 'qf-3', home: 1, away: 2,
+    scorers: [
+      { p: 'A. Schjelderup', s: 'home', t: 36 },
+      { p: 'J. Bellingham', s: 'away', t: 45 },
+      { p: 'J. Bellingham', s: 'away', t: 93 },
+    ],
+  },
 ]
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
