@@ -13,15 +13,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # KAZA · Angleterre-Argentine (demi-finale / sf-2) : Argentine gagne 2-0.
-      #   Orientation match ENG(dom) vs ARG(ext) : home(ENG)=0, away(ARG)=2.
+      # KAZA · Argentine-Suisse (quart / qf-4) : Argentine gagne 2-0.
+      #   Orientation match ARG(dom) vs SUI(ext) : home(ARG)=2, away(SUI)=0.
+      #   Supprime aussi le prono sf-2 écrit par erreur (mauvaise interprétation).
       - run: node scripts/set-bet-once.mjs
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BET_PSEUDO: 'KAZA'
-          BET_MATCH_ID: 'sf-2'
-          BET_HOME_NAME: 'Angleterre'
-          BET_AWAY_NAME: 'Argentine'
-          BET_HOME: '0'
-          BET_AWAY: '2'
-          BET_STAGE: 'Demi-finale'
+          BET_MATCH_ID: 'qf-4'
+          BET_HOME_NAME: 'Argentine'
+          BET_AWAY_NAME: 'Suisse'
+          BET_HOME: '2'
+          BET_AWAY: '0'
+          BET_STAGE: 'Quart de finale'
+          BET_DELETE_MATCH_ID: 'sf-2'

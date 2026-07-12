@@ -30,6 +30,13 @@ let prof = profs.find(p => p.pseudo.toLowerCase() === PSEUDO.toLowerCase()) || (
 if (!prof) { console.error(`❌ Plusieurs joueurs correspondent : ${profs.map(p => p.pseudo).join(', ')}.`); process.exit(1) }
 console.log(`Joueur : ${prof.pseudo} (${prof.id}) · score actuel ${prof.score}`)
 
+// 1 bis) Suppression d'un prono écrit par erreur (optionnel).
+const DELETE_ID = (process.env.BET_DELETE_MATCH_ID || '').trim()
+if (DELETE_ID) {
+  const del = await sb(`bets?user_id=eq.${prof.id}&match_id=eq.${DELETE_ID}`, { method: 'DELETE' })
+  console.log(del.ok ? `🗑️  Prono ${DELETE_ID} supprimé.` : `⚠️ Suppression ${DELETE_ID} : ${del.status}`)
+}
+
 // 2) Match déjà réglé ?
 const rr = await sb(`match_results?match_id=eq.${MATCH_ID}&select=home_score,away_score`)
 const res = rr.ok ? (await rr.json())[0] : null
