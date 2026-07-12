@@ -13,15 +13,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # KAZA · Mexique-Équateur (16es / r32-11) : Mexique 1 - Équateur 0.
-      #   Orientation match MEX(dom) vs ECU(ext) : home(MEX)=1, away(ECU)=0.
+      # KAZA · Angleterre-Argentine (demi-finale / sf-2) : Argentine gagne 2-0.
+      #   Orientation match ENG(dom) vs ARG(ext) : home(ENG)=0, away(ARG)=2.
       - run: node scripts/set-bet-once.mjs
         env:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BET_PSEUDO: 'KAZA'
-          BET_MATCH_ID: 'r32-11'
-          BET_HOME_NAME: 'Mexique'
-          BET_AWAY_NAME: 'Équateur'
-          BET_HOME: '1'
-          BET_AWAY: '0'
-          BET_STAGE: '16es de finale'
+          BET_MATCH_ID: 'sf-2'
+          BET_HOME_NAME: 'Angleterre'
+          BET_AWAY_NAME: 'Argentine'
+          BET_HOME: '0'
+          BET_AWAY: '2'
+          BET_STAGE: 'Demi-finale'
