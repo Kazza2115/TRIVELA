@@ -88,6 +88,16 @@ const SETTLE = [
       { p: 'J. Bellingham', s: 'away', t: 93 },
     ],
   },
+  // qf-4 : Argentine 3-1 Suisse (12 juil) — Mac Allister, J. Álvarez, L. Martínez ; Ndoye.
+  {
+    id: 'qf-4', home: 3, away: 1,
+    scorers: [
+      { p: 'A. Mac Allister', s: 'home', t: null },
+      { p: 'J. Álvarez', s: 'home', t: null },
+      { p: 'L. Martínez', s: 'home', t: null },
+      { p: 'D. Ndoye', s: 'away', t: null },
+    ],
+  },
 ]
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
