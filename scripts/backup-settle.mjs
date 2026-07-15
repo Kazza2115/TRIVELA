@@ -106,6 +106,15 @@ const SETTLE = [
       { p: 'P. Porro', s: 'away', t: 58 },
     ],
   },
+  // sf-2 : Angleterre 1-2 Argentine (15 juil) — Gordon 54e ; E. Fernández 85e, L. Martínez 90+.
+  {
+    id: 'sf-2', home: 1, away: 2,
+    scorers: [
+      { p: 'A. Gordon', s: 'home', t: 54 },
+      { p: 'E. Fernández', s: 'away', t: 85 },
+      { p: 'L. Martínez', s: 'away', t: 90 },
+    ],
+  },
 ]
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
