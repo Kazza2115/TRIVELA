@@ -98,6 +98,14 @@ const SETTLE = [
       { p: 'D. Ndoye', s: 'away', t: null },
     ],
   },
+  // sf-1 : France 0-2 Espagne (14 juil) — Oyarzabal 22e (pen), Pedro Porro 58e.
+  {
+    id: 'sf-1', home: 0, away: 2,
+    scorers: [
+      { p: 'M. Oyarzabal', s: 'away', t: 22, pen: true },
+      { p: 'P. Porro', s: 'away', t: 58 },
+    ],
+  },
 ]
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
