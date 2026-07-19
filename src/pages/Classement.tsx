@@ -5,8 +5,16 @@ import { subscribeToLeaderboard, getWorldChampion } from '../services/auth'
 import { teamByShort } from '../data/wc2026Matches'
 import type { UserProfile } from '../services/auth'
 
-const PODIUM_COLORS  = ['#A0A0A8', '#C89B3C', '#A07040']
-const PODIUM_HEIGHTS = [110, 140, 90]
+// Config du podium par colonne affichée (ordre à l'écran : 2e · 1er · 3e).
+// Hiérarchie « en avant » : le 1er (or) domine, le 2e est assez mis en avant, le 3e moins.
+const PODIUM = [
+  // 2e place — argent, assez en avant
+  { rank: 2, medal: '🥈', color: '#B8B8C4', h: 132, flagW: 34, name: 14,   pts: 11, lift: -6,  z: 2, crown: false },
+  // 1re place — OR, le plus en avant
+  { rank: 1, medal: '🥇', color: '#E8C24A', h: 176, flagW: 46, name: 17.5, pts: 13, lift: -16, z: 3, crown: true },
+  // 3e place — bronze, un peu moins
+  { rank: 3, medal: '🥉', color: '#B0703A', h: 96,  flagW: 27, name: 12.5, pts: 10, lift: 0,   z: 1, crown: false },
+]
 
 interface ClassementProps {
   onBack: () => void
@@ -125,36 +133,48 @@ export default function Classement({ onBack, currentUser, onOpenAuth, onSelectPl
             {/* Feux d'artifice CSS sur le podium quand le tournoi est terminé */}
             <Fireworks active={seasonOver} style={{ top: -20, zIndex: 4 }} />
             {[top3[1], top3[0], top3[2]].map((p, i) => {
-              if (!p) return <div key={i} style={{ width: 100, flexShrink: 0 }} />
-              const c = PODIUM_COLORS[i]
-              const medals = ['🥈', '🥇', '🥉']
-              const podiumRank = i === 0 ? 2 : i === 1 ? 1 : 3
+              const cfg = PODIUM[i]
+              if (!p) return <div key={i} style={{ width: cfg.flagW + 60, flexShrink: 0 }} />
+              const first = cfg.rank === 1
               return (
                 <div key={p.id}
-                  onClick={() => onSelectPlayer(p, podiumRank)}
+                  onClick={() => onSelectPlayer(p, cfg.rank)}
                   style={{
                   display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                  flex: '0 0 auto', width: 100, cursor: 'pointer',
+                  flex: '0 0 auto', width: cfg.flagW + 60, cursor: 'pointer',
+                  transform: `translateY(${cfg.lift}px)`, zIndex: cfg.z, position: 'relative',
                 }}>
-                  <img src={`https://flagcdn.com/w40/${p.countryCode}.png`} alt={p.countryName}
-                    style={{ width: 28, height: 19, borderRadius: 3, objectFit: 'cover',
-                      border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }} />
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-1)',
-                    textAlign: 'center', maxWidth: 90,
+                  {cfg.crown && <div style={{ fontSize: 22, lineHeight: 1, marginBottom: -2,
+                    filter: 'drop-shadow(0 2px 4px rgba(200,155,60,0.5))' }}>👑</div>}
+                  <img src={`https://flagcdn.com/w80/${p.countryCode}.png`} alt={p.countryName}
+                    style={{ width: cfg.flagW, height: Math.round(cfg.flagW * 0.67),
+                      borderRadius: 3, objectFit: 'cover',
+                      border: first ? '2px solid #E8C24A' : '1px solid var(--border)',
+                      boxShadow: first ? '0 0 12px rgba(232,194,74,0.55)' : 'var(--shadow-sm)' }} />
+                  <div style={{ fontSize: cfg.name, fontWeight: first ? 800 : 700,
+                    color: first ? '#A07828' : 'var(--text-1)',
+                    textAlign: 'center', maxWidth: cfg.flagW + 56,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {p.pseudo}
                   </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-2)' }}>
+                  <div style={{ fontSize: cfg.pts, fontWeight: first ? 800 : 600,
+                    color: first ? '#A07828' : 'var(--text-2)' }}>
                     {p.score.toLocaleString()} pts
                   </div>
                   <div style={{
-                    width: '100%', height: PODIUM_HEIGHTS[i],
-                    background: `linear-gradient(180deg, ${c}22, ${c}08)`,
-                    border: `1.5px solid ${c}44`, borderRadius: '10px 10px 0 0',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 28, boxShadow: `inset 0 0 0 1px ${c}22`,
+                    width: '100%', height: cfg.h,
+                    background: first
+                      ? 'linear-gradient(180deg, rgba(232,194,74,0.34), rgba(200,144,30,0.12))'
+                      : `linear-gradient(180deg, ${cfg.color}2E, ${cfg.color}0A)`,
+                    border: `1.5px solid ${cfg.color}${first ? '99' : '55'}`,
+                    borderRadius: '12px 12px 0 0',
+                    display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+                    paddingTop: 12, fontSize: first ? 34 : 26,
+                    boxShadow: first
+                      ? '0 -2px 22px rgba(232,194,74,0.4), inset 0 0 0 1px rgba(232,194,74,0.35)'
+                      : `inset 0 0 0 1px ${cfg.color}22`,
                   }}>
-                    {medals[i]}
+                    {cfg.medal}
                   </div>
                 </div>
               )
