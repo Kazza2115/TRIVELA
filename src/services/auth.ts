@@ -727,6 +727,19 @@ export async function getKnockoutTeams(): Promise<Record<string, KnockoutTeamRow
   } catch { return {} }
 }
 
+/** Champion du monde : code court du vainqueur de la finale (slot 'final'), sinon null.
+ *  Déduit du bracket (knockout_teams) + du résultat officiel (match_results). Lecture publique. */
+export async function getWorldChampion(): Promise<string | null> {
+  try {
+    const [ko, results] = await Promise.all([getKnockoutTeams(), getResults()])
+    const fin = ko['final']
+    const res = results.find(r => r.matchId === 'final')
+    if (!fin || !res || res.homeScore === res.awayScore) return null   // pas de finale décisive réglée
+    const win = res.homeScore > res.awayScore ? fin.home_short : fin.away_short
+    return win ? win.toUpperCase() : null
+  } catch { return null }
+}
+
 /** Coups d'envoi réels (source de vérité API) : { match_id → ISO }. Lecture publique. */
 export async function getMatchSchedule(): Promise<Record<string, string>> {
   if (!supabaseConfigured) return {}

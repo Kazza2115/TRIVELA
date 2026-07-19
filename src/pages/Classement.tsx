@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import PageLayout from './PageLayout'
-import { subscribeToLeaderboard } from '../services/auth'
+import Fireworks from '../components/Fireworks'
+import { subscribeToLeaderboard, getWorldChampion } from '../services/auth'
+import { teamByShort } from '../data/wc2026Matches'
 import type { UserProfile } from '../services/auth'
 
 const PODIUM_COLORS  = ['#A0A0A8', '#C89B3C', '#A07040']
@@ -15,9 +17,13 @@ interface ClassementProps {
 
 export default function Classement({ onBack, currentUser, onOpenAuth, onSelectPlayer }: ClassementProps) {
   const [players, setPlayers] = useState<UserProfile[]>([])
+  const [champion, setChampion] = useState<string | null>(null)   // pays champion du monde (code court)
 
   useEffect(() => subscribeToLeaderboard(setPlayers), [])
+  useEffect(() => { getWorldChampion().then(setChampion) }, [])
 
+  const championTeam = champion ? teamByShort(champion) : null
+  const seasonOver = !!champion                     // tournoi terminé → fête sur le podium
   const top3   = players.slice(0, 3)
   const myRank = currentUser ? players.findIndex(p => p.id === currentUser.id) + 1 : null
 
@@ -41,13 +47,29 @@ export default function Classement({ onBack, currentUser, onOpenAuth, onSelectPl
             Coupe du Monde 2026
           </div>
         </div>
-        <div style={{
-          padding: '5px 12px',
-          background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)',
-          borderRadius: 20, fontSize: 11, fontWeight: 700, color: '#16a34a',
-        }}>
-          EN COURS
-        </div>
+        {seasonOver ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
+            background: 'rgba(200,155,60,0.14)', border: '1px solid rgba(200,155,60,0.4)',
+            borderRadius: 20, fontSize: 11, fontWeight: 800, color: '#A07828',
+          }}>
+            🏆 {championTeam ? (
+              <>
+                <img src={`https://flagcdn.com/w20/${championTeam.code}.png`} alt=""
+                  style={{ width: 16, height: 11, borderRadius: 2, objectFit: 'cover' }} />
+                {championTeam.short} CHAMPION
+              </>
+            ) : 'TERMINÉ'}
+          </div>
+        ) : (
+          <div style={{
+            padding: '5px 12px',
+            background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.3)',
+            borderRadius: 20, fontSize: 11, fontWeight: 700, color: '#16a34a',
+          }}>
+            EN COURS
+          </div>
+        )}
       </div>
 
       {players.length === 0 ? (
@@ -81,11 +103,27 @@ export default function Classement({ onBack, currentUser, onOpenAuth, onSelectPl
         </div>
       ) : (
         <>
+          {/* ── Bandeau champion (fin de saison) ───────────────── */}
+          {seasonOver && (
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+              padding: '10px 14px', marginBottom: 14,
+              background: 'linear-gradient(135deg, rgba(200,155,60,0.16), rgba(255,215,94,0.06))',
+              border: '1px solid rgba(200,155,60,0.4)', borderRadius: 14,
+              fontFamily: "'Bebas Neue', cursive", fontSize: 17, letterSpacing: 1.5, color: '#A07828',
+            }}>
+              🎉 Coupe du Monde terminée — bravo au podium ! 🎉
+            </div>
+          )}
+
           {/* ── Podium ─────────────────────────────────────────── */}
           <div style={{
+            position: 'relative',
             display: 'flex', gap: 10, marginBottom: 28,
             justifyContent: 'center', alignItems: 'flex-end',
           }}>
+            {/* Feux d'artifice CSS sur le podium quand le tournoi est terminé */}
+            <Fireworks active={seasonOver} style={{ top: -20, zIndex: 4 }} />
             {[top3[1], top3[0], top3[2]].map((p, i) => {
               if (!p) return <div key={i} style={{ width: 100, flexShrink: 0 }} />
               const c = PODIUM_COLORS[i]

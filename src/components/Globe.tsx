@@ -3,9 +3,10 @@ import * as d3 from 'd3'
 import { feature } from 'topojson-client'
 import type { Topology } from 'topojson-specification'
 import CountryPopup from './CountryPopup'
+import Fireworks from './Fireworks'
 import { matchKickoffUTC, teamColor, teamByShort, KNOCKOUT_MATCHES } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { getBets, getLive, getResults, subscribeToLive, getKnockoutTeams } from '../services/auth'
+import { getBets, getLive, getResults, subscribeToLive, getKnockoutTeams, getWorldChampion } from '../services/auth'
 import type { UserProfile } from '../services/auth'
 import { COMPETITIONS } from '../data/continentStats'
 
@@ -246,6 +247,7 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
   const openMatchCardRef  = useRef<(m: Match) => void>(() => {})
   const [popup,              setPopup]              = useState<PopupState | null>(null)
   const [isLoaded,           setIsLoaded]           = useState(false)
+  const [champion,           setChampion]           = useState<string | null>(null)   // pays champion du monde
   const [continentPopup,     setContinentPopup]     = useState<{ conf: string } | null>(null)
   const [continentPopupVis,  setContinentPopupVis]  = useState(false)
   // true once the container has valid pixel dimensions — guards D3 init
@@ -481,6 +483,16 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
     }).catch(() => {})
     load()
     const iv = setInterval(load, 60000)
+    return () => { on = false; clearInterval(iv) }
+  }, [])
+
+  // Champion du monde (vainqueur de la finale) → feux d'artifice + bandeau. N'affecte PAS
+  // le rendu D3 du globe (overlay HTML pur) → aucune incidence sur la stabilité.
+  useEffect(() => {
+    let on = true
+    const load = () => getWorldChampion().then(c => { if (on) setChampion(c) }).catch(() => {})
+    load()
+    const iv = setInterval(load, 120000)
     return () => { on = false; clearInterval(iv) }
   }, [])
 
@@ -1275,6 +1287,31 @@ setIsLoaded(true)
         onMouseDown={() => { if (svgRef.current) svgRef.current.style.cursor = 'grabbing' }}
         onMouseUp={()   => { if (svgRef.current) svgRef.current.style.cursor = 'grab' }}
       />
+
+      {/* 🏆 Champion du monde : feux d'artifice CSS + bandeau (overlay HTML, hors D3) */}
+      {champion && isLoaded && (() => {
+        const champTeam = teamByShort(champion)
+        return (
+          <>
+            <Fireworks active style={{ zIndex: 6 }} />
+            <div style={{
+              position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
+              display: 'flex', alignItems: 'center', gap: 8, zIndex: 7, pointerEvents: 'none',
+              padding: '7px 14px', borderRadius: 999,
+              background: 'linear-gradient(135deg, rgba(20,14,0,0.82), rgba(40,28,0,0.72))',
+              border: '1px solid rgba(255,215,94,0.55)', boxShadow: '0 0 18px rgba(255,215,94,0.3)',
+              fontFamily: "'Bebas Neue', cursive", fontSize: 15, letterSpacing: 1.4, color: '#FFE9B0',
+              whiteSpace: 'nowrap',
+            }}>
+              🏆 {champTeam && (
+                <img src={`https://flagcdn.com/w40/${champTeam.code}.png`} alt=""
+                  style={{ width: 22, height: 15, borderRadius: 2, objectFit: 'cover' }} />
+              )}
+              {champTeam?.name ?? champion} · Champion du monde 2026
+            </div>
+          </>
+        )
+      })()}
 
       {/* Loading spinner */}
       {!isLoaded && (
