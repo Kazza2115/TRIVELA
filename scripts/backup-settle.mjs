@@ -130,6 +130,12 @@ const SETTLE = [
       { p: 'O. Dembélé', s: 'home', t: null },
     ],
   },
+  // 🏆 FINALE : Espagne 1-0 Argentine a.p. (19 juil, MetLife) — Ferran Torres 105e
+  //   (tête de Nico Williams). L'ESPAGNE EST CHAMPIONNE DU MONDE 2026. Slot final = ESP(dom) vs ARG(ext).
+  {
+    id: 'final', home: 1, away: 0,
+    scorers: [{ p: 'F. Torres', s: 'home', t: 105 }],
+  },
 ]
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
