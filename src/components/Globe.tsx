@@ -3,10 +3,9 @@ import * as d3 from 'd3'
 import { feature } from 'topojson-client'
 import type { Topology } from 'topojson-specification'
 import CountryPopup from './CountryPopup'
-import Fireworks from './Fireworks'
 import { matchKickoffUTC, teamColor, teamByShort, KNOCKOUT_MATCHES } from '../data/wc2026Matches'
 import type { Match, Team } from '../data/wc2026Matches'
-import { getBets, getLive, getResults, subscribeToLive, getKnockoutTeams, getWorldChampion } from '../services/auth'
+import { getBets, getLive, getResults, subscribeToLive, getKnockoutTeams } from '../services/auth'
 import type { UserProfile } from '../services/auth'
 import { COMPETITIONS } from '../data/continentStats'
 
@@ -241,14 +240,12 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
   const koTeamsRef      = useRef<Record<string, { home_short: string | null; away_short: string | null }>>({})  // bracket
   const koSigRef        = useRef<string>('')                         // signature du bracket (rebuild si change)
   const renderMarkersRef = useRef<() => void>(() => {})              // (re)dessine les affiches du globe
-  const countryFxRef    = useRef<Map<number, 'out' | 'normal' | 'champ'>>(new Map())  // dernier état peint par pays
+  const countryFxRef    = useRef<Map<number, 'out' | 'normal'>>(new Map())  // dernier état peint par pays
   const eliminatedRef   = useRef<Set<number>>(new Set())                     // pays éliminés (éteints)
   const outAnimUntilRef = useRef<Map<number, number>>(new Map())             // fin d'anim d'extinction par pays
   const openMatchCardRef  = useRef<(m: Match) => void>(() => {})
   const [popup,              setPopup]              = useState<PopupState | null>(null)
   const [isLoaded,           setIsLoaded]           = useState(false)
-  const [champion,           setChampion]           = useState<string | null>(null)   // pays champion du monde
-  const championRef  = useRef<string | null>(null)                                     // idem, pour le rendu D3
   const [continentPopup,     setContinentPopup]     = useState<{ conf: string } | null>(null)
   const [continentPopupVis,  setContinentPopupVis]  = useState(false)
   // true once the container has valid pixel dimensions — guards D3 init
@@ -487,21 +484,6 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
     return () => { on = false; clearInterval(iv) }
   }, [])
 
-  // Champion du monde (vainqueur de la finale) → hologramme permanent + feux d'artifice.
-  useEffect(() => {
-    let on = true
-    const load = () => getWorldChampion().then(c => {
-      if (!on) return
-      const changed = championRef.current !== c
-      championRef.current = c
-      setChampion(c)
-      if (changed) renderMarkersRef.current()   // (ré)affiche la finale → hologramme du champion
-    }).catch(() => {})
-    load()
-    const iv = setInterval(load, 60000)
-    return () => { on = false; clearInterval(iv) }
-  }, [])
-
   // Wait for the container to have real pixel dimensions before initialising D3.
   // Root cause of the "tiny globe" bug: on iOS Safari (and occasionally Chrome)
   // the flex layout hasn't resolved yet when the first useEffect fires.
@@ -574,13 +556,6 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
       .attr('x1', '0').attr('y1', '1').attr('x2', '0').attr('y2', '0')   // bas → haut
     beamGrad.append('stop').attr('offset', '0%').attr('stop-color', '#7FE9FF').attr('stop-opacity', 0.55)
     beamGrad.append('stop').attr('offset', '100%').attr('stop-color', '#7FE9FF').attr('stop-opacity', 0)
-
-    // Pays champion du monde — remplissage OR lumineux (radial, centré sur le pays).
-    const champGrad = defs.append('radialGradient').attr('id', 'champ-glow')
-      .attr('gradientUnits', 'objectBoundingBox').attr('cx', '50%').attr('cy', '45%').attr('r', '75%')
-    champGrad.append('stop').attr('offset', '0%').attr('stop-color', '#FFF0B8')
-    champGrad.append('stop').attr('offset', '55%').attr('stop-color', '#FFD75E')
-    champGrad.append('stop').attr('offset', '100%').attr('stop-color', '#C8901E')
 
     // Ocean — deep dark gradient
     const sphereGrad = defs.append('radialGradient').attr('id', 'sphere-grad')
@@ -759,22 +734,16 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
           // qui exclut les affiches TBD AVANT qu'on injecte les équipes du bracket).
           const dayStr = (ms: number) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' })
           const today = dayStr(Date.now())
-          const withTeams = KNOCKOUT_MATCHES.map(m => {
-            const a = ko[m.id]
-            return a ? { ...m, home: teamByShort(a.home_short) ?? m.home, away: teamByShort(a.away_short) ?? m.away } : m
-          })
-          const out = withTeams.filter(m => {
-            if (m.home.code === 'un' || m.away.code === 'un') return false   // équipes connues
-            const k = matchKickoffUTC(m)
-            return k != null && dayStr(k) === today                          // affiche DU JOUR
-          })
-          // Finale réglée → on la garde TOUJOURS affichée : le champion reste projeté en
-          // hologramme en permanence (au-delà du jour de la finale).
-          if (championRef.current && !out.some(m => m.id === 'final')) {
-            const fin = withTeams.find(m => m.id === 'final')
-            if (fin && fin.home.code !== 'un' && fin.away.code !== 'un') out.push(fin)
-          }
-          return out
+          return KNOCKOUT_MATCHES
+            .map(m => {
+              const a = ko[m.id]
+              return a ? { ...m, home: teamByShort(a.home_short) ?? m.home, away: teamByShort(a.away_short) ?? m.away } : m
+            })
+            .filter(m => {
+              if (m.home.code === 'un' || m.away.code === 'un') return false   // équipes connues
+              const k = matchKickoffUTC(m)
+              return k != null && dayStr(k) === today                          // affiche DU JOUR
+            })
         }
 
         // (Re)construit drapeaux + arcs. Rappelé quand le bracket se charge (équipes connues).
@@ -948,21 +917,8 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
           // extinction : transition animée (cascade). Ensuite : maintien direct (robuste) une fois
           // l'anim finie. Couleur directe (pas de filtre CSS, peu fiable sur un <path> SVG).
           const nowMs = Date.now()
-          const champId = idOfShort(championRef.current)   // pays champion du monde
           let outI = 0
           qualifiedIds.forEach(id => {
-            // Champion du monde : allumé en OR, jamais éteint (par-dessus la logique normale).
-            if (champId != null && id === champId) {
-              const sel = svg.selectAll(`.country-${id}`)
-              if (sel.empty()) return
-              eliminatedRef.current.delete(id)
-              if (countryFxRef.current.get(id) !== 'champ') {
-                countryFxRef.current.set(id, 'champ')
-                sel.interrupt().attr('fill', 'url(#champ-glow)').attr('opacity', 1)
-                  .classed('country-champion', true)
-              }
-              return
-            }
             const out = !(reached.has(id) && !losers.has(id))
             const sel = svg.selectAll(`.country-${id}`)
             if (sel.empty()) return
@@ -1319,33 +1275,6 @@ setIsLoaded(true)
         onMouseDown={() => { if (svgRef.current) svgRef.current.style.cursor = 'grabbing' }}
         onMouseUp={()   => { if (svgRef.current) svgRef.current.style.cursor = 'grab' }}
       />
-
-      {/* 🏆 Champion du monde : feux d'artifice + bandeau (finale réglée) */}
-      {champion && isLoaded && (() => {
-        const champTeam = teamByShort(champion)
-        return (
-          <>
-            <Fireworks active style={{ zIndex: 6 }} />
-            <div style={{
-              position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
-              display: 'flex', alignItems: 'center', gap: 8, zIndex: 7, pointerEvents: 'none',
-              padding: '7px 14px', borderRadius: 999,
-              background: 'linear-gradient(135deg, rgba(20,14,0,0.82), rgba(40,28,0,0.72))',
-              border: '1px solid rgba(255,215,94,0.55)',
-              boxShadow: '0 0 18px rgba(255,215,94,0.35)',
-              fontFamily: "'Bebas Neue', cursive", fontSize: 15, letterSpacing: 1.4, color: '#FFE9B0',
-              whiteSpace: 'nowrap',
-            }}>
-              🏆 {champTeam && (
-                <img src={`https://flagcdn.com/w40/${champTeam.code}.png`} alt=""
-                  style={{ width: 22, height: 15, borderRadius: 2, objectFit: 'cover',
-                    boxShadow: '0 0 6px rgba(255,215,94,0.8)' }} />
-              )}
-              {champTeam?.name ?? champion} · Champion du monde 2026
-            </div>
-          </>
-        )
-      })()}
 
       {/* Loading spinner */}
       {!isLoaded && (

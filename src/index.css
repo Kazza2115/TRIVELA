@@ -129,13 +129,6 @@ html, body {
 }
 .pts-fire { animation: ptsFireGlow 0.85s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .pts-fire { animation: none; box-shadow: 0 0 8px 2px rgba(225,29,42,0.6); } }
-/* Pays champion du monde sur le globe : halo doré qui pulse autour de la nation. */
-@keyframes champGlow {
-  0%, 100% { filter: drop-shadow(0 0 3px rgba(255,215,94,0.85)) drop-shadow(0 0 7px rgba(200,144,30,0.55)); }
-  50%      { filter: drop-shadow(0 0 6px rgba(255,240,184,1)) drop-shadow(0 0 15px rgba(255,215,94,0.8)); }
-}
-.country-champion { animation: champGlow 1.6s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { .country-champion { animation: none; filter: drop-shadow(0 0 5px rgba(255,215,94,0.9)); } }
 /* ─── Globe : mise en scène des matchs éliminatoires ─────────────────────── */
 /* Gagnant PROJETÉ EN L'AIR (hologramme) : flotte + scintille jusqu'au prochain match. */
 @keyframes globeHoloBob {
