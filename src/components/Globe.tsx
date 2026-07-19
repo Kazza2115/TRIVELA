@@ -462,6 +462,12 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
         const liveStatus = new Map<string, string>()
         for (const l of liveRows) liveStatus.set(l.matchId, l.status)
         matchLiveStatusRef.current = liveStatus
+        // Finale réglée → (re)dessine les affiches tant que l'arc de la finale n'est pas
+        // encore présent, pour afficher l'hologramme permanent du champion. Robuste aux
+        // courses d'init (réessaie au prochain sondage si le rendu D3 n'est pas prêt).
+        if (finals.has('final') && !matchArcsRef.current.some(a => a.match.id === 'final')) {
+          renderMarkersRef.current()
+        }
       } catch { /* ignore */ }
     }
     load()
@@ -746,16 +752,24 @@ export default function Globe({ onNavigate, onSelectContinent, isActive, contine
           // qui exclut les affiches TBD AVANT qu'on injecte les équipes du bracket).
           const dayStr = (ms: number) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Europe/Zurich' })
           const today = dayStr(Date.now())
-          return KNOCKOUT_MATCHES
-            .map(m => {
-              const a = ko[m.id]
-              return a ? { ...m, home: teamByShort(a.home_short) ?? m.home, away: teamByShort(a.away_short) ?? m.away } : m
-            })
-            .filter(m => {
-              if (m.home.code === 'un' || m.away.code === 'un') return false   // équipes connues
-              const k = matchKickoffUTC(m)
-              return k != null && dayStr(k) === today                          // affiche DU JOUR
-            })
+          const withTeams = KNOCKOUT_MATCHES.map(m => {
+            const a = ko[m.id]
+            return a ? { ...m, home: teamByShort(a.home_short) ?? m.home, away: teamByShort(a.away_short) ?? m.away } : m
+          })
+          const out = withTeams.filter(m => {
+            if (m.home.code === 'un' || m.away.code === 'un') return false   // équipes connues
+            const k = matchKickoffUTC(m)
+            return k != null && dayStr(k) === today                          // affiche DU JOUR
+          })
+          // FINALE réglée → on la garde TOUJOURS affichée (au-delà de son jour) : le champion
+          // du monde reste projeté en HOLOGRAMME en permanence. Réutilise le système existant
+          // (arc + faisceau + drapeau flottant, animé en CSS) → aucune boucle JS ajoutée.
+          const fin = withTeams.find(m => m.id === 'final')
+          if (fin && fin.home.code !== 'un' && fin.away.code !== 'un'
+              && matchFinalRef.current.has('final') && !out.some(m => m.id === 'final')) {
+            out.push(fin)
+          }
+          return out
         }
 
         // (Re)construit drapeaux + arcs. Rappelé quand le bracket se charge (équipes connues).
