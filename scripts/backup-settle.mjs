@@ -115,6 +115,21 @@ const SETTLE = [
       { p: 'L. Martínez', s: 'away', t: 90 },
     ],
   },
+  // 3rd : petite finale France 4-6 Angleterre (18 juil, Miami). Slot 3rd = FRA(dom) vs ENG(ext).
+  //   Angleterre 3e ; Mbappé finit meilleur buteur du tournoi. Liste de buteurs partielle.
+  {
+    id: '3rd', home: 4, away: 6,
+    scorers: [
+      { p: 'D. Rice', s: 'away', t: 3 },
+      { p: 'E. Konsa', s: 'away', t: null },
+      { p: 'B. Saka', s: 'away', t: null },
+      { p: 'B. Saka', s: 'away', t: null },
+      { p: 'K. Mbappé', s: 'home', t: 48 },
+      { p: 'B. Barcola', s: 'home', t: null },
+      { p: 'K. Mbappé', s: 'home', t: null },
+      { p: 'O. Dembélé', s: 'home', t: null },
+    ],
+  },
 ]
 
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
