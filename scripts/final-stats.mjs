@@ -3,9 +3,15 @@
 const SUPA_URL = 'https://tivcwtzzhrsdfzxirjkw.supabase.co'
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 if (!KEY) { console.error('❌ SUPABASE_SERVICE_ROLE_KEY absent'); process.exit(1) }
-const sb = p => fetch(`${SUPA_URL}/rest/v1/${p}`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } }).then(r => r.json())
+const sb = async p => {
+  const r = await fetch(`${SUPA_URL}/rest/v1/${p}`, { headers: { apikey: KEY, Authorization: `Bearer ${KEY}` } })
+  const j = await r.json()
+  if (!Array.isArray(j)) { console.error(`⚠️  ${p} →`, JSON.stringify(j)); return [] }
+  return j
+}
 
-const profiles = await sb('profiles?select=id,pseudo,score,exact_count,good_count,country_name')
+let profiles = await sb('profiles?select=id,pseudo,score,exact_count,good_count,country_name')
+if (!profiles.length) profiles = await sb('profiles?select=*')
 const results  = await sb('match_results?select=match_id,home_score,away_score')
 const R = {}; for (const r of results) R[r.match_id] = r
 
@@ -15,6 +21,7 @@ for (let off = 0; ; off += 1000) {
   const rows = await sb(`bets?select=user_id,match_id,home_score,away_score,points,qualifier_short&order=user_id.asc&limit=1000&offset=${off}`)
   bets.push(...rows); if (rows.length < 1000) break
 }
+if (profiles[0]) console.error('🔎 colonnes profiles :', Object.keys(profiles[0]).join(', '))
 const nameOf = {}; for (const p of profiles) nameOf[p.id] = p.pseudo
 
 const N = profiles.length
