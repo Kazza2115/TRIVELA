@@ -36,9 +36,16 @@ const avg = N ? Math.round(totalScore / N) : 0
 console.log(`\n=== GLOBAL ===`)
 console.log(`  Paris placés : ${bets.length} · Score moyen : ${avg} pts · Total distribué : ${totalScore} pts`)
 
-// Sniper : le plus de scores exacts.
-const bestExact = [...profiles].sort((a, b) => (b.exact_count ?? 0) - (a.exact_count ?? 0))[0]
-console.log(`\n🎯 Sniper (scores exacts) : ${bestExact?.pseudo} — ${bestExact?.exact_count ?? 0} exacts`)
+// Sniper : le plus de scores exacts (+5), calculé depuis les paris.
+const exactBy = {}, koBonusBy = {}, ptsBy = {}
+for (const b of bets) {
+  if (b.points === 5) exactBy[b.user_id] = (exactBy[b.user_id] || 0) + 1
+  if (b.points === 6 || b.points === 7) koBonusBy[b.user_id] = (koBonusBy[b.user_id] || 0) + 1
+  if (b.points != null) ptsBy[b.user_id] = (ptsBy[b.user_id] || 0) + b.points
+}
+const topBy = m => Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([id, n]) => `${nameOf[id]} (${n})`)
+console.log(`\n🎯 Sniper (scores exacts +5) : ${topBy(exactBy).join(', ')}`)
+console.log(`🧠 Rois du couperet (bonus KO +6/+7) : ${topBy(koBonusBy).join(', ')}`)
 
 // Meilleur coup : le pari le plus rémunérateur (points max sur un match).
 let best = null
